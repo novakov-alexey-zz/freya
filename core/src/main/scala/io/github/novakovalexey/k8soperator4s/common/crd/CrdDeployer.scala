@@ -11,27 +11,26 @@ import io.github.novakovalexey.k8soperator4s.common.{EntityInfo, JSONSchemaReade
 
 import scala.jdk.CollectionConverters._
 
-class CrdDeployer extends LazyLogging {
+class CrdDeployer[T: EntityInfo] extends LazyLogging {
 
   def initCrds(
     client: KubernetesClient,
     prefix: String,
     entityName: String,
-    shortNames: Array[String],
+    shortNames: List[String],
     pluralName: String,
     additionalPrinterColumnNames: Array[String],
     additionalPrinterColumnPaths: Array[String],
     additionalPrinterColumnTypes: Array[String],
-    infoClass: Class[_ <: EntityInfo],
+    infoClass: Class[T],
     isOpenshift: Boolean
   ): CustomResourceDefinition = {
-    val newPrefix = prefix.substring(0, prefix.length - 1) //TODO: why last character is skipped?
     Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     val crds = client.customResourceDefinitions.list.getItems.asScala.toList
-      .filter(p => entityName == p.getSpec.getNames.getKind && newPrefix == p.getSpec.getGroup)
+      .filter(p => entityName == p.getSpec.getNames.getKind && prefix == p.getSpec.getGroup)
 
-    val crdToReturn = crds match {
+    val crd = crds match {
       case h :: _ =>
         logger.info(
           s"CustomResourceDefinition for $entityName has been found in the K8s, so we are skipping the creation."
@@ -44,22 +43,24 @@ class CrdDeployer extends LazyLogging {
         val builder = {
           val b = if (schema != null) {
             removeDefaultValues(schema)
-            getCRDBuilder(newPrefix, entityName, shortNames, pluralName).withNewValidation
+            getCRDBuilder(prefix, entityName, shortNames, pluralName).withNewValidation
               .withNewOpenAPIV3SchemaLike(schema)
               .endOpenAPIV3Schema
               .endValidation
-          } else getCRDBuilder(newPrefix, entityName, shortNames, pluralName)
+          } else getCRDBuilder(prefix, entityName, shortNames, pluralName)
 
-          if (additionalPrinterColumnNames != null && additionalPrinterColumnNames.length > 0) {
-            additionalPrinterColumnNames.indices.foldLeft(b) {
-              case (acc, i) =>
-                acc
-                  .addNewAdditionalPrinterColumn()
-                  .withName(additionalPrinterColumnNames(i))
-                  .withJSONPath(additionalPrinterColumnPaths(i))
-                  .endAdditionalPrinterColumn
-            }
-          } else b
+          additionalPrinterColumnNames.toList match {
+            case Nil => b
+            case _ :: _ =>
+              additionalPrinterColumnNames.indices.foldLeft(b) {
+                case (acc, i) =>
+                  acc
+                    .addNewAdditionalPrinterColumn()
+                    .withName(additionalPrinterColumnNames(i))
+                    .withJSONPath(additionalPrinterColumnPaths(i))
+                    .endAdditionalPrinterColumn
+              }
+          }
         }
 
         try {
@@ -76,7 +77,7 @@ class CrdDeployer extends LazyLogging {
               if (isOpenshift) "OpenShift"
               else "Kubernetes"
             )
-            val crd = getCRDBuilder(newPrefix, entityName, shortNames, pluralName).endSpec.build
+            val crd = getCRDBuilder(prefix, entityName, shortNames, pluralName).endSpec.build
             client.customResourceDefinitions.createOrReplace(crd)
             crd
         }
@@ -84,14 +85,14 @@ class CrdDeployer extends LazyLogging {
 
     // register the new crd for json serialization
     KubernetesDeserializer.registerCustomKind(
-      s"$newPrefix/${crdToReturn.getSpec.getVersion}#$entityName",
+      s"$prefix/${crd.getSpec.getVersion}#$entityName",
       classOf[InfoClass[_]]
     )
     KubernetesDeserializer.registerCustomKind(
-      s"$newPrefix/${crdToReturn.getSpec.getVersion}#${entityName}List",
+      s"$prefix/${crd.getSpec.getVersion}#${entityName}List",
       classOf[CustomResourceList[_ <: HasMetadata]]
     )
-    crdToReturn
+    crd
   }
 
   private def removeDefaultValues(schema: JSONSchemaProps): Unit = {
@@ -104,7 +105,8 @@ class CrdDeployer extends LazyLogging {
     }
   }
 
-  private def getCRDBuilder(prefix: String, entityName: String, shortNames: Array[String], pluralName: String) = { // if no plural name is specified, try to make one by adding "s"
+  private def getCRDBuilder(prefix: String, entityName: String, shortNames: List[String], pluralName: String) = {
+    // if no plural name is specified, try to make one by adding "s"
     // also, plural names must be all lowercase
     val plural = {
       if (pluralName.isEmpty) entityName + "s" else pluralName

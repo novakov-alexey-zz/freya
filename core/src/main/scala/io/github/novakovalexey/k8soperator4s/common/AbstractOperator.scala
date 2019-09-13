@@ -1,7 +1,6 @@
 package io.github.novakovalexey.k8soperator4s.common
 
 import java.util.concurrent.CompletableFuture
-import java.util.function.Consumer
 
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.ConfigMap
@@ -23,27 +22,27 @@ import scala.util.Try
  *
  * [T] info class that captures the configuration of the objects we are watching
  */
-abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) extends LazyLogging {
-  // client, isOpenshift and namespace are being set in the SDKEntrypoint from the context
-  protected var client: KubernetesClient = _
-  protected var isOpenshift = false
-  protected var namespace: String = _
+class AbstractOperator[T: EntityInfo](
+  operator: Operator[T],
+  infoClass: Class[T],
+  client: KubernetesClient,
+  isOpenshift: Boolean = false
+) extends LazyLogging {
+  private val crdDeployer: CrdDeployer[T] = new CrdDeployer
+
   protected var entityName = ""
-  protected var prefix = ""
-  protected var shortNames = Array.empty[String]
+  protected var shortNames = List.empty[String]
   protected var pluralName: String = ""
-  protected var infoClass: Class[T] = _
-  protected var isCrd = true
   protected var enabled = true
-  protected var named = ""
   protected var additionalPrinterColumnNames = Array.empty[String]
   protected var additionalPrinterColumnPaths = Array.empty[String]
   protected var additionalPrinterColumnTypes = Array.empty[String]
   protected var fullReconciliationRun = false
+
   private var selector = Map.empty[String, String]
   private var operatorName = ""
   private var crd: CustomResourceDefinition = _
-  private var watch: AbstractWatcher[_ <: EntityInfo] = _
+  private var watch: AbstractWatcher[T] = _
 
   /**
    * In this method, the user of the abstract-operator is assumed to handle the creation of
@@ -56,7 +55,8 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
    * @param entity entity that represents the config map (or CR) that has just been created.
    *               The type of the entity is passed as a type parameter to this class.
    */
-  protected def onAdd(entity: T): Unit
+  protected def onAdd(entity: T): Unit =
+    onAction(entity, operator.namespace, operator.onAdd)
 
   /**
    * Override this method if you want to manually handle the case when it watches for the events in the all
@@ -66,9 +66,8 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
    *                  *            The type of the entity is passed as a type parameter to this class.
    * @param namespace namespace in which the resources should be created.
    */
-  protected def onAdd(entity: T, namespace: String): Unit = {
-    onAction(entity, namespace, this.onAdd)
-  }
+  protected def onAdd(entity: T, namespace: String): Unit =
+    onAction(entity, namespace, operator.onAdd)
 
   /**
    * This method should handle the deletion of the resource that was represented by the config map or custom resource.
@@ -78,11 +77,11 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
    * @param entity entity that represents the config map or custom resource that has just been created.
    *               The type of the entity is passed as a type parameter to this class.
    */
-  protected def onDelete(entity: T): Unit
+  protected def onDelete(entity: T): Unit =
+    operator.onDelete(entity, operator.namespace)
 
-  protected def onDelete(entity: T, namespace: String): Unit = {
-    onAction(entity, namespace, this.onDelete)
-  }
+  protected def onDelete(entity: T, namespace: String): Unit =
+    onAction(entity, namespace, operator.onDelete)
 
   /**
    * It's called when one modifies the configmap of type 'T' (that passes <code>isSupported</code> check) or custom resource.
@@ -92,22 +91,16 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
    *               The type of the entity is passed as a type parameter to this class.
    */
   protected def onModify(entity: T): Unit = {
-    onDelete(entity)
-    onAdd(entity)
+    operator.onDelete(entity, operator.namespace)
+    operator.onAdd(entity, operator.namespace)
   }
 
   protected def onModify(entity: T, namespace: String): Unit = {
-    onAction(entity, namespace, this.onModify)
+    onAction(entity, namespace, operator.onModify)
   }
 
-  private def onAction(entity: T, namespace: String, handler: Consumer[T]): Unit = {
-    if (ALL_NAMESPACES == this.namespace) { //synchronized (this.watch) { // events from the watch should be serialized (1 thread)
-      try {
-        this.namespace = namespace
-        handler.accept(entity)
-      } finally this.namespace = ALL_NAMESPACES
-      //}
-    } else handler.accept(entity)
+  private def onAction(entity: T, namespace: String, handler: (T, String) => Unit): Unit = {
+    handler(entity, namespace)
   }
 
   /**
@@ -163,18 +156,18 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
    */
   def start: CompletableFuture[AbstractWatcher[T]] = {
     initInternals()
-    selector = LabelsHelper.forKind(entityName, prefix)
+    selector = LabelsHelper.forKind(entityName, operator.prefix)
     val ok = checkIntegrity
     if (!ok) {
       logger.error("Unable to initialize the operator correctly, some mandatory fields are missing.")
       return CompletableFuture.completedFuture(null)
     }
 
-    logger.info("Starting {} for namespace {}", operatorName, namespace)
-    if (isCrd)
+    logger.info("Starting {} for namespace {}", operatorName, operator.namespace)
+    if (operator.isCrd)
       crd = crdDeployer.initCrds(
         client,
-        prefix,
+        operator.prefix,
         entityName,
         shortNames,
         pluralName,
@@ -191,30 +184,39 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
       .thenApply[AbstractWatcher[T]](w => {
         watch = w
         logger.info(
-          s"${AnsiColors.gr}$operatorName running${AnsiColors.xx} for namespace ${Option(namespace).getOrElse("'all'")}"
+          s"${AnsiColors.gr}$operatorName running${AnsiColors.xx} for namespace ${Option(operator.namespace).getOrElse("'all'")}"
         )
         w
       })
       .exceptionally((e: Throwable) => {
-        logger.error(s"$operatorName startup failed for namespace $namespace", e.getCause)
+        logger.error(s"$operatorName startup failed for namespace ${operator.namespace}", e.getCause)
         null
       })
   }
 
   private def initializeWatcher: CompletableFuture[AbstractWatcher[T]] = {
-    if (isCrd) {
-      CustomResourceWatcher[T](namespace, entityName, client, crd, onAdd, onDelete, onModify, convertCr)
+    if (operator.isCrd) {
+      CustomResourceWatcher[T](operator.namespace, entityName, client, crd, onAdd, onDelete, onModify, convertCr)
         .watchF()
     } else {
-      ConfigMapWatcher[T](namespace, entityName, client, selector, onAdd, onDelete, onModify, isSupported, convert)
-        .watchF()
+      ConfigMapWatcher[T](
+        operator.namespace,
+        entityName,
+        client,
+        selector,
+        onAdd,
+        onDelete,
+        onModify,
+        isSupported,
+        convert
+      ).watchF()
     }
   }
 
   private def checkIntegrity = {
     var ok = infoClass != null
     ok = ok && entityName != null && !entityName.isEmpty
-    ok = ok && prefix != null && !prefix.isEmpty && prefix.endsWith("/")
+    ok = ok && operator.prefix != null && !operator.prefix.isEmpty //&& prefix.endsWith("/")
     ok = ok && operatorName != null && operatorName.endsWith("operator")
     ok = ok && additionalPrinterColumnNames == null || (additionalPrinterColumnPaths != null && (additionalPrinterColumnNames.length == additionalPrinterColumnPaths.length) && (additionalPrinterColumnTypes == null || additionalPrinterColumnNames.length == additionalPrinterColumnTypes.length))
     ok
@@ -222,24 +224,17 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
 
   private def initInternals()
     : Unit = { // prefer "named" for the entity name, otherwise "entityName" and finally the converted class name.
-    if (named != null && !named.isEmpty) entityName = named
+    if (operator.name != null && !operator.name.isEmpty) entityName = operator.name
     else if (entityName != null && !entityName.isEmpty) {
       // ok case
     } else if (infoClass != null) entityName = infoClass.getSimpleName
     else entityName = ""
 
-    // if CRD env variable is defined, it will override the annotation parameter
-    if (null != System.getenv("CRD")) isCrd = !("false" == System.getenv("CRD"))
-    prefix =
-      if (prefix == null || prefix.isEmpty) getClass.getPackage.getName
-      else prefix
-    prefix = prefix + (if (!prefix.endsWith("/")) "/"
-                       else "")
     operatorName = s"'$entityName' operator"
   }
 
   def stop(): Unit = {
-    logger.info("Stopping {} for namespace {}", operatorName, namespace)
+    logger.info(s"Stopping $operatorName for namespace ${operator.namespace}")
     watch.close()
     client.close()
   }
@@ -253,11 +248,11 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
    * @return returns the set of 'T's that correspond to the CMs or CRs that have been created in the K8s
    */
   protected def getDesiredSet: Set[T] = {
-    if (isCrd) {
+    if (operator.isCrd) {
       val crds = {
         val _crds =
           client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
-        if (ALL_NAMESPACES == namespace) _crds.inAnyNamespace else _crds.inNamespace(namespace)
+        if (ALL_NAMESPACES == operator.namespace) _crds.inAnyNamespace else _crds.inNamespace(operator.namespace)
       }
 
       crds.list.getItems.asScala.toList
@@ -267,8 +262,8 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
     } else {
       val cms = {
         val _cms = client.configMaps
-        if (ALL_NAMESPACES == namespace) _cms.inAnyNamespace
-        else _cms.inNamespace(namespace)
+        if (ALL_NAMESPACES == operator.namespace) _cms.inAnyNamespace
+        else _cms.inNamespace(operator.namespace)
       }
 
       cms
@@ -283,32 +278,11 @@ abstract class AbstractOperator[T <: EntityInfo](crdDeployer: CrdDeployer) exten
     }
   }
 
-  def setClient(client: KubernetesClient): Unit =
-    this.client = client
-
-  def setOpenshift(openshift: Boolean): Unit =
-    isOpenshift = openshift
-
-  def setNamespace(namespace: String): Unit =
-    this.namespace = namespace
-
   def setEntityName(entityName: String): Unit =
     this.entityName = entityName
 
-  def setPrefix(prefix: String): Unit =
-    this.prefix = prefix
-
-  def setInfoClass(infoClass: Class[T]): Unit =
-    this.infoClass = infoClass
-
-  def setCrd(crd: Boolean): Unit =
-    isCrd = crd
-
   def setEnabled(enabled: Boolean): Unit =
     this.enabled = enabled
-
-  def setNamed(named: String): Unit =
-    this.named = named
 
   def setFullReconciliationRun(fullReconciliationRun: Boolean): Unit = {
     this.fullReconciliationRun = fullReconciliationRun

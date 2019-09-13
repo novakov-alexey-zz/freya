@@ -7,10 +7,10 @@ import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
 import io.github.novakovalexey.k8soperator4s.resource.HasDataHelper
 
 object ConfigMapWatcher {
-  def defaultConvert[T <: EntityInfo](clazz: Class[T], cm: ConfigMap): T = HasDataHelper.parseCM(clazz, cm)
+  def defaultConvert[T: EntityInfo](clazz: Class[T], cm: ConfigMap): T = HasDataHelper.parseCM(clazz, cm)
 }
 
-final case class ConfigMapWatcher[T <: EntityInfo](
+final case class ConfigMapWatcher[T: EntityInfo](
   override val namespace: String,
   override val entityName: String,
   override val client: KubernetesClient,

@@ -3,7 +3,7 @@ package io.github.novakovalexey.k8soperator4s.resource
 import io.fabric8.kubernetes.api.model.HasMetadata
 
 /**
- * A helper for parsing the {@code metadata.labels} section inside the K8s resource
+ * A helper for parsing the metadata.labels section inside the K8s resource
  */
 object LabelsHelper {
 

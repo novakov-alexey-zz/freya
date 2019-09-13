@@ -19,12 +19,15 @@ import scala.util.{Failure, Success, Try}
  */
 object HasDataHelper extends LazyLogging {
 
-  def parseYaml[T <: EntityInfo](clazz: Class[T], yamlDoc: String, name: String): T = {
+  def parseYaml[T](clazz: Class[T], yamlDoc: String, name: String)(implicit E: EntityInfo[T]): T = {
     val snake = new Yaml(new Constructor(clazz))
 
     Try(snake.load[T](yamlDoc)).orElse(Try(clazz.newInstance())) match {
       case Success(v) =>
-        Option(v).map(r => r.copy(name = Option(r.name).getOrElse(name))).orNull.asInstanceOf[T]
+        Option(v).map(r => E.copyOf(r, name = Option(E.name).getOrElse(name))) match {
+          case Some(v) => v
+          case None => null.asInstanceOf[T]
+        }
       case e @ Failure(_: InstantiationException | _ : IllegalAccessException) =>
         logger.error("failed to create new instance", e.exception)
         null.asInstanceOf[T]
@@ -51,7 +54,7 @@ object HasDataHelper extends LazyLogging {
    * @param <     T>    type parameter (T must extend { @link io.radanalytics.operator.common.EntityInfo})
    * @return Java object of type T
    */
-  def parseCM[T <: EntityInfo](clazz: Class[T], cm: ConfigMap): T = {
+  def parseCM[T: EntityInfo](clazz: Class[T], cm: ConfigMap): T = {
     val yaml = cm.getData.get("config")
     parseYaml(clazz, yaml, cm.getMetadata.getName)
   }

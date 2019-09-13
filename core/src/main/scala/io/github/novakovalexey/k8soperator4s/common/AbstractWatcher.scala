@@ -7,7 +7,7 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.Watcher.Action._
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator4s.SDKEntrypoint
+import io.github.novakovalexey.k8soperator4s.Scheduler
 import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
 import io.github.novakovalexey.k8soperator4s.common.OperatorConfig.ALL_NAMESPACES
 import io.github.novakovalexey.k8soperator4s.common.crd.{InfoClass, InfoClassDoneable, InfoList}
@@ -16,7 +16,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.Try
 import scala.util.control.NonFatal
 
-abstract class AbstractWatcher[T <: EntityInfo] protected (
+abstract class AbstractWatcher[T : EntityInfo] protected (
   val isCrd: Boolean,
   val namespace: String,
   val entityName: String,
@@ -75,7 +75,7 @@ abstract class AbstractWatcher[T <: EntityInfo] protected (
             }
           })
         },
-        SDKEntrypoint.executors
+        Scheduler.executors
       )
 
     cf.thenApply[Watch](w => {
@@ -127,7 +127,7 @@ abstract class AbstractWatcher[T <: EntityInfo] protected (
           this.watch = watch
           watch
         },
-        SDKEntrypoint.executors
+        Scheduler.executors
       )
 
     cf.thenApply[Watch](w => {
@@ -165,7 +165,7 @@ abstract class AbstractWatcher[T <: EntityInfo] protected (
 
   private def handleAction(action: Watcher.Action, entity: T, ns: String): Unit = {
     if (fullReconciliationRun) {
-      val name = entity.name
+      val name = implicitly[EntityInfo[T]].name
       Try(action).collect {
         case ADDED =>
           logger.info("{}creating{} {}:  \n{}\n", gr, xx, entityName, name)
