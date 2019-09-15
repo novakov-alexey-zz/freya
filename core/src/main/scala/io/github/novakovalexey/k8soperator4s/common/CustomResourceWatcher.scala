@@ -1,21 +1,17 @@
 package io.github.novakovalexey.k8soperator4s.common
 
-import java.util.concurrent.CompletableFuture
-
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
-import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
+import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator4s.common.OperatorConfig.ALL_NAMESPACES
-import io.github.novakovalexey.k8soperator4s.common.crd.InfoClass
+import io.github.novakovalexey.k8soperator4s.common.crd.{InfoClass, InfoClassDoneable, InfoList}
+
+import scala.concurrent.ExecutionContext
 
 object CustomResourceWatcher {
 
-  def defaultConvert[T: EntityInfo](clazz: Class[T], info: InfoClass[_]): T = {
-    val name = info.getMetadata.getName
-    val namespace = info.getMetadata.getNamespace
-
+  def defaultConvert[T](clazz: Class[T], info: InfoClass[_]): T = {
     val mapper = new ObjectMapper
     mapper.registerModule(DefaultScalaModule)
 
@@ -30,37 +26,65 @@ object CustomResourceWatcher {
           e.printStackTrace()
       }
     }
-
-    val E = implicitly[EntityInfo[T]]
-    E.copyOf(infoSpec, name = Option(E.name).getOrElse(name), namespace = Option(E.namespace).getOrElse(namespace))
+    infoSpec
   }
 }
 
-final case class CustomResourceWatcher[T: EntityInfo](
+final case class CustomResourceWatcher[T](
   override val namespace: String = ALL_NAMESPACES,
   override val entityName: String,
-  override val client: KubernetesClient,
-  override val crd: CustomResourceDefinition,
   override val onAdd: (T, String) => Unit,
   override val onDelete: (T, String) => Unit,
   override val onModify: (T, String) => Unit,
-  override val convertCr: InfoClass[_] => T
-) // use via builder
-    extends AbstractWatcher[T](
-      true,
-      namespace,
-      entityName,
-      client,
-      crd,
-      null,
-      onAdd,
-      onDelete,
-      onModify,
-      null,
-      null,
-      convertCr
-    ) {
+  convertCr: InfoClass[_] => (T, Metadata),
+  client: KubernetesClient,
+  crd: CustomResourceDefinition,
+)(implicit ec: ExecutionContext)
+    extends AbstractWatcher[T](true, namespace, entityName, onAdd, onDelete, onModify) {
 
-  override def watchF(): CompletableFuture[AbstractWatcher[T]] =
-    createCustomResourceWatch.thenApply((_: Watch) => this)
+  override def watch: Watch =
+    createCustomResourceWatch
+
+  protected def createCustomResourceWatch: Watch = {
+    val inAllNs = ALL_NAMESPACES == namespace
+    val watchable = {
+      val crds =
+        client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
+      if (inAllNs) crds.inAnyNamespace
+      else crds.inNamespace(namespace)
+    }
+
+    val watch = watchable.watch(new Watcher[InfoClass[T]]() {
+      override def eventReceived(action: Watcher.Action, info: InfoClass[T]): Unit = {
+        logger.info(s"Custom resource in namespace $namespace was $action\nCR:\n$info")
+
+        val (entity, meta) = convertCr(info)
+        if (entity == null)
+          logger.error("something went wrong, unable to parse {} definition", entityName)
+
+        if (action == Watcher.Action.ERROR)
+          logger.error(s"Failed Custom resource $info in namespace $namespace")
+        else
+          handleAction(
+            action,
+            entity,
+            meta,
+            if (inAllNs) info.getMetadata.getNamespace
+            else namespace
+          )
+      }
+
+      override def onClose(e: KubernetesClientException): Unit = {
+        if (e != null) {
+          logger.error(s"Watcher closed with exception in namespace $namespace", e)
+          //recreateWatcher()
+        } else
+          logger.info(s"Watcher closed in namespace $namespace")
+      }
+    })
+
+    logger.info(s"CustomResource watcher running for kinds '$entityName'")
+    watch
+  }
+
 }

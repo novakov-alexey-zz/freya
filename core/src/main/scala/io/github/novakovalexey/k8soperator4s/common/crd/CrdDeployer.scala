@@ -7,15 +7,15 @@ import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, 
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
-import io.github.novakovalexey.k8soperator4s.common.{EntityInfo, JSONSchemaReader}
+import io.github.novakovalexey.k8soperator4s.common.JSONSchemaReader
 
 import scala.jdk.CollectionConverters._
 
-class CrdDeployer[T: EntityInfo] extends LazyLogging {
+class CrdDeployer[T] extends LazyLogging {
 
   def initCrds(
     client: KubernetesClient,
-    prefix: String,
+    apiPrefix: String,
     entityName: String,
     shortNames: List[String],
     pluralName: String,
@@ -28,7 +28,7 @@ class CrdDeployer[T: EntityInfo] extends LazyLogging {
     Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     val crds = client.customResourceDefinitions.list.getItems.asScala.toList
-      .filter(p => entityName == p.getSpec.getNames.getKind && prefix == p.getSpec.getGroup)
+      .filter(p => entityName == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
 
     val crd = crds match {
       case h :: _ =>
@@ -43,11 +43,11 @@ class CrdDeployer[T: EntityInfo] extends LazyLogging {
         val builder = {
           val b = if (schema != null) {
             removeDefaultValues(schema)
-            getCRDBuilder(prefix, entityName, shortNames, pluralName).withNewValidation
+            getCRDBuilder(apiPrefix, entityName, shortNames, pluralName).withNewValidation
               .withNewOpenAPIV3SchemaLike(schema)
               .endOpenAPIV3Schema
               .endValidation
-          } else getCRDBuilder(prefix, entityName, shortNames, pluralName)
+          } else getCRDBuilder(apiPrefix, entityName, shortNames, pluralName)
 
           additionalPrinterColumnNames.toList match {
             case Nil => b
@@ -77,7 +77,7 @@ class CrdDeployer[T: EntityInfo] extends LazyLogging {
               if (isOpenshift) "OpenShift"
               else "Kubernetes"
             )
-            val crd = getCRDBuilder(prefix, entityName, shortNames, pluralName).endSpec.build
+            val crd = getCRDBuilder(apiPrefix, entityName, shortNames, pluralName).endSpec.build
             client.customResourceDefinitions.createOrReplace(crd)
             crd
         }
@@ -85,11 +85,11 @@ class CrdDeployer[T: EntityInfo] extends LazyLogging {
 
     // register the new crd for json serialization
     KubernetesDeserializer.registerCustomKind(
-      s"$prefix/${crd.getSpec.getVersion}#$entityName",
+      s"$apiPrefix/${crd.getSpec.getVersion}#$entityName",
       classOf[InfoClass[_]]
     )
     KubernetesDeserializer.registerCustomKind(
-      s"$prefix/${crd.getSpec.getVersion}#${entityName}List",
+      s"$apiPrefix/${crd.getSpec.getVersion}#${entityName}List",
       classOf[CustomResourceList[_ <: HasMetadata]]
     )
     crd

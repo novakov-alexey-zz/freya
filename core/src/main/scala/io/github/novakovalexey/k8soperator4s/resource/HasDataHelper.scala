@@ -2,7 +2,7 @@ package io.github.novakovalexey.k8soperator4s.resource
 
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.ConfigMap
-import io.github.novakovalexey.k8soperator4s.common.EntityInfo
+import io.github.novakovalexey.k8soperator4s.common.Metadata
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.Constructor
 import org.yaml.snakeyaml.error.YAMLException
@@ -19,16 +19,13 @@ import scala.util.{Failure, Success, Try}
  */
 object HasDataHelper extends LazyLogging {
 
-  def parseYaml[T](clazz: Class[T], yamlDoc: String, name: String)(implicit E: EntityInfo[T]): T = {
+  def parseYaml[T](clazz: Class[T], yamlDoc: String, name: String): T = {
     val snake = new Yaml(new Constructor(clazz))
 
     Try(snake.load[T](yamlDoc)).orElse(Try(clazz.newInstance())) match {
       case Success(v) =>
-        Option(v).map(r => E.copyOf(r, name = Option(E.name).getOrElse(name))) match {
-          case Some(v) => v
-          case None => null.asInstanceOf[T]
-        }
-      case e @ Failure(_: InstantiationException | _ : IllegalAccessException) =>
+        Option(v).getOrElse(null.asInstanceOf[T])
+      case e @ Failure(_: InstantiationException | _: IllegalAccessException) =>
         logger.error("failed to create new instance", e.exception)
         null.asInstanceOf[T]
       case Failure(e: YAMLException) =>
@@ -54,8 +51,8 @@ object HasDataHelper extends LazyLogging {
    * @param <     T>    type parameter (T must extend { @link io.radanalytics.operator.common.EntityInfo})
    * @return Java object of type T
    */
-  def parseCM[T: EntityInfo](clazz: Class[T], cm: ConfigMap): T = {
+  def parseCM[T](clazz: Class[T], cm: ConfigMap): (T, Metadata) = {
     val yaml = cm.getData.get("config")
-    parseYaml(clazz, yaml, cm.getMetadata.getName)
+    (parseYaml(clazz, yaml, cm.getMetadata.getName), Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace))
   }
 }

@@ -1,116 +1,61 @@
 package io.github.novakovalexey.k8soperator4s
 
-import java.util.concurrent.TimeUnit.SECONDS
-import java.util.concurrent._
-
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
-import io.fabric8.kubernetes.client.{ConfigBuilder, DefaultKubernetesClient, KubernetesClient}
-import io.github.novakovalexey.k8soperator4s.common.OperatorConfig._
+import io.fabric8.kubernetes.client.{ConfigBuilder, KubernetesClient, Watch}
 import io.github.novakovalexey.k8soperator4s.common._
 import okhttp3.{HttpUrl, Request}
 
-import scala.collection.mutable.ArrayBuffer
-import scala.util.{Failure, Success, Try}
+import scala.collection.concurrent.TrieMap
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
-object Scheduler {
-  lazy val executors: ExecutorService = Executors.newFixedThreadPool(10)
-}
-
-class Scheduler[T: EntityInfo](operators: Operator[T]*) extends LazyLogging {
-  val config: OperatorConfig = fromMap(System.getenv)
-  val client: KubernetesClient = new DefaultKubernetesClient
+class Scheduler[T](client: KubernetesClient, cfg: OperatorCfg[T], operator: Operator[T])(implicit ec: ExecutionContext)
+    extends LazyLogging {
   val isOpenShift: Boolean = checkIfOnOpenshift()
+  private val watchers = TrieMap[String, Watch]()
 
-  def start(): Unit = {
-    logger.info("Starting..")
-    val future = run.exceptionally((ex: Throwable) => {
+  def start(): Future[Watch] = {
+    val f = run
+    f.failed.foreach { ex: Throwable =>
       logger.error("Unable to start operator for one or more namespaces", ex)
-      System.exit(1)
-      null
-    })
-  }
-
-  private def run = {
-    printInfo()
-
-    if (isOpenShift) logger.info("{}OpenShift{} environment detected.", AnsiColors.ye, AnsiColors.xx)
-    else logger.info("{}Kubernetes{} environment detected.", AnsiColors.ye, AnsiColors.xx)
-    val futures = ArrayBuffer[CompletableFuture[_]]()
-
-    if (SAME_NAMESPACE == config.namespaces.iterator.next) { // current namespace
-      val namespace = client.getNamespace
-      val future = runForNamespace(isOpenShift, namespace, config.reconciliationIntervalS, 0)
-      futures += (future)
-    } else if (ALL_NAMESPACES == config.namespaces.iterator.next) {
-      val future = runForNamespace(isOpenShift, ALL_NAMESPACES, config.reconciliationIntervalS, 0)
-      futures += future
-    } else {
-      config.namespaces.zipWithIndex.foldLeft(futures) {
-        case (acc, (n, i)) =>
-          val future = runForNamespace(isOpenShift, n, config.reconciliationIntervalS, i)
-          acc += future
-      }
     }
-    CompletableFuture.allOf(futures.toSeq: _*)
+    f
   }
 
-  private def runForNamespace(isOpenShift: Boolean, namespace: String, reconInterval: Long, delay: Int) = {
-    if (operators.isEmpty)
-      logger.warn(
-        "No suitable operators were found, make sure your class extends AbstractOperator and have @Singleton on it."
+  def stop(): Future[Int] = {
+    val ws = watchers.toList.map {
+      case (o, w) =>
+        logger.info(s"Stopping '$o' for namespace '${cfg.namespace}'")
+        Future(w.close())
+    }
+    Future.sequence(ws).map(_.length)
+  }
+
+  private def run: Future[Watch] = {
+    if (isOpenShift) logger.info(s"${AnsiColors.ye}OpenShift${AnsiColors.xx} environment detected.")
+    else logger.info(s"${AnsiColors.ye}Kubernetes${AnsiColors.xx} environment detected.")
+
+    runForNamespace(isOpenShift, cfg.namespace)
+  }
+
+  private def runForNamespace(isOpenShift: Boolean, namespace: String): Future[Watch] = {
+    val o = new AbstractOperator[T](operator, cfg, client, isOpenShift)
+    val f = Future(o.start).map { w =>
+      watchers.put(o.operatorName, w)
+
+      logger.info(
+        s"${AnsiColors.re}Operator ${o.operatorName}${AnsiColors.xx} has been started in namespace '$namespace'"
       )
 
-    val futures = operators
-      .map(o => new AbstractOperator[T](o, o.forKind, client, isOpenShift))
-      .zipWithIndex
-      .foldLeft(List[CompletableFuture[_]]()) {
-        case (acc, (operator, i: Int)) =>
-          if (!operator.isEnabled) {
-            logger.info("Skipping initialization of {} operator", operator.getClass)
-            acc
-          } else {
+      w
+    }
 
-            val future: CompletableFuture[_] = operator.start
-              .thenApply(res => {
-                logger.info("{} started in namespace {}", operator.getName, namespace)
-                res
-              })
-              .exceptionally(ex => {
-                logger.error("{} in namespace {} failed to start", operator.getName, namespace, ex.getCause)
-                System.exit(1)
-                null
-              })
+    f.failed.foreach { ex =>
+      logger.error("{} in namespace {} failed to start", o.operatorName, namespace, ex.getCause)
+    }
 
-            val s = Executors.newScheduledThreadPool(1)
-            val realDelay = (delay * operators.length) + i + 2
-
-            s.scheduleAtFixedRate(
-              () => {
-                try {
-                  operator.fullReconciliation()
-                  operator.setFullReconciliationRun(true)
-                } catch {
-                  case t: Throwable =>
-                    logger.warn("error during full reconciliation: {}", t.getMessage)
-                    t.printStackTrace()
-                }
-              },
-              realDelay,
-              reconInterval,
-              SECONDS
-            )
-
-            logger.info(
-              s"full reconciliation for ${operator.getName} scheduled (periodically each $reconInterval seconds)"
-            )
-            logger.info("the first full reconciliation for {} is happening in {} seconds", operator.getName, realDelay)
-
-            acc :+ future
-          }
-      }
-
-    CompletableFuture.allOf(futures: _*)
+    f
   }
 
   private def checkIfOnOpenshift(): Boolean = {
@@ -127,42 +72,18 @@ class Scheduler[T: EntityInfo](operators: Operator[T]*) extends LazyLogging {
 
       val httpClient = HttpClientUtils.createHttpClient(new ConfigBuilder().build)
       val response = httpClient.newCall(new Request.Builder().url(url).build).execute
+      response.body().close()
+      httpClient.connectionPool().evictAll()
       val success = response.isSuccessful
 
-      if (success) logger.info("{} returned {}. We are on OpenShift.", url, response.code)
+      if (success) logger.info(s"$url returned ${response.code}. We are on OpenShift.")
       else logger.info("{} returned {}. We are not on OpenShift. Assuming, we are on Kubernetes.", url, response.code)
 
       success
-    } match {
-      case Success(value) => value
-      case Failure(e) =>
-        e.printStackTrace()
-        logger.error("Failed to distinguish between Kubernetes and OpenShift")
-        logger.warn("Let's assume we are on K8s")
-        false
-    }
-  }
-
-  private def printInfo(): Unit = {
-    var gitSha = "unknown"
-    var version = "unknown"
-    try {
-      version = Option(classOf[Scheduler[T]].getPackage.getImplementationVersion).getOrElse(version)
-//      gitSha = Option(Manifests.read("Implementation-Build")).orElse(gitSha)
-    } catch {
-      case _: Exception =>
-      // ignore, not critical
-    }
-
-    logger.info(
-      "\n{}Operator{} has started in version {}{}{}.\n",
-      AnsiColors.re,
-      AnsiColors.xx,
-      AnsiColors.gr,
-      version,
-      AnsiColors.xx
-    )
-    if (!gitSha.isEmpty) logger.info("Git sha: {}{}{}", AnsiColors.ye, gitSha, AnsiColors.xx)
-    logger.info("==================\n")
+    }.fold(e => {
+      logger.error("Failed to distinguish between Kubernetes and OpenShift", e)
+      logger.warn("Let's assume we are on K8s")
+      false
+    }, identity)
   }
 }

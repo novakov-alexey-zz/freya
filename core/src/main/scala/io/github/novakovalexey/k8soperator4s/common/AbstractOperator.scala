@@ -1,7 +1,5 @@
 package io.github.novakovalexey.k8soperator4s.common
 
-import java.util.concurrent.CompletableFuture
-
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
@@ -10,6 +8,7 @@ import io.github.novakovalexey.k8soperator4s.common.OperatorConfig.ALL_NAMESPACE
 import io.github.novakovalexey.k8soperator4s.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
 import io.github.novakovalexey.k8soperator4s.resource.LabelsHelper
 
+import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
@@ -22,27 +21,26 @@ import scala.util.Try
  *
  * [T] info class that captures the configuration of the objects we are watching
  */
-class AbstractOperator[T: EntityInfo](
+class AbstractOperator[T](
   operator: Operator[T],
-  infoClass: Class[T],
+  cfg: OperatorCfg[T],
   client: KubernetesClient,
   isOpenshift: Boolean = false
-) extends LazyLogging {
-  private val crdDeployer: CrdDeployer[T] = new CrdDeployer
+)(implicit ec: ExecutionContext)
+    extends LazyLogging {
 
-  protected var entityName = ""
+  private val crdDeployer: CrdDeployer[T] = new CrdDeployer[T]
+  protected val kind: String = cfg.customKind.getOrElse(cfg.forKind.getSimpleName)
+  val operatorName = s"'$kind' operator"
+
   protected var shortNames = List.empty[String]
   protected var pluralName: String = ""
-  protected var enabled = true
   protected var additionalPrinterColumnNames = Array.empty[String]
   protected var additionalPrinterColumnPaths = Array.empty[String]
   protected var additionalPrinterColumnTypes = Array.empty[String]
-  protected var fullReconciliationRun = false
 
-  private var selector = Map.empty[String, String]
-  private var operatorName = ""
+  private val selector = LabelsHelper.forKind(kind, cfg.prefix)
   private var crd: CustomResourceDefinition = _
-  private var watch: AbstractWatcher[T] = _
 
   /**
    * In this method, the user of the abstract-operator is assumed to handle the creation of
@@ -56,7 +54,7 @@ class AbstractOperator[T: EntityInfo](
    *               The type of the entity is passed as a type parameter to this class.
    */
   protected def onAdd(entity: T): Unit =
-    onAction(entity, operator.namespace, operator.onAdd)
+    onAction(entity, cfg.namespace, operator.onAdd)
 
   /**
    * Override this method if you want to manually handle the case when it watches for the events in the all
@@ -78,7 +76,7 @@ class AbstractOperator[T: EntityInfo](
    *               The type of the entity is passed as a type parameter to this class.
    */
   protected def onDelete(entity: T): Unit =
-    operator.onDelete(entity, operator.namespace)
+    operator.onDelete(entity, cfg.namespace)
 
   protected def onDelete(entity: T, namespace: String): Unit =
     onAction(entity, namespace, operator.onDelete)
@@ -91,31 +89,21 @@ class AbstractOperator[T: EntityInfo](
    *               The type of the entity is passed as a type parameter to this class.
    */
   protected def onModify(entity: T): Unit = {
-    operator.onDelete(entity, operator.namespace)
-    operator.onAdd(entity, operator.namespace)
+    operator.onDelete(entity, cfg.namespace)
+    operator.onAdd(entity, cfg.namespace)
   }
 
-  protected def onModify(entity: T, namespace: String): Unit = {
+  protected def onModify(entity: T, namespace: String): Unit =
     onAction(entity, namespace, operator.onModify)
-  }
 
-  private def onAction(entity: T, namespace: String, handler: (T, String) => Unit): Unit = {
+  private def onAction(entity: T, namespace: String, handler: (T, String) => Unit): Unit =
     handler(entity, namespace)
-  }
 
   /**
    * Override this method to do arbitrary work before the operator starts listening on configmaps or custom resources.
    */
-  protected def onInit(): Unit = {
-    // no-op by default
-  }
-
-  /**
-   * Override this method to do a full reconciliation.
-   */
-  def fullReconciliation(): Unit = {
-    // no-op by default
-  }
+  protected def onInit(): Unit =
+    operator.onInit()
 
   /**
    * Implicitly only those configmaps with given prefix and kind are being watched, but you can provide additional
@@ -127,13 +115,6 @@ class AbstractOperator[T: EntityInfo](
   protected def isSupported(cm: ConfigMap) = true
 
   /**
-   * If true, start the watcher for this operator. Otherwise it's considered as disabled.
-   *
-   * @return enabled
-   */
-  def isEnabled: Boolean = enabled
-
-  /**
    * Converts the configmap representation into T.
    * Normally, you may want to call something like:
    *
@@ -143,100 +124,81 @@ class AbstractOperator[T: EntityInfo](
    * @param cm ConfigMap that is about to be converted to T
    * @return entity of type T
    */
-  protected def convert(cm: ConfigMap): T = ConfigMapWatcher.defaultConvert(infoClass, cm)
+  protected def convert(cm: ConfigMap): (T, Metadata) = ConfigMapWatcher.defaultConvert(cfg.forKind, cm)
 
-  protected def convertCr(info: InfoClass[_]): T = CustomResourceWatcher.defaultConvert(infoClass, info)
-
-  def getName: String = operatorName
+  protected def convertCr(info: InfoClass[_]): (T, Metadata) =
+    (
+      CustomResourceWatcher.defaultConvert(cfg.forKind, info),
+      Metadata(info.getMetadata.getName, info.getMetadata.getNamespace)
+    )
 
   /**
    * Starts the operator and creates the watch
    *
-   * @return CompletableFuture
    */
-  def start: CompletableFuture[AbstractWatcher[T]] = {
-    initInternals()
-    selector = LabelsHelper.forKind(entityName, operator.prefix)
+  def start: Watch = {
     val ok = checkIntegrity
     if (!ok) {
-      logger.error("Unable to initialize the operator correctly, some mandatory fields are missing.")
-      return CompletableFuture.completedFuture(null)
+      val msg = "Unable to initialize the operator correctly, some mandatory fields are missing."
+      logger.error(msg)
+      throw new RuntimeException(msg)
     }
 
-    logger.info("Starting {} for namespace {}", operatorName, operator.namespace)
-    if (operator.isCrd)
+    logger.info(s"Starting $operatorName for namespace ${cfg.namespace}")
+
+    if (cfg.crd)
       crd = crdDeployer.initCrds(
         client,
-        operator.prefix,
-        entityName,
+        cfg.prefix,
+        kind,
         shortNames,
         pluralName,
         additionalPrinterColumnNames,
         additionalPrinterColumnPaths,
         additionalPrinterColumnTypes,
-        infoClass,
+        cfg.forKind,
         isOpenshift
       )
-    // onInit() can be overridden in child operators
+
     onInit()
 
-    initializeWatcher
-      .thenApply[AbstractWatcher[T]](w => {
-        watch = w
-        logger.info(
-          s"${AnsiColors.gr}$operatorName running${AnsiColors.xx} for namespace ${Option(operator.namespace).getOrElse("'all'")}"
-        )
-        w
-      })
-      .exceptionally((e: Throwable) => {
-        logger.error(s"$operatorName startup failed for namespace ${operator.namespace}", e.getCause)
-        null
-      })
+    val watch = startWatcher
+
+    logger.info(
+      s"${AnsiColors.gr}$operatorName running${AnsiColors.xx} for namespace ${Option(cfg.namespace).getOrElse("'all'")}"
+    )
+
+    watch
   }
 
-  private def initializeWatcher: CompletableFuture[AbstractWatcher[T]] = {
-    if (operator.isCrd) {
-      CustomResourceWatcher[T](operator.namespace, entityName, client, crd, onAdd, onDelete, onModify, convertCr)
-        .watchF()
+  private def startWatcher: Watch =
+    if (cfg.crd) {
+      CustomResourceWatcher[T](cfg.namespace, kind, onAdd, onDelete, onModify, convertCr, client, crd).watch
     } else {
-      ConfigMapWatcher[T](
-        operator.namespace,
-        entityName,
-        client,
-        selector,
-        onAdd,
-        onDelete,
-        onModify,
-        isSupported,
-        convert
-      ).watchF()
+      ConfigMapWatcher[T](cfg.namespace, kind, onAdd, onDelete, onModify, client, selector, isSupported, convert).watch
     }
+
+  protected def recreateWatcher(): Watch = {
+    val crdOrCm = if (cfg.crd) "CustomResource" else "ConfigMap"
+    val w = startWatcher
+    logger.info("{} watch recreated in namespace {}", crdOrCm, cfg.namespace)
+
+//      .failed
+//      .map((e: Throwable) => {
+//        logger.error("Failed to recreate {} watch in namespace {}", crdOrCm, cfg.namespace)
+//        null
+//      })
+    w
   }
 
   private def checkIntegrity = {
-    var ok = infoClass != null
-    ok = ok && entityName != null && !entityName.isEmpty
-    ok = ok && operator.prefix != null && !operator.prefix.isEmpty //&& prefix.endsWith("/")
-    ok = ok && operatorName != null && operatorName.endsWith("operator")
-    ok = ok && additionalPrinterColumnNames == null || (additionalPrinterColumnPaths != null && (additionalPrinterColumnNames.length == additionalPrinterColumnPaths.length) && (additionalPrinterColumnTypes == null || additionalPrinterColumnNames.length == additionalPrinterColumnTypes.length))
+    var ok = cfg.forKind != null
+    ok = ok && kind != null && !kind.isEmpty
+    ok = ok && cfg.prefix != null && !cfg.prefix.isEmpty
+    ok = ok && additionalPrinterColumnNames == null || (additionalPrinterColumnPaths != null
+    && (additionalPrinterColumnNames.length == additionalPrinterColumnPaths.length)
+    && (additionalPrinterColumnTypes == null || additionalPrinterColumnNames.length == additionalPrinterColumnTypes.length))
     ok
-  }
-
-  private def initInternals()
-    : Unit = { // prefer "named" for the entity name, otherwise "entityName" and finally the converted class name.
-    if (operator.name != null && !operator.name.isEmpty) entityName = operator.name
-    else if (entityName != null && !entityName.isEmpty) {
-      // ok case
-    } else if (infoClass != null) entityName = infoClass.getSimpleName
-    else entityName = ""
-
-    operatorName = s"'$entityName' operator"
-  }
-
-  def stop(): Unit = {
-    logger.info(s"Stopping $operatorName for namespace ${operator.namespace}")
-    watch.close()
-    client.close()
   }
 
   /**
@@ -247,23 +209,23 @@ class AbstractOperator[T: EntityInfo](
    *
    * @return returns the set of 'T's that correspond to the CMs or CRs that have been created in the K8s
    */
-  protected def getDesiredSet: Set[T] = {
-    if (operator.isCrd) {
+  protected def getDesiredSet: Set[(T, Metadata)] = {
+    if (cfg.crd) {
       val crds = {
         val _crds =
           client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
-        if (ALL_NAMESPACES == operator.namespace) _crds.inAnyNamespace else _crds.inNamespace(operator.namespace)
+        if (ALL_NAMESPACES == cfg.namespace) _crds.inAnyNamespace else _crds.inNamespace(cfg.namespace)
       }
 
       crds.list.getItems.asScala.toList
       // ignore this CR if not convertible
-        .flatMap(item => Try(Some(convertCr(item))).getOrElse(None))
+        .flatMap(i => Try(Some(convertCr(i))).getOrElse(None))
         .toSet
     } else {
       val cms = {
         val _cms = client.configMaps
-        if (ALL_NAMESPACES == operator.namespace) _cms.inAnyNamespace
-        else _cms.inNamespace(operator.namespace)
+        if (ALL_NAMESPACES == cfg.namespace) _cms.inAnyNamespace
+        else _cms.inNamespace(cfg.namespace)
       }
 
       cms
@@ -276,16 +238,5 @@ class AbstractOperator[T: EntityInfo](
         .flatMap(item => Try(Some(convert(item))).getOrElse(None))
         .toSet
     }
-  }
-
-  def setEntityName(entityName: String): Unit =
-    this.entityName = entityName
-
-  def setEnabled(enabled: Boolean): Unit =
-    this.enabled = enabled
-
-  def setFullReconciliationRun(fullReconciliationRun: Boolean): Unit = {
-    this.fullReconciliationRun = fullReconciliationRun
-    this.watch.setFullReconciliationRun(true)
   }
 }

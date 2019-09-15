@@ -73,5 +73,6 @@ object OperatorConfig {
  * @param reconciliationIntervalS specify every how many milliseconds the reconciliation runs
  * @param operationTimeoutMs      timeout for internal operations specified in milliseconds
  */
-case class OperatorConfig(namespaces: Set[String], metrics: Boolean, metricsJvm: Boolean, metricsPort: Int, reconciliationIntervalS: Long, operationTimeoutMs: Long)
+case class OperatorConfig(namespaces: Set[String], metrics: Boolean, metricsJvm: Boolean, metricsPort: Int,
+                          reconciliationIntervalS: Long, operationTimeoutMs: Long)
 

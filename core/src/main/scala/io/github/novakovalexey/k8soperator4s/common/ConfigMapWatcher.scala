@@ -1,42 +1,85 @@
 package io.github.novakovalexey.k8soperator4s.common
 
-import java.util.concurrent.CompletableFuture
-
 import io.fabric8.kubernetes.api.model.ConfigMap
-import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
+import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.github.novakovalexey.k8soperator4s.common.OperatorConfig.ALL_NAMESPACES
 import io.github.novakovalexey.k8soperator4s.resource.HasDataHelper
 
+import scala.concurrent.ExecutionContext
+import scala.jdk.CollectionConverters._
+
 object ConfigMapWatcher {
-  def defaultConvert[T: EntityInfo](clazz: Class[T], cm: ConfigMap): T = HasDataHelper.parseCM(clazz, cm)
+  def defaultConvert[T](clazz: Class[T], cm: ConfigMap): (T, Metadata) =
+    HasDataHelper.parseCM(clazz, cm)
 }
 
-final case class ConfigMapWatcher[T: EntityInfo](
+final case class ConfigMapWatcher[T](
   override val namespace: String,
   override val entityName: String,
-  override val client: KubernetesClient,
-  override val selector: Map[String, String],
   override val onAdd: (T, String) => Unit,
   override val onDelete: (T, String) => Unit,
   override val onModify: (T, String) => Unit,
-  predicate: ConfigMap => Boolean,
-  override val convert: ConfigMap => T
-) extends AbstractWatcher[T](
-      true,
+  client: KubernetesClient,
+  selector: Map[String, String],
+  isSupported: ConfigMap => Boolean,
+  convert: ConfigMap => (T, Metadata)
+)(implicit ec: ExecutionContext)
+    extends AbstractWatcher[T](
+      false,
       namespace,
       entityName,
-      client,
-      null,
-      selector,
       onAdd,
       onDelete,
-      onModify,
-      predicate,
-      convert,
-      null
+      onModify
     ) {
 
   io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
 
-  override def watchF(): CompletableFuture[AbstractWatcher[T]] =
-    createConfigMapWatch.thenApply((_: Watch) => this)
+  override def watch: Watch =
+    createConfigMapWatch
+
+  private def createConfigMapWatch: Watch = {
+
+    val inAllNs = ALL_NAMESPACES == namespace
+    val watchable = {
+      val cms = client.configMaps
+      if (inAllNs) cms.inAnyNamespace.withLabels(selector.asJava)
+      else cms.inNamespace(namespace).withLabels(selector.asJava)
+    }
+
+    val watch = watchable.watch(new Watcher[ConfigMap]() {
+      override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
+        if (isSupported(cm)) {
+          logger.info("ConfigMap in namespace {} was {}\nCM:\n{}\n", namespace, action, cm)
+          val (entity, meta) = convert(cm)
+
+          if (entity == null)
+            logger.error("something went wrong, unable to parse {} definition", entityName)
+
+          if (action == Watcher.Action.ERROR)
+            logger.error("Failed ConfigMap {} in namespace{} ", cm, namespace)
+          else
+            handleAction(
+              action,
+              entity,
+              meta,
+              if (inAllNs) cm.getMetadata.getNamespace
+              else namespace
+            )
+        } else logger.error("Unknown CM kind: {}", cm.toString)
+      }
+
+      override def onClose(e: KubernetesClientException): Unit = {
+        if (e != null) {
+          logger.error("Watcher closed with exception in namespace {}", namespace, e)
+          //recreateWatcher()
+        } else
+          logger.info("Watcher closed in namespace {}", namespace)
+      }
+    })
+
+    logger.info("ConfigMap watcher running for labels {}", selector)
+    watch
+  }
+
 }

@@ -32,5 +32,5 @@ object LabelsHelper {
       .map(_.getMetadata.getLabels.get(prefix + OPERATOR_KIND_LABEL))
 
   def forKind(kind: String, prefix: String): Map[String, String] =
-    Map(prefix + OPERATOR_KIND_LABEL -> kind)
+    Map(prefix + "/" + OPERATOR_KIND_LABEL -> kind)
 }
