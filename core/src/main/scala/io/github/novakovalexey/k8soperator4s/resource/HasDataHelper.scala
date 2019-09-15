@@ -22,14 +22,19 @@ object HasDataHelper extends LazyLogging {
   def parseYaml[T](clazz: Class[T], yamlDoc: String, name: String): T = {
     val snake = new Yaml(new Constructor(clazz))
 
-    Try(snake.load[T](yamlDoc)).orElse(Try(clazz.newInstance())) match {
+    Try(snake.load[T](yamlDoc)).orElse(Try(clazz.getDeclaredConstructor().newInstance())) match {
       case Success(v) =>
         Option(v).getOrElse(null.asInstanceOf[T])
       case e @ Failure(_: InstantiationException | _: IllegalAccessException) =>
         logger.error("failed to create new instance", e.exception)
         null.asInstanceOf[T]
       case Failure(e: YAMLException) =>
-        val msg = "Unable to parse yaml definition of configmap, check if you don't have typo: \n'\n" + yamlDoc + "\n'\n"
+        val msg =
+          s"""Unable to parse yaml definition of configmap, check if you don't have typo:
+             |'
+             |$yamlDoc
+             |'
+             |""".stripMargin
         logger.error(msg)
         throw new IllegalStateException(e)
       case Failure(e) =>
@@ -40,16 +45,16 @@ object HasDataHelper extends LazyLogging {
 
   /**
    *
-   * @param clazz concrete class of type T that extends the EntityInfo.
-   *              This is the resulting type, we are convertion into.
+   * @param clazz concrete class of type T which is monitored by the operator.
+   *              This is the resulting type, we are converting into.
    * @param cm    input config map that will be converted into T.
    *              We assume there is a multi-line section in the config map called config and it
    *              contains a YAML structure that represents the object of type T. In other words the
    *              keys in the yaml should be the same as the field names in the class T and the name of the
    *              configmap will be assigned to the name of the object T. One can create arbitrarily deep
    *              configuration by nesting the types in T and using the Snake yaml as the conversion library.
-   * @param <     T>    type parameter (T must extend { @link io.radanalytics.operator.common.EntityInfo})
-   * @return Java object of type T
+   * @param T    type parameter T which represent spec of monitored object
+   * @return object of type T
    */
   def parseCM[T](clazz: Class[T], cm: ConfigMap): (T, Metadata) = {
     val yaml = cm.getData.get("config")

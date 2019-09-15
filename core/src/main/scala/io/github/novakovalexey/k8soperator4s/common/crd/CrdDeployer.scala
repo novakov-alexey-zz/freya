@@ -3,7 +3,7 @@ package io.github.novakovalexey.k8soperator4s.common.crd
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.HasMetadata
-import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder, JSONSchemaProps}
+import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent, JSONSchemaProps}
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
@@ -16,38 +16,36 @@ class CrdDeployer[T] extends LazyLogging {
   def initCrds(
     client: KubernetesClient,
     apiPrefix: String,
-    entityName: String,
+    kind: String,
     shortNames: List[String],
     pluralName: String,
-    additionalPrinterColumnNames: Array[String],
-    additionalPrinterColumnPaths: Array[String],
-    additionalPrinterColumnTypes: Array[String],
+    additionalPrinterColumnNames: List[String],
+    additionalPrinterColumnPaths: List[String],
+    additionalPrinterColumnTypes: List[String],
     infoClass: Class[T],
     isOpenshift: Boolean
   ): CustomResourceDefinition = {
     Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     val crds = client.customResourceDefinitions.list.getItems.asScala.toList
-      .filter(p => entityName == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
+      .filter(p => kind == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
 
     val crd = crds match {
       case h :: _ =>
-        logger.info(
-          s"CustomResourceDefinition for $entityName has been found in the K8s, so we are skipping the creation."
-        )
+        logger.info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping the creation.")
         h
       case _ =>
-        logger.info(s"Creating CustomResourceDefinition for $entityName.")
+        logger.info(s"Creating CustomResourceDefinition for $kind.")
         val schema = JSONSchemaReader.readSchema(infoClass)
 
         val builder = {
           val b = if (schema != null) {
             removeDefaultValues(schema)
-            getCRDBuilder(apiPrefix, entityName, shortNames, pluralName).withNewValidation
+            getCRDBuilder(apiPrefix, kind, shortNames, pluralName).withNewValidation
               .withNewOpenAPIV3SchemaLike(schema)
               .endOpenAPIV3Schema
               .endValidation
-          } else getCRDBuilder(apiPrefix, entityName, shortNames, pluralName)
+          } else getCRDBuilder(apiPrefix, kind, shortNames, pluralName)
 
           additionalPrinterColumnNames.toList match {
             case Nil => b
@@ -77,19 +75,16 @@ class CrdDeployer[T] extends LazyLogging {
               if (isOpenshift) "OpenShift"
               else "Kubernetes"
             )
-            val crd = getCRDBuilder(apiPrefix, entityName, shortNames, pluralName).endSpec.build
+            val crd = getCRDBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build
             client.customResourceDefinitions.createOrReplace(crd)
             crd
         }
     }
 
     // register the new crd for json serialization
+    KubernetesDeserializer.registerCustomKind(s"$apiPrefix/${crd.getSpec.getVersion}#$kind", classOf[InfoClass[_]])
     KubernetesDeserializer.registerCustomKind(
-      s"$apiPrefix/${crd.getSpec.getVersion}#$entityName",
-      classOf[InfoClass[_]]
-    )
-    KubernetesDeserializer.registerCustomKind(
-      s"$apiPrefix/${crd.getSpec.getVersion}#${entityName}List",
+      s"$apiPrefix/${crd.getSpec.getVersion}#${kind}List",
       classOf[CustomResourceList[_ <: HasMetadata]]
     )
     crd
@@ -105,7 +100,12 @@ class CrdDeployer[T] extends LazyLogging {
     }
   }
 
-  private def getCRDBuilder(prefix: String, entityName: String, shortNames: List[String], pluralName: String) = {
+  private def getCRDBuilder(
+    prefix: String,
+    entityName: String,
+    shortNames: List[String],
+    pluralName: String
+  ): CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder] = {
     // if no plural name is specified, try to make one by adding "s"
     // also, plural names must be all lowercase
     val plural = {

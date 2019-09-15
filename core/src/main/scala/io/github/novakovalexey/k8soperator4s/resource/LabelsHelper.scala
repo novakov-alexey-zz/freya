@@ -16,7 +16,7 @@ object LabelsHelper {
    * <li>{@code radanalytics.io/kind=app}
    * identifies a ConfigMap that is intended to be consumed
    * by the app operator.</li>
-   * <li>{@code radanalytics.io/kind=notebook}
+   * <li>{@code <prefix>/kind=notebook}
    * identifies a ConfigMap that is intended to be consumed
    * by the notebook operator.</li>
    * </ul>

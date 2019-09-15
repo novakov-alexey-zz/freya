@@ -2,7 +2,7 @@ package io.github.novakovalexey.k8soperator4s
 
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
-import io.github.novakovalexey.k8soperator4s.common.{Operator, OperatorCfg}
+import io.github.novakovalexey.k8soperator4s.common.{CrdConfig, Operator}
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -18,7 +18,7 @@ object TestOperator extends App with LazyLogging {
       logger.info(s"krb deleted: $krb")
   }
 
-  val cfg = OperatorCfg(classOf[Krb], "yp-kss", "io.github.novakov-alexey", crd = true)
+  val cfg = CrdConfig(classOf[Krb], "yp-kss", "io.github.novakov-alexey")
 
   val client = new DefaultKubernetesClient
   val scheduler = new Scheduler[Krb](client, cfg, operator)

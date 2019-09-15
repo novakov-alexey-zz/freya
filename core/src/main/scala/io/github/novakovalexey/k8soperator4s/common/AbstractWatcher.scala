@@ -6,14 +6,14 @@ import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.Watcher.Action._
 import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import scala.util.Try
 import scala.util.control.NonFatal
 
 abstract class AbstractWatcher[T] protected (
   val isCrd: Boolean,
   val namespace: String,
-  val entityName: String,
+  val kind: String,
   val onAdd: (T, String) => Unit,
   val onDelete: (T, String) => Unit,
   val onModify: (T, String) => Unit,
@@ -26,19 +26,19 @@ abstract class AbstractWatcher[T] protected (
     val name = meta.name
     Try(action).collect {
       case ADDED =>
-        logger.info("{}creating{} {}:  \n{}\n", gr, xx, entityName, name)
+        logger.info("{}creating{} {}:  \n{}\n", gr, xx, kind, name)
         onAdd(entity, ns)
-        logger.info("{} {} has been  {}created{}", entityName, name, gr, xx)
+        logger.info("{} {} has been  {}created{}", kind, name, gr, xx)
 
       case DELETED =>
-        logger.info("{}deleting{} {}:  \n{}\n", gr, xx, entityName, name)
+        logger.info("{}deleting{} {}:  \n{}\n", gr, xx, kind, name)
         onDelete(entity, ns)
-        logger.info("{} {} has been  {}deleted{}", entityName, name, gr, xx)
+        logger.info("{} {} has been  {}deleted{}", kind, name, gr, xx)
 
       case MODIFIED =>
-        logger.info("{}modifying{} {}:  \n{}\n", gr, xx, entityName, name)
+        logger.info("{}modifying{} {}:  \n{}\n", gr, xx, kind, name)
         onModify(entity, ns)
-        logger.info("{} {} has been  {}modified{}", entityName, name, gr, xx)
+        logger.info("{} {} has been  {}modified{}", kind, name, gr, xx)
 
       case _ =>
         logger.error("Unknown action: {} in namespace {}", action, namespace)
@@ -46,9 +46,5 @@ abstract class AbstractWatcher[T] protected (
       case NonFatal(e) =>
         logger.warn(s"${re}Error${xx} when reacting on event", e)
     }
-  }
-
-  def close(): Unit = {
-    logger.info(s"Stopping ${if (isCrd) "CustomResourceWatch" else "ConfigMapWatch"} for namespace $namespace")
   }
 }
