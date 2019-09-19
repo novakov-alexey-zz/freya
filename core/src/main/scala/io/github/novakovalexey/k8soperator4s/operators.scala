@@ -118,9 +118,7 @@ abstract class CrdOperator[T](client: KubernetesClient, cfg: CrdConfig[T])(impli
     kind,
     crd.shortNames,
     crd.pluralName,
-    crd.additionalPrinterColumnNames,
-    crd.additionalPrinterColumnPaths,
-    crd.additionalPrinterColumnTypes,
+    crd.additionalPrinterColumns,
     cfg.forKind,
     isOpenShift
   )

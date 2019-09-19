@@ -1,8 +1,7 @@
 package io.github.novakovalexey.k8soperator4s.common
 
-import scala.util.Right
-
 final case class Metadata(name: String, namespace: String)
+final case class AdditionalPrinterColumn(name: String, `type`: String, jsonPath: String)
 
 object OperatorCfg {
   val SAME_NAMESPACE = "~"
@@ -29,14 +28,8 @@ final case class CrdConfig[T](
   override val customKind: Option[String] = None,
   shortNames: List[String] = List.empty[String],
   pluralName: String = "",
-  additionalPrinterColumnNames: Array[String] = Array.empty[String], //TODO: merge these 3 arrays into List[(Name, Path, Type)]
-  additionalPrinterColumnPaths: Array[String] = Array.empty[String],
-  additionalPrinterColumnTypes: Array[String] = Array.empty[String]
-) extends OperatorCfg(forKind, prefix, namespace, customKind) {
-  override def validate: Boolean =
-    super.validate && ((additionalPrinterColumnNames.length == additionalPrinterColumnPaths.length)
-    && (additionalPrinterColumnNames.length == additionalPrinterColumnTypes.length))
-}
+  additionalPrinterColumns: List[AdditionalPrinterColumn]
+) extends OperatorCfg(forKind, prefix, namespace, customKind)
 
 final case class ConfigMapConfig[T](
   override val forKind: Class[T],

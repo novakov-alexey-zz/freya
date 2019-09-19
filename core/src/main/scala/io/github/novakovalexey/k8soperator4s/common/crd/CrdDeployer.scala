@@ -7,7 +7,7 @@ import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, 
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
-import io.github.novakovalexey.k8soperator4s.common.JSONSchemaReader
+import io.github.novakovalexey.k8soperator4s.common.{AdditionalPrinterColumn, JSONSchemaReader}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -20,9 +20,7 @@ class CrdDeployer[T] extends LazyLogging {
     kind: String,
     shortNames: List[String],
     pluralName: String,
-    additionalPrinterColumnNames: Array[String],
-    additionalPrinterColumnPaths: Array[String],
-    additionalPrinterColumnTypes: Array[String],
+    additionalPrinterColumns: List[AdditionalPrinterColumn],
     infoClass: Class[T],
     isOpenshift: Boolean
   ): Either[Throwable, CustomResourceDefinition] = {
@@ -36,17 +34,7 @@ class CrdDeployer[T] extends LazyLogging {
         logger.info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping the creation.")
         Right(h)
       case Nil =>
-        createCrd(
-          client,
-          apiPrefix,
-          kind,
-          shortNames,
-          pluralName,
-          additionalPrinterColumnNames,
-          additionalPrinterColumnPaths,
-          infoClass,
-          isOpenshift
-        )
+        createCrd(client, apiPrefix, kind, shortNames, pluralName, additionalPrinterColumns, infoClass, isOpenshift)
     }
 
     crd.map { crd =>
@@ -66,8 +54,7 @@ class CrdDeployer[T] extends LazyLogging {
     kind: String,
     shortNames: List[String],
     pluralName: String,
-    additionalPrinterColumnNames: Array[String],
-    additionalPrinterColumnPaths: Array[String],
+    additionalPrinterColumns: List[AdditionalPrinterColumn],
     infoClass: Class[T],
     isOpenshift: Boolean
   ) = {
@@ -75,7 +62,7 @@ class CrdDeployer[T] extends LazyLogging {
     val schema = JSONSchemaReader.readSchema(infoClass)
 
     val builder = {
-      val b = schema match {
+      val crdBuilder = schema match {
         case Some(s) =>
           removeDefaultValues(s)
           getCRDBuilder(apiPrefix, kind, shortNames, pluralName).withNewValidation
@@ -86,15 +73,16 @@ class CrdDeployer[T] extends LazyLogging {
           getCRDBuilder(apiPrefix, kind, shortNames, pluralName)
       }
 
-      additionalPrinterColumnNames.toList match {
-        case Nil => b
+      additionalPrinterColumns match {
+        case Nil => crdBuilder
         case _ :: _ =>
-          additionalPrinterColumnNames.indices.foldLeft(b) {
-            case (acc, i) =>
+          additionalPrinterColumns.foldLeft(crdBuilder) {
+            case (acc, c) =>
               acc
                 .addNewAdditionalPrinterColumn()
-                .withName(additionalPrinterColumnNames(i))
-                .withJSONPath(additionalPrinterColumnPaths(i))
+                .withName(c.name)
+                .withType(c.`type`)
+                .withJSONPath(c.jsonPath)
                 .endAdditionalPrinterColumn
           }
       }
