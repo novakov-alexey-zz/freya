@@ -12,7 +12,7 @@ import scala.util.control.NonFatal
 
 abstract class AbstractWatcher[T] protected (
   val isCrd: Boolean,
-  val namespace: String,
+  val namespace: Namespaces,
   val kind: String,
   val onAdd: (T, String) => Unit,
   val onDelete: (T, String) => Unit,
@@ -41,7 +41,7 @@ abstract class AbstractWatcher[T] protected (
         logger.info("{} {} has been  {}modified{}", kind, name, gr, xx)
 
       case _ =>
-        logger.error("Unknown action: {} in namespace {}", action, namespace)
+        logger.error("Unknown action: {} in namespace {}", action, namespace.value)
     }.recover {
       case NonFatal(e) =>
         logger.warn(s"${re}Error${xx} when reacting on event", e)

@@ -30,7 +30,7 @@ object CustomResourceWatcher {
 }
 
 final case class CustomResourceWatcher[T](
-  override val namespace: String = OperatorCfg.ALL_NAMESPACES,
+  override val namespace: Namespaces,
   override val kind: String,
   override val onAdd: (T, String) => Unit,
   override val onDelete: (T, String) => Unit,
@@ -46,12 +46,12 @@ final case class CustomResourceWatcher[T](
     createCustomResourceWatch
 
   protected def createCustomResourceWatch: Watch = {
-    val inAllNs = OperatorCfg.ALL_NAMESPACES == namespace
+    val inAllNs = AllNamespaces == namespace
     val watchable = {
       val crds =
         client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
       if (inAllNs) crds.inAnyNamespace
-      else crds.inNamespace(namespace)
+      else crds.inNamespace(namespace.value)
     }
 
     val watch = watchable.watch(new Watcher[InfoClass[T]]() {
@@ -70,7 +70,7 @@ final case class CustomResourceWatcher[T](
             entity,
             meta,
             if (inAllNs) info.getMetadata.getNamespace
-            else namespace
+            else namespace.value
           )
       }
 

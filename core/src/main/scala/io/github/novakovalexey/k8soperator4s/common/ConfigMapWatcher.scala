@@ -13,7 +13,7 @@ object ConfigMapWatcher {
 }
 
 final case class ConfigMapWatcher[T](
-  override val namespace: String,
+  override val namespace: Namespaces,
   override val kind: String,
   override val onAdd: (T, String) => Unit,
   override val onDelete: (T, String) => Unit,
@@ -32,11 +32,11 @@ final case class ConfigMapWatcher[T](
     createConfigMapWatch
 
   private def createConfigMapWatch: Watch = {
-    val inAllNs = OperatorCfg.ALL_NAMESPACES == namespace
+    val inAllNs = AllNamespaces == namespace
     val watchable = {
       val cms = client.configMaps
       if (inAllNs) cms.inAnyNamespace.withLabels(selector.asJava)
-      else cms.inNamespace(namespace).withLabels(selector.asJava)
+      else cms.inNamespace(namespace.value).withLabels(selector.asJava)
     }
 
     val watch = watchable.watch(new Watcher[ConfigMap]() {
@@ -56,7 +56,7 @@ final case class ConfigMapWatcher[T](
               entity,
               meta,
               if (inAllNs) cm.getMetadata.getNamespace
-              else namespace
+              else namespace.value
             )
         } else logger.error("Unknown CM kind: {}", cm.toString)
       }
