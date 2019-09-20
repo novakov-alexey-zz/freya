@@ -15,9 +15,9 @@ object ConfigMapWatcher {
 final case class ConfigMapWatcher[T](
   override val namespace: Namespaces,
   override val kind: String,
-  override val onAdd: (T, String) => Unit,
-  override val onDelete: (T, String) => Unit,
-  override val onModify: (T, String) => Unit,
+  override val onAdd: (T, Metadata) => Unit,
+  override val onDelete: (T, Metadata) => Unit,
+  override val onModify: (T, Metadata) => Unit,
   client: KubernetesClient,
   selector: Map[String, String],
   isSupported: ConfigMap => Boolean,
@@ -46,10 +46,10 @@ final case class ConfigMapWatcher[T](
           val (entity, meta) = convert(cm)
 
           if (entity == null)
-            logger.error("something went wrong, unable to parse {} definition", kind)
+            logger.error(s"something went wrong, unable to parse $kind definition")
 
           if (action == Watcher.Action.ERROR)
-            logger.error("Failed ConfigMap {} in namespace{} ", cm, namespace)
+            logger.error("Failed ConfigMap {} in namespace {} ", cm, namespace)
           else
             handleAction(
               action,
@@ -58,19 +58,19 @@ final case class ConfigMapWatcher[T](
               if (inAllNs) cm.getMetadata.getNamespace
               else namespace.value
             )
-        } else logger.error("Unknown CM kind: {}", cm.toString)
+        } else logger.error(s"Unknown CM kind: ${cm.toString}")
       }
 
       override def onClose(e: KubernetesClientException): Unit = {
         if (e != null) {
-          logger.error("Watcher closed with exception in namespace {}", namespace, e)
+          logger.error(s"Watcher closed with exception in namespace $namespace", e)
           recreateWatcher(e)
         } else
-          logger.info("Watcher closed in namespace {}", namespace)
+          logger.info(s"Watcher closed in namespace $namespace")
       }
     })
 
-    logger.info("ConfigMap watcher running for labels {}", selector)
+    logger.info(s"ConfigMap watcher running for labels $selector")
     watch
   }
 

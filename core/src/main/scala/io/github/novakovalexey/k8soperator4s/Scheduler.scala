@@ -63,44 +63,34 @@ class Scheduler[T](client: KubernetesClient, operator: Operator[T])(implicit ec:
     f
   }
 
-  def stop(): Future[Unit] = {
-    val maybeWatch = watcher.getAndSet(None)
-    logger.info(s"Stopping '$operatorName' for namespace '$namespace'")
-    maybeWatch match {
-      case Some(w) => Future(w.close())
+  def stop(): Future[Unit] =
+    watcher.getAndSet(None) match {
+      case Some(w) =>
+        logger.info(s"Stopping '$operatorName' for namespace '$namespace'")
+        Future(w.close())
       case None =>
         logger.debug(s"No watcher to close for '$operatorName' with namespace '$namespace'")
         Future.successful(())
     }
-  }
 
-  private def runForNamespace(isOpenShift: Boolean, namespace: Namespaces): Future[Watch] = {
-    val f = Future(startOperator).flatMap {
+  private def runForNamespace(isOpenShift: Boolean, namespace: Namespaces): Future[Watch] =
+    Future(startOperator).flatMap {
       case Right(w) =>
         logger.info(
           s"${AnsiColors.re}Operator $operatorName${AnsiColors.xx} has been started in namespace '$namespace'"
         )
         Future.successful(w)
-      case Left(e) => Future.failed(e)
+      case Left(e) =>
+        logger.error(s"$operatorName in namespace ${namespace.value} failed to start", e)
+        Future.failed(e)
     }
 
-    f.failed.foreach { e =>
-      logger.error(s"$operatorName in namespace ${namespace.value} failed to start", e)
-    }
-    f
-  }
-
-  private def startOperator: Either[Throwable, Watch] = {
-    if (!operator.cfg.validate) {
-      val ex = new RuntimeException(
-        "Unable to initialize the operator correctly, some mandatory configuration fields are missing."
-      )
-      Left(ex)
-    } else {
+  private def startOperator: Either[Throwable, Watch] = operator.cfg.validate match {
+    case Left(e) =>
+      Left(new RuntimeException(s"Unable to initialize the operator correctly: $e"))
+    case Right(()) =>
       logger.info(s"Starting $operatorName for namespace $namespace")
-
       onInit()
-
       startWatcher.map { w =>
         logger.info(
           s"${AnsiColors.gr}$operatorName running${AnsiColors.xx} for namespace ${if (AllNamespaces == namespace) "'all'"
@@ -108,12 +98,15 @@ class Scheduler[T](client: KubernetesClient, operator: Operator[T])(implicit ec:
         )
         w
       }
-    }
   }
 
   private def startWatcher = {
     val watch = operator.watcher(recreateWatcher)
-    watcher.set(watch.toOption)
+    val maybeOldWatch = watcher.getAndSet(watch.toOption)
+    maybeOldWatch.foreach { w =>
+      logger.warn(s"Closing old watcher for $namespace namespace")
+      w.close()
+    }
     watch
   }
 
@@ -126,17 +119,17 @@ class Scheduler[T](client: KubernetesClient, operator: Operator[T])(implicit ec:
     }
   }
 
-  protected def onAdd(entity: T, namespace: String): Unit =
-    onAction(entity, namespace, operator.onAdd)
+  protected def onAdd(entity: T, metadata: Metadata): Unit =
+    onAction(entity, metadata, operator.onAdd)
 
-  protected def onDelete(entity: T, namespace: String): Unit =
-    onAction(entity, namespace, operator.onDelete)
+  protected def onDelete(entity: T, metadata: Metadata): Unit =
+    onAction(entity, metadata, operator.onDelete)
 
-  protected def onModify(entity: T, namespace: String): Unit =
-    onAction(entity, namespace, operator.onModify)
+  protected def onModify(entity: T, metadata: Metadata): Unit =
+    onAction(entity, metadata, operator.onModify)
 
-  private def onAction(entity: T, namespace: String, handler: (T, String) => Unit): Unit =
-    handler(entity, namespace)
+  private def onAction(entity: T, metadata: Metadata, handler: (T, Metadata) => Unit): Unit =
+    handler(entity, metadata)
 
   private def onInit(): Unit =
     operator.onInit()

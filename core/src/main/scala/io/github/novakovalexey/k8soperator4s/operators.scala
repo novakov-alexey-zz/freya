@@ -16,11 +16,11 @@ sealed abstract class Operator[T](client: KubernetesClient, val cfg: OperatorCfg
   protected val isOpenShift: Boolean = Scheduler.checkIfOnOpenshift(client)
   protected val kind: String = cfg.customKind.getOrElse(cfg.forKind.getSimpleName)
 
-  def onAdd(entity: T, namespace: String): Unit = ()
+  def onAdd(entity: T, metadata: Metadata): Unit = ()
 
-  def onDelete(entity: T, namespace: String): Unit = ()
+  def onDelete(entity: T, metadata: Metadata): Unit = ()
 
-  def onModify(entity: T, namespace: String): Unit = ()
+  def onModify(entity: T, metadata: Metadata): Unit = ()
 
   def onInit(): Unit = ()
 

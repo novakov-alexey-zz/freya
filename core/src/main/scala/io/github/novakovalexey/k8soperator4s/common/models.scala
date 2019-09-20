@@ -14,11 +14,13 @@ sealed abstract class OperatorCfg[T](
   val namespace: Namespaces = AllNamespaces,
   val customKind: Option[String] = None
 ) {
-  //TODO: return Either with error message
-  def validate: Boolean = {
-    val ok = forKind != null
-    ok && prefix != null && !prefix.isEmpty
-  }
+  def validate: Either[String, Unit] =
+    (forKind, prefix) match {
+      case (null, _) => Left("forKind must not be null")
+      case (_, null) => Left("prefix must not be null")
+      case (_, _) if prefix.isEmpty => Left("prefix must not be empty")
+      case _ => Right(())
+    }
 }
 
 final case class CrdConfig[T](
@@ -28,7 +30,7 @@ final case class CrdConfig[T](
   override val customKind: Option[String] = None,
   shortNames: List[String] = List.empty[String],
   pluralName: String = "",
-  additionalPrinterColumns: List[AdditionalPrinterColumn]
+  additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
 ) extends OperatorCfg(forKind, prefix, namespace, customKind)
 
 final case class ConfigMapConfig[T](
@@ -48,4 +50,6 @@ case object SameNamespace extends Namespaces {
   val value: String = OperatorCfg.SAME_NAMESPACE
 }
 
-final case class Namespace(value: String) extends Namespaces
+final case class Namespace(value: String) extends Namespaces {
+  override def toString: String = value
+}

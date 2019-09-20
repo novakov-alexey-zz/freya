@@ -10,10 +10,10 @@ object LabelsHelper {
   /**
    * The kind of a ConfigMap:
    * <ul>
-   * <li>{@code radanalytics.io/kind=cluster}
+   * <li>{@code <prefix>/kind=cluster}
    * identifies a ConfigMap that is intended to be consumed by
    * the cluster operator.</li>
-   * <li>{@code radanalytics.io/kind=app}
+   * <li>{@code <prefix>/kind=app}
    * identifies a ConfigMap that is intended to be consumed
    * by the app operator.</li>
    * <li>{@code <prefix>/kind=notebook}
@@ -22,7 +22,7 @@ object LabelsHelper {
    * </ul>
    */
   val OPERATOR_KIND_LABEL = "kind"
-  val OPERATOR_SEVICE_TYPE_LABEL = "service"
+  val OPERATOR_SERVICE_TYPE_LABEL = "service"
   val OPERATOR_RC_TYPE_LABEL = "rcType"
   val OPERATOR_POD_TYPE_LABEL = "podType"
   val OPERATOR_DEPLOYMENT_LABEL = "deployment"

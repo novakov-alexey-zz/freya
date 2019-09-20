@@ -32,9 +32,9 @@ object CustomResourceWatcher {
 final case class CustomResourceWatcher[T](
   override val namespace: Namespaces,
   override val kind: String,
-  override val onAdd: (T, String) => Unit,
-  override val onDelete: (T, String) => Unit,
-  override val onModify: (T, String) => Unit,
+  override val onAdd: (T, Metadata) => Unit,
+  override val onDelete: (T, Metadata) => Unit,
+  override val onModify: (T, Metadata) => Unit,
   convertCr: InfoClass[_] => (T, Metadata),
   client: KubernetesClient,
   crd: CustomResourceDefinition,

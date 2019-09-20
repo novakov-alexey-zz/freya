@@ -58,6 +58,8 @@ object HasDataHelper extends LazyLogging {
    */
   def parseCM[T](clazz: Class[T], cm: ConfigMap): (T, Metadata) = {
     val yaml = cm.getData.get("config")
-    (parseYaml(clazz, yaml, cm.getMetadata.getName), Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace))
+    val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+    val entity = parseYaml(clazz, yaml, cm.getMetadata.getName)
+    (entity, meta)
   }
 }

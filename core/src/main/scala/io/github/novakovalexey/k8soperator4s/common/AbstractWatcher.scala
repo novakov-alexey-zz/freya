@@ -14,37 +14,36 @@ abstract class AbstractWatcher[T] protected (
   val isCrd: Boolean,
   val namespace: Namespaces,
   val kind: String,
-  val onAdd: (T, String) => Unit,
-  val onDelete: (T, String) => Unit,
-  val onModify: (T, String) => Unit,
+  val onAdd: (T, Metadata) => Unit,
+  val onDelete: (T, Metadata) => Unit,
+  val onModify: (T, Metadata) => Unit,
 )(implicit ec: ExecutionContext)
     extends LazyLogging {
 
   def watch: Watch
 
   protected def handleAction(action: Action, entity: T, meta: Metadata, ns: String): Unit = {
-    val name = meta.name
     Try(action).collect {
       case ADDED =>
-        logger.info("{}creating{} {}:  \n{}\n", gr, xx, kind, name)
-        onAdd(entity, ns)
-        logger.info("{} {} has been  {}created{}", kind, name, gr, xx)
+        logger.info("{}creating{} {}:  \n{}\n", gr, xx, kind, meta.name)
+        onAdd(entity, meta)
+        logger.info("{} {} has been  {}created{}", kind, meta.name, gr, xx)
 
       case DELETED =>
-        logger.info("{}deleting{} {}:  \n{}\n", gr, xx, kind, name)
-        onDelete(entity, ns)
-        logger.info("{} {} has been  {}deleted{}", kind, name, gr, xx)
+        logger.info("{}deleting{} {}:  \n{}\n", gr, xx, kind, meta.name)
+        onDelete(entity, meta)
+        logger.info("{} {} has been  {}deleted{}", kind, meta.name, gr, xx)
 
       case MODIFIED =>
-        logger.info("{}modifying{} {}:  \n{}\n", gr, xx, kind, name)
-        onModify(entity, ns)
-        logger.info("{} {} has been  {}modified{}", kind, name, gr, xx)
+        logger.info("{}modifying{} {}:  \n{}\n", gr, xx, kind, meta.name)
+        onModify(entity, meta)
+        logger.info("{} {} has been  {}modified{}", kind, meta.name, gr, xx)
 
       case _ =>
         logger.error("Unknown action: {} in namespace {}", action, namespace.value)
     }.recover {
       case NonFatal(e) =>
-        logger.warn(s"${re}Error${xx} when reacting on event", e)
+        logger.warn(s"${re}Error$xx when reacting on event", e)
     }
   }
 }
