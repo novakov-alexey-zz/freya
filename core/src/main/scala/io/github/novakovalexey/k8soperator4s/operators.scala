@@ -57,7 +57,7 @@ abstract class ConfigMapOperator[T](client: KubernetesClient, cfg: ConfigMapConf
       .asScala
       .toList
       // ignore this CM if not convertible
-      .flatMap(item => Try(Some(convert(item))).getOrElse(None))
+      .flatMap(item => Try(Option(convert(item))).getOrElse(None))
       .toSet
   }
 
@@ -100,7 +100,7 @@ abstract class CrdOperator[T](client: KubernetesClient, cfg: CrdConfig[T])(impli
 
     crds.list.getItems.asScala.toList
     // ignore this CR if not convertible
-      .flatMap(i => Try(Some(convertCr(i))).getOrElse(None))
+      .flatMap(i => Try(Option(convertCr(i))).getOrElse(None))
       .toSet
   }
 
