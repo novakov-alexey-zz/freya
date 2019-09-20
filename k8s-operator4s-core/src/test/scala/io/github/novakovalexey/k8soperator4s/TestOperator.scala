@@ -8,17 +8,21 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
+class KrbOperator(client: DefaultKubernetesClient, cfg: CrdConfig[Krb]) extends CrdOperator[Krb](client, cfg) {
+
+  override def onAdd(krb: Krb, meta: Metadata): Unit = {
+    logger.info(s"new krb added: $krb, $meta")
+
+  }
+
+  override def onDelete(krb: Krb, meta: Metadata): Unit =
+    logger.info(s"krb deleted: $krb, $meta")
+}
+
 object TestOperator extends App with LazyLogging {
   val client = new DefaultKubernetesClient
   val cfg = CrdConfig(classOf[Krb], Namespace("yp-kss"), "io.github.novakov-alexey")
-  val operator = new CrdOperator[Krb](client, cfg) {
-
-    override def onAdd(krb: Krb, meta: Metadata): Unit =
-      logger.info(s"new krb added: $krb, $meta")
-
-    override def onDelete(krb: Krb, meta: Metadata): Unit =
-      logger.info(s"krb deleted: $krb, $meta")
-  }
+  val operator = new KrbOperator(client, cfg)
 
   val scheduler = new Scheduler[Krb](client, operator)
   val future = scheduler.start()

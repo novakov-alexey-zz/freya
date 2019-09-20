@@ -13,7 +13,7 @@ import scala.util.Try
 
 sealed abstract class Operator[T](client: KubernetesClient, val cfg: OperatorCfg[T])(implicit ex: ExecutionContext)
     extends LazyLogging {
-  protected val isOpenShift: Boolean = Scheduler.checkIfOnOpenshift(client)
+  val isOpenShift: Boolean = Scheduler.checkIfOnOpenshift(client)
   protected val kind: String = cfg.customKind.getOrElse(cfg.forKind.getSimpleName)
 
   def onAdd(entity: T, metadata: Metadata): Unit = ()
