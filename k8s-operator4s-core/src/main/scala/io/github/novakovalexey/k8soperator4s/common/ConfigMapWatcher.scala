@@ -24,7 +24,7 @@ final case class ConfigMapWatcher[T](
   convert: ConfigMap => (T, Metadata),
   recreateWatcher: KubernetesClientException => Unit
 )(implicit ec: ExecutionContext)
-    extends AbstractWatcher[T](false, namespace, kind, onAdd, onDelete, onModify) {
+    extends AbstractWatcher[T]( namespace, kind, onAdd, onDelete, onModify) {
 
   io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
 
@@ -49,7 +49,7 @@ final case class ConfigMapWatcher[T](
             logger.error(s"something went wrong, unable to parse $kind definition")
 
           if (action == Watcher.Action.ERROR)
-            logger.error("Failed ConfigMap {} in namespace {} ", cm, namespace)
+            logger.error(s"Failed ConfigMap $cm in namespace $namespace")
           else
             handleAction(
               action,

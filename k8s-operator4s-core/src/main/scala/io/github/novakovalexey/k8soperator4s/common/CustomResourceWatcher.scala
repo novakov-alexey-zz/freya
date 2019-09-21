@@ -40,7 +40,7 @@ final case class CustomResourceWatcher[T](
   crd: CustomResourceDefinition,
   recreateWatcher: KubernetesClientException => Unit
 )(implicit ec: ExecutionContext)
-    extends AbstractWatcher[T](true, namespace, kind, onAdd, onDelete, onModify) {
+    extends AbstractWatcher[T]( namespace, kind, onAdd, onDelete, onModify) {
 
   override def watch: Watch =
     createCustomResourceWatch

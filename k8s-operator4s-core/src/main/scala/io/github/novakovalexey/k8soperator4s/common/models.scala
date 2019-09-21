@@ -44,10 +44,12 @@ sealed trait Namespaces {
   val value: String
 }
 case object AllNamespaces extends Namespaces {
-  val value: String = OperatorCfg.ALL_NAMESPACES
+  val value: String = "all"
+  override def toString: String = value
 }
 case object SameNamespace extends Namespaces {
-  val value: String = OperatorCfg.SAME_NAMESPACE
+  val value: String = "current"
+  override def toString: String = value
 }
 
 final case class Namespace(value: String) extends Namespaces {

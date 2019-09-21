@@ -7,11 +7,12 @@ val fabric8K8sVer = "4.4.2"
 
 lazy val `k8s-operator4s-core` = project.settings(
   libraryDependencies ++= Seq(
-    "io.fabric8" % "kubernetes-client" % fabric8K8sVer,
-    "io.fabric8" % "kubernetes-model" % fabric8K8sVer,
+    k8sClient,
+    k8sModel,
     scalaLogging,
-    logbackClassic,
-    "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.10.0.pr2"
+    //TODO: get rid of jackson library
+    "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.10.0.pr2",
+    logbackClassic % Test,
   )
 )
 

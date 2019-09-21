@@ -41,7 +41,7 @@ object Scheduler extends LazyLogging {
     }, identity)
 }
 
-class Scheduler[T](client: KubernetesClient, operator: Operator[T])(implicit ec: ExecutionContext) extends LazyLogging {
+class Scheduler[T](operator: Operator[T])(implicit ec: ExecutionContext) extends LazyLogging {
 
   private val isOpenShift: Boolean = operator.isOpenShift
   private val watcher: AtomicReference[Option[Watch]] = new AtomicReference(None)
@@ -49,7 +49,7 @@ class Scheduler[T](client: KubernetesClient, operator: Operator[T])(implicit ec:
   private val kind = operator.cfg.customKind.getOrElse(operator.cfg.forKind.getSimpleName)
   private val operatorName = s"'$kind' operator"
   private val namespace =
-    if (operator.cfg.namespace == SameNamespace) Namespace(client.getNamespace)
+    if (operator.cfg.namespace == SameNamespace) operator.clientNamespace
     else operator.cfg.namespace
 
   def start(): Future[Watch] = {

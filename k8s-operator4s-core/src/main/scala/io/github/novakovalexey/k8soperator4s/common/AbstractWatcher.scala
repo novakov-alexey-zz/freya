@@ -11,7 +11,6 @@ import scala.util.Try
 import scala.util.control.NonFatal
 
 abstract class AbstractWatcher[T] protected (
-  val isCrd: Boolean,
   val namespace: Namespaces,
   val kind: String,
   val onAdd: (T, Metadata) => Unit,
@@ -25,22 +24,22 @@ abstract class AbstractWatcher[T] protected (
   protected def handleAction(action: Action, entity: T, meta: Metadata, ns: String): Unit = {
     Try(action).collect {
       case ADDED =>
-        logger.info("{}creating{} {}:  \n{}\n", gr, xx, kind, meta.name)
+        logger.info("Event received {}ADDED{} kind={} name={}", gr, xx, kind, meta.name)
         onAdd(entity, meta)
-        logger.info("{} {} has been  {}created{}", kind, meta.name, gr, xx)
+        logger.info("Event {}ADDED{} for {} {} has been handled", gr, xx, kind, meta.name)
 
       case DELETED =>
-        logger.info("{}deleting{} {}:  \n{}\n", gr, xx, kind, meta.name)
+        logger.info("Event received {}DELETED{} kind={} name={}", gr, xx, kind, meta.name)
         onDelete(entity, meta)
-        logger.info("{} {} has been  {}deleted{}", kind, meta.name, gr, xx)
+        logger.info("Event {}DELETED{} for kind={} name={}  has been handled", gr, xx, kind, meta.name)
 
       case MODIFIED =>
-        logger.info("{}modifying{} {}:  \n{}\n", gr, xx, kind, meta.name)
+        logger.info("Event received {}MODIFIED{} {}: {}", gr, xx, kind, meta.name)
         onModify(entity, meta)
-        logger.info("{} {} has been  {}modified{}", kind, meta.name, gr, xx)
+        logger.info("Event {}MODIFIED{} for kind={} name={} has been handled", gr, xx, kind, meta.name)
 
       case _ =>
-        logger.error("Unknown action: {} in namespace {}", action, namespace.value)
+        logger.error("Unknown action: {} in namespace '{}'", action, namespace)
     }.recover {
       case NonFatal(e) =>
         logger.warn(s"${re}Error$xx when reacting on event", e)
