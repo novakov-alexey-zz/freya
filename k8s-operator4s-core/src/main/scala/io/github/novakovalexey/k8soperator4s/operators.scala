@@ -20,10 +20,11 @@ sealed abstract class Operator[T](readClient: ReadClient, val cfg: OperatorCfg[T
   implicit ex: ExecutionContext
 ) extends LazyLogging {
 
-  protected[k8soperator4s] val _client: KubernetesClient = readClient()
+  private[k8soperator4s] val _client: KubernetesClient = readClient()
+  protected val kind: String = cfg.customKind.getOrElse(cfg.forKind.getSimpleName)
+
   val isOpenShift: Boolean = Scheduler.checkIfOnOpenshift(_client)
   val clientNamespace: Namespaces = Namespace(_client.getNamespace)
-  protected val kind: String = cfg.customKind.getOrElse(cfg.forKind.getSimpleName)
 
   def onAdd(entity: T, metadata: Metadata): Unit = ()
 
@@ -55,7 +56,7 @@ abstract class ConfigMapOperator[T](
    *
    * @return returns the set of 'T's that correspond to the CMs that have been created in the K8s
    */
-  protected def getDesiredSet: Set[(T, Metadata)] = {
+  protected def currentConfigMaps: Map[Metadata, T] = {
     val cms = {
       val _cms = _client.configMaps
       if (AllNamespaces == cfg.namespace) _cms.inAnyNamespace
@@ -70,7 +71,8 @@ abstract class ConfigMapOperator[T](
       .toList
       // ignore this CM if not convertible
       .flatMap(item => Try(Option(convert(item))).getOrElse(None))
-      .toSet
+      .map { case (entity, meta) => meta -> entity }
+      .toMap
   }
 
   protected def convert(cm: ConfigMap): (T, Metadata) =
@@ -106,7 +108,7 @@ abstract class CrdOperator[T](
    *
    * @return returns the set of 'T's that correspond to the CRs that have been created in the K8s
    */
-  protected def getDesiredSet: Either[Throwable, Set[(T, Metadata)]] = crd.map { v =>
+  protected def currentResources: Either[Throwable, Map[Metadata, T]] = crd.map { v =>
     val crds = {
       val _crds =
         _client.customResources(v, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
@@ -116,7 +118,8 @@ abstract class CrdOperator[T](
     crds.list.getItems.asScala.toList
     // ignore this CR if not convertible
       .flatMap(i => Try(Option(convertCr(i))).getOrElse(None))
-      .toSet
+      .map { case (entity, meta) => meta -> entity }
+      .toMap
   }
 
   def watchName: String = "CustomResource"
