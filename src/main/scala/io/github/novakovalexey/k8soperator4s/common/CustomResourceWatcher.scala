@@ -1,12 +1,12 @@
 package io.github.novakovalexey.k8soperator4s.common
 
+import cats.effect.Effect
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.github.novakovalexey.k8soperator4s.Operator
 import io.github.novakovalexey.k8soperator4s.common.crd.{InfoClass, InfoClassDoneable, InfoList}
-
-import scala.concurrent.ExecutionContext
 
 object CustomResourceWatcher {
 
@@ -17,7 +17,7 @@ object CustomResourceWatcher {
     var infoSpec = mapper.convertValue(info.getSpec, clazz)
 
     if (infoSpec == null) { // empty spec
-      try infoSpec = clazz.newInstance
+      try infoSpec = clazz.getDeclaredConstructor().newInstance()
       catch {
         case e: InstantiationException =>
           e.printStackTrace()
@@ -29,18 +29,15 @@ object CustomResourceWatcher {
   }
 }
 
-final case class CustomResourceWatcher[T](
+final case class CustomResourceWatcher[F[_]: Effect, T](
   override val namespace: Namespaces,
   override val kind: String,
-  override val onAdd: (T, Metadata) => Unit,
-  override val onDelete: (T, Metadata) => Unit,
-  override val onModify: (T, Metadata) => Unit,
+  override val handler: Operator[F, T],
   convertCr: InfoClass[_] => (T, Metadata),
   client: KubernetesClient,
   crd: CustomResourceDefinition,
-  recreateWatcher: KubernetesClientException => Unit
-)(implicit ec: ExecutionContext)
-    extends AbstractWatcher[T]( namespace, kind, onAdd, onDelete, onModify) {
+  recreateWatcher: KubernetesClientException => F[Unit]
+) extends AbstractWatcher[F, T](namespace, kind, handler, recreateWatcher) {
 
   override def watch: Watch =
     createCustomResourceWatch
@@ -65,22 +62,19 @@ final case class CustomResourceWatcher[T](
         if (action == Watcher.Action.ERROR)
           logger.error(s"Failed Custom resource $info in namespace $namespace")
         else
-          handleAction(
-            action,
-            entity,
-            meta,
-            if (inAllNs) info.getMetadata.getNamespace
-            else namespace.value
+          unsafeRun(
+            handleAction(
+              action,
+              entity,
+              meta,
+              if (inAllNs) info.getMetadata.getNamespace
+              else namespace.value
+            )
           )
       }
 
-      override def onClose(e: KubernetesClientException): Unit = {
-        if (e != null) {
-          logger.error(s"Watcher closed with exception in namespace '$namespace'", e)
-          recreateWatcher(e)
-        } else
-          logger.info(s"Watcher closed in namespace $namespace")
-      }
+      override def onClose(e: KubernetesClientException): Unit =
+        CustomResourceWatcher.super.onClose(e)
     })
 
     logger.info(s"CustomResource watcher running for kinds '$kind'")

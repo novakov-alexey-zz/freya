@@ -1,55 +1,71 @@
 package io.github.novakovalexey.k8soperator4s
 
+import cats.effect.{Effect, Sync}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watch}
-import io.github.novakovalexey.k8soperator4s.Operator.ReadClient
 import io.github.novakovalexey.k8soperator4s.common._
 import io.github.novakovalexey.k8soperator4s.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
 import io.github.novakovalexey.k8soperator4s.resource.LabelsHelper
 
-import scala.concurrent.ExecutionContext
+import scala.annotation.unused
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
-object Operator {
-  type ReadClient = () => _ <: KubernetesClient
+abstract class Operator[F[_]: Sync, T] {
+  def onAdd(@unused entity: T, @unused metadata: Metadata): F[Unit] =
+    Sync[F].unit
+
+  def onDelete(@unused entity: T, @unused metadata: Metadata): F[Unit] =
+    Sync[F].unit
+
+  def onModify(@unused entity: T, @unused metadata: Metadata): F[Unit] =
+    Sync[F].unit
+
+  def onInit(): F[Unit] =
+    Sync[F].unit
 }
 
-sealed abstract class Operator[T](readClient: ReadClient, val cfg: OperatorCfg[T])(
-  implicit ex: ExecutionContext
+sealed abstract class AbstractOperator[F[_]: Effect, T](
+  val handler: Operator[F, T],
+  private[k8soperator4s] val client: KubernetesClient,
+  val cfg: OperatorCfg[T]
 ) extends LazyLogging {
-
-  private[k8soperator4s] val _client: KubernetesClient = readClient()
   protected val kind: String = cfg.customKind.getOrElse(cfg.forKind.getSimpleName)
 
-  val isOpenShift: Boolean = Scheduler.checkIfOnOpenshift(_client)
-  val clientNamespace: Namespaces = Namespace(_client.getNamespace)
+  val isOpenShift: Boolean = Scheduler.checkIfOnOpenshift(client.getMasterUrl)
+  val clientNamespace: Namespaces = Namespace(client.getNamespace)
 
-  def onAdd(entity: T, metadata: Metadata): Unit = ()
+  val watchName: String
 
-  def onDelete(entity: T, metadata: Metadata): Unit = ()
+  def onAdd(entity: T, metadata: Metadata): F[Unit] =
+    handler.onAdd(entity, metadata)
 
-  def onModify(entity: T, metadata: Metadata): Unit = ()
+  def onDelete(entity: T, metadata: Metadata): F[Unit] =
+    handler.onDelete(entity, metadata)
 
-  def onInit(): Unit = ()
+  def onModify(entity: T, metadata: Metadata): F[Unit] =
+    handler.onModify(entity, metadata)
 
-  def watcher(recreateWatcher: KubernetesClientException => Unit): Either[Throwable, Watch]
+  def onInit(): F[Unit] =
+    handler.onInit()
 
-  def watchName: String
+  def watcher(recreateWatcher: KubernetesClientException => F[Unit]): F[Watch]
+
+  def close(): Unit = client.close()
 }
 
-abstract class ConfigMapOperator[T](
+class ConfigMapOperator[F[_]: Effect, T](
+  handler: Operator[F, T],
   cfg: ConfigMapConfig[T],
-  readClient: ReadClient = () => new DefaultKubernetesClient()
-)(implicit ex: ExecutionContext)
-    extends Operator[T](readClient, cfg) {
+  client: KubernetesClient = new DefaultKubernetesClient()
+) extends AbstractOperator[F, T](handler, client, cfg) {
 
   private val selector = LabelsHelper.forKind(kind, cfg.prefix)
 
-  protected def isSupported(cm: ConfigMap): Boolean = true
+  protected def isSupported(@unused cm: ConfigMap): Boolean = true
 
-  def watchName: String = "ConfigMap"
+  val watchName: String = "ConfigMap"
 
   /**
    * Call this method in the concrete operator to obtain the desired state of the system.
@@ -58,7 +74,7 @@ abstract class ConfigMapOperator[T](
    */
   protected def currentConfigMaps: Map[Metadata, T] = {
     val cms = {
-      val _cms = _client.configMaps
+      val _cms = client.configMaps
       if (AllNamespaces == cfg.namespace) _cms.inAnyNamespace
       else _cms.inNamespace(cfg.namespace.value)
     }
@@ -78,29 +94,17 @@ abstract class ConfigMapOperator[T](
   protected def convert(cm: ConfigMap): (T, Metadata) =
     ConfigMapWatcher.defaultConvert(cfg.forKind, cm)
 
-  override def watcher(recreateWatcher: KubernetesClientException => Unit): Either[Throwable, Watch] =
-    Right(
-      ConfigMapWatcher[T](
-        cfg.namespace,
-        kind,
-        onAdd,
-        onDelete,
-        onModify,
-        _client,
-        selector,
-        isSupported,
-        convert,
-        recreateWatcher
-      ).watch
+  override def watcher(recreateWatcher: KubernetesClientException => F[Unit]): F[Watch] =
+    Sync[F].delay(
+      ConfigMapWatcher[F, T](cfg.namespace, kind, handler, client, selector, isSupported, convert, recreateWatcher).watch
     )
 }
 
-abstract class CrdOperator[T](
+class CrdOperator[F[_]: Effect, T](
+  handler: Operator[F, T],
   cfg: CrdConfig[T],
-  readClient: ReadClient = () => new DefaultKubernetesClient()
-)(implicit ex: ExecutionContext)
-    extends Operator[T](readClient, cfg) {
-  private val crdDeployer = new CrdDeployer[T]
+  client: KubernetesClient = new DefaultKubernetesClient()
+) extends AbstractOperator[F, T](handler, client, cfg) {
   private val crd = deployCrd(cfg.asInstanceOf[CrdConfig[T]])
 
   /**
@@ -111,7 +115,7 @@ abstract class CrdOperator[T](
   protected def currentResources: Either[Throwable, Map[Metadata, T]] = crd.map { v =>
     val crds = {
       val _crds =
-        _client.customResources(v, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
+        client.customResources(v, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
       if (AllNamespaces == cfg.namespace) _crds.inAnyNamespace else _crds.inNamespace(cfg.namespace.value)
     }
 
@@ -122,7 +126,7 @@ abstract class CrdOperator[T](
       .toMap
   }
 
-  def watchName: String = "CustomResource"
+  val watchName: String = "CustomResource"
 
   protected def convertCr(info: InfoClass[_]): (T, Metadata) =
     (
@@ -130,8 +134,8 @@ abstract class CrdOperator[T](
       Metadata(info.getMetadata.getName, info.getMetadata.getNamespace)
     )
 
-  private def deployCrd(crd: CrdConfig[T]) = crdDeployer.initCrds(
-    _client,
+  private def deployCrd(crd: CrdConfig[T]) = CrdDeployer.initCrds[T](
+    client,
     cfg.prefix,
     kind,
     crd.shortNames,
@@ -141,10 +145,11 @@ abstract class CrdOperator[T](
     isOpenShift
   )
 
-  override def watcher(recreateWatcher: KubernetesClientException => Unit): Either[Throwable, Watch] =
-    crd.map(
-      v =>
-        CustomResourceWatcher[T](cfg.namespace, kind, onAdd, onDelete, onModify, convertCr, _client, v, recreateWatcher).watch
+  override def watcher(recreateWatcher: KubernetesClientException => F[Unit]): F[Watch] =
+    Sync[F].fromEither(
+      crd.map(
+        v => CustomResourceWatcher[F, T](cfg.namespace, kind, handler, convertCr, client, v, recreateWatcher).watch
+      )
     )
 
 }

@@ -12,9 +12,9 @@ import io.github.novakovalexey.k8soperator4s.common.{AdditionalPrinterColumn, JS
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
-class CrdDeployer[T] extends LazyLogging {
+object CrdDeployer extends LazyLogging {
 
-  def initCrds(
+  def initCrds[T](
     client: KubernetesClient,
     apiPrefix: String,
     kind: String,
@@ -34,7 +34,7 @@ class CrdDeployer[T] extends LazyLogging {
         logger.info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping the creation.")
         Right(h)
       case Nil =>
-        createCrd(client, apiPrefix, kind, shortNames, pluralName, additionalPrinterColumns, infoClass, isOpenshift)
+        createCrd[T](client, apiPrefix, kind, shortNames, pluralName, additionalPrinterColumns, infoClass, isOpenshift)
     }
 
     crd.map { crd =>
@@ -48,7 +48,7 @@ class CrdDeployer[T] extends LazyLogging {
     crd
   }
 
-  private def createCrd(
+  private def createCrd[T](
     client: KubernetesClient,
     apiPrefix: String,
     kind: String,

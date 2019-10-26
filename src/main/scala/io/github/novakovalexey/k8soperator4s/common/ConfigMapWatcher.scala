@@ -1,10 +1,11 @@
 package io.github.novakovalexey.k8soperator4s.common
 
+import cats.effect.Effect
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.github.novakovalexey.k8soperator4s.Operator
 import io.github.novakovalexey.k8soperator4s.resource.HasDataHelper
 
-import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 
 object ConfigMapWatcher {
@@ -12,19 +13,16 @@ object ConfigMapWatcher {
     HasDataHelper.parseCM(clazz, cm)
 }
 
-final case class ConfigMapWatcher[T](
+final case class ConfigMapWatcher[F[_]: Effect, T](
   override val namespace: Namespaces,
   override val kind: String,
-  override val onAdd: (T, Metadata) => Unit,
-  override val onDelete: (T, Metadata) => Unit,
-  override val onModify: (T, Metadata) => Unit,
+  override val handler: Operator[F, T],
   client: KubernetesClient,
   selector: Map[String, String],
   isSupported: ConfigMap => Boolean,
   convert: ConfigMap => (T, Metadata),
-  recreateWatcher: KubernetesClientException => Unit
-)(implicit ec: ExecutionContext)
-    extends AbstractWatcher[T]( namespace, kind, onAdd, onDelete, onModify) {
+  recreateWatcher: KubernetesClientException => F[Unit]
+) extends AbstractWatcher[F, T](namespace, kind, handler, recreateWatcher) {
 
   io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
 
@@ -51,23 +49,20 @@ final case class ConfigMapWatcher[T](
           if (action == Watcher.Action.ERROR)
             logger.error(s"Failed ConfigMap $cm in namespace $namespace")
           else
-            handleAction(
-              action,
-              entity,
-              meta,
-              if (inAllNs) cm.getMetadata.getNamespace
-              else namespace.value
+            unsafeRun(
+              handleAction(
+                action,
+                entity,
+                meta,
+                if (inAllNs) cm.getMetadata.getNamespace
+                else namespace.value
+              )
             )
         } else logger.error(s"Unknown CM kind: ${cm.toString}")
       }
 
-      override def onClose(e: KubernetesClientException): Unit = {
-        if (e != null) {
-          logger.error(s"Watcher closed with exception in namespace $namespace", e)
-          recreateWatcher(e)
-        } else
-          logger.info(s"Watcher closed in namespace $namespace")
-      }
+      override def onClose(e: KubernetesClientException): Unit =
+        ConfigMapWatcher.super.onClose(e)
     })
 
     logger.info(s"ConfigMap watcher running for labels $selector")

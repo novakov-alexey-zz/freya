@@ -4,7 +4,7 @@ final case class Metadata(name: String, namespace: String)
 final case class AdditionalPrinterColumn(name: String, `type`: String, jsonPath: String)
 
 object OperatorCfg {
-  val SAME_NAMESPACE = "~"
+  val CURRENT_NAMESPACE = "~"
   val ALL_NAMESPACES = "*"
 }
 
@@ -47,7 +47,7 @@ case object AllNamespaces extends Namespaces {
   val value: String = "all"
   override def toString: String = value
 }
-case object SameNamespace extends Namespaces {
+case object CurrentNamespace extends Namespaces {
   val value: String = "current"
   override def toString: String = value
 }

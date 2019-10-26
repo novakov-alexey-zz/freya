@@ -19,7 +19,7 @@ import scala.util.{Failure, Success, Try}
  */
 object HasDataHelper extends LazyLogging {
 
-  def parseYaml[T](clazz: Class[T], yamlDoc: String, name: String): T = {
+  def parseYaml[T](clazz: Class[T], yamlDoc: String): T = {
     val snake = new Yaml(new Constructor(clazz))
 
     Try(snake.load[T](yamlDoc)).orElse(Try(clazz.getDeclaredConstructor().newInstance())) match {
@@ -59,7 +59,7 @@ object HasDataHelper extends LazyLogging {
   def parseCM[T](clazz: Class[T], cm: ConfigMap): (T, Metadata) = {
     val yaml = cm.getData.get("config")
     val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-    val entity = parseYaml(clazz, yaml, cm.getMetadata.getName)
+    val entity = parseYaml(clazz, yaml)
     (entity, meta)
   }
 }
