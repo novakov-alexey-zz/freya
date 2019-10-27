@@ -1,8 +1,10 @@
 package io.github.novakovalexey.k8soperator4s.common
 
-import cats.effect.Effect
+import cats.syntax.functor._
+import cats.effect.{Effect, Sync}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator4s.Operator
@@ -34,15 +36,15 @@ final case class CustomResourceWatcher[F[_]: Effect, T](
   override val kind: String,
   override val handler: Operator[F, T],
   convertCr: InfoClass[_] => (T, Metadata),
+  q: Queue[F, OperatorEvent[T]],
   client: KubernetesClient,
-  crd: CustomResourceDefinition,
-  recreateWatcher: KubernetesClientException => F[Unit]
-) extends AbstractWatcher[F, T](namespace, kind, handler, recreateWatcher) {
+  crd: CustomResourceDefinition
+) extends AbstractWatcher[F, T](namespace, kind, handler) {
 
-  override def watch: Watch =
+  override def watch: F[(Watch, fs2.Stream[F, Unit])] =
     createCustomResourceWatch
 
-  protected def createCustomResourceWatch: Watch = {
+  protected def createCustomResourceWatch: F[(Watch, fs2.Stream[F, Unit])] = {
     val inAllNs = AllNamespaces == namespace
     val watchable = {
       val crds =
@@ -51,7 +53,7 @@ final case class CustomResourceWatcher[F[_]: Effect, T](
       else crds.inNamespace(namespace.value)
     }
 
-    val watch = watchable.watch(new Watcher[InfoClass[T]]() {
+    val watch = Sync[F].delay(watchable.watch(new Watcher[InfoClass[T]]() {
       override def eventReceived(action: Watcher.Action, info: InfoClass[T]): Unit = {
         logger.info(s"Custom resource in namespace $namespace was $action\nCR:\n$info")
 
@@ -61,24 +63,19 @@ final case class CustomResourceWatcher[F[_]: Effect, T](
 
         if (action == Watcher.Action.ERROR)
           logger.error(s"Failed Custom resource $info in namespace $namespace")
-        else
-          unsafeRun(
-            handleAction(
-              action,
-              entity,
-              meta,
-              if (inAllNs) info.getMetadata.getNamespace
-              else namespace.value
-            )
-          )
+        else {
+          val ns = if (inAllNs) info.getMetadata.getNamespace else namespace.value
+          val event = OperatorEvent[T](action, entity, meta, ns)
+          unsafeRun(q.enqueue1(event))
+        }
       }
 
       override def onClose(e: KubernetesClientException): Unit =
         CustomResourceWatcher.super.onClose(e)
-    })
+    }))
 
     logger.info(s"CustomResource watcher running for kinds '$kind'")
-    watch
+    watch.map( _ -> q.dequeue.evalMap(handleEvent))
   }
 
 }

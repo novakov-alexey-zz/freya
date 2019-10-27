@@ -9,39 +9,40 @@ import io.fabric8.kubernetes.client.{KubernetesClientException, Watch}
 import io.github.novakovalexey.k8soperator4s.Operator
 import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
 
+final case class OperatorEvent[T](action: Action, entity: T, meta: Metadata, namespace: String)
+
 abstract class AbstractWatcher[F[_], T] protected (
   val namespace: Namespaces,
   val kind: String,
-  val handler: Operator[F, T],
-  recreateWatcher: KubernetesClientException => F[Unit]
+  val handler: Operator[F, T]
 )(implicit F: Effect[F])
     extends LazyLogging {
 
-  def watch: Watch
+  def watch: F[(Watch, fs2.Stream[F, Unit])]
 
-  protected def handleAction(action: Action, entity: T, meta: Metadata, namespace: String): F[Unit] =
-    action match {
+  protected def handleEvent(event: OperatorEvent[T]): F[Unit] =
+    event.action match {
       case ADDED =>
-        F.delay(logger.info(s"Event received ${gr}ADDED$xx kind=$kind name=${meta.name} in namespace=$namespace")) *>
-          handler.onAdd(entity, meta) *>
-          F.delay(logger.info(s"Event ${gr}ADDED$xx for kind=$kind name=${meta.name} has been handled"))
+        F.delay(logger.info(s"Event received ${gr}ADDED$xx kind=$kind name=${event.meta.name} in namespace=$namespace")) *>
+          handler.onAdd(event.entity, event.meta) *>
+          F.delay(logger.info(s"Event ${gr}ADDED$xx for kind=$kind name=${event.meta.name} has been handled"))
 
       case DELETED =>
         F.delay(
-          logger.info("Event received {}DELETED{} kind={} name={} in namespace={}", gr, xx, kind, meta.name, namespace)
+          logger.info(s"Event received ${gr}DELETED$xx kind=$kind name=${event.meta.name} in namespace=$namespace")
         ) *>
-          handler.onDelete(entity, meta) *>
-          F.delay(logger.info("Event {}DELETED{} for kind={} name={}  has been handled", gr, xx, kind, meta.name))
+          handler.onDelete(event.entity, event.meta) *>
+          F.delay(logger.info("Event {}DELETED{} for kind={} name={}  has been handled", gr, xx, kind, event.meta.name))
 
       case MODIFIED =>
         F.delay(
-          logger.info("Event received {}MODIFIED{} kind={} name={} in namespace={}", gr, xx, kind, meta.name, namespace)
+          logger.info(s"Event received ${gr}MODIFIED$xx kind=$kind name=${event.meta.name} in namespace=$namespace")
         ) *>
-          handler.onModify(entity, meta) *>
-          F.delay(logger.info("Event {}MODIFIED{} for kind={} name={} has been handled", gr, xx, kind, meta.name))
+          handler.onModify(event.entity, event.meta) *>
+          F.delay(logger.info("Event {}MODIFIED{} for kind={} name={} has been handled", gr, xx, kind, event.meta.name))
 
       case _ =>
-        F.delay(logger.error("Unknown action: {} in namespace '{}'", action, namespace))
+        F.delay(logger.error(s"Unknown action: ${event.action} in namespace '$namespace'"))
     }
 
   protected def unsafeRun(f: F[Unit]): Unit =
@@ -50,7 +51,6 @@ abstract class AbstractWatcher[F[_], T] protected (
   protected[common] def onClose(e: KubernetesClientException): Unit =
     if (e != null) {
       logger.error(s"Watcher closed with exception in namespace '$namespace'", e)
-      unsafeRun(recreateWatcher(e))
     } else
       logger.info(s"Watcher closed in namespace $namespace")
 }

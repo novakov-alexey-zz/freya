@@ -1,19 +1,22 @@
 package io.github.novakovalexey.k8soperator4s
 
 import java.net.URL
-import java.util.concurrent.atomic.AtomicReference
 
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, ExitCode, Resource}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+import fs2.Stream
+import fs2.concurrent.Queue
+import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
-import io.fabric8.kubernetes.client.{ConfigBuilder, KubernetesClientException, Watch}
+import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
 import io.github.novakovalexey.k8soperator4s.common._
 import okhttp3.{HttpUrl, Request}
 
 import scala.util.Try
 
 object Scheduler extends LazyLogging {
+
   def checkIfOnOpenshift(masterURL: URL): Boolean =
     Try {
       val urlBuilder = new HttpUrl.Builder().host(masterURL.getHost)
@@ -40,82 +43,87 @@ object Scheduler extends LazyLogging {
       logger.warn("Let's assume we are on K8s")
       false
     }, identity)
+
+  def ofCrd[F[_], T](
+    operator: Operator[F, T],
+    cfg: CrdConfig[T],
+    client: KubernetesClient = new DefaultKubernetesClient()
+  )(implicit F: ConcurrentEffect[F]): Scheduler[F, T] =
+    new Scheduler[F, T](new CrdOperator[F, T](operator, cfg, client))
+
+  def ofConfigMap[F[_], T](
+    operator: Operator[F, T],
+    cfg: ConfigMapConfig[T],
+    client: KubernetesClient = new DefaultKubernetesClient()
+  )(implicit F: ConcurrentEffect[F]): Scheduler[F, T] =
+    new Scheduler[F, T](new ConfigMapOperator[F, T](operator, cfg, client))
 }
 
-class Scheduler[F[_], T](operator: AbstractOperator[F, T])(implicit F: ConcurrentEffect[F]) extends LazyLogging {
+private[k8soperator4s] class Scheduler[F[_], T](operator: AbstractOperator[F, T])(implicit F: ConcurrentEffect[F])
+    extends LazyLogging {
 
-  private val watcher: AtomicReference[Option[Watch]] = new AtomicReference(None)
+  trait StopHandler {
+    def stop(): F[Unit]
+  }
 
-  private val kind = operator.cfg.customKind.getOrElse(operator.cfg.forKind.getSimpleName)
-  private val operatorName = s"'$kind' operator"
+  private val operatorName = s"'${operator.cfg.customKind.getOrElse(operator.cfg.forKind.getSimpleName)}' operator"
   private val namespace =
     if (operator.cfg.namespace == CurrentNamespace) operator.clientNamespace
     else operator.cfg.namespace
 
-  def start(): F[Watch] =
-    F.delay {
-      if (operator.isOpenShift) logger.info(s"${AnsiColors.ye}OpenShift${AnsiColors.xx} environment detected.")
-      else logger.info(s"${AnsiColors.ye}Kubernetes${AnsiColors.xx} environment detected.")
-    } *>
-      runForNamespace(namespace).onError {
-        case ex: Throwable =>
-          logger.error(s"Unable to start operator for $namespace namespace", ex)
-          F.unit
+  def run: F[ExitCode] =
+    Resource
+      .make(start) {
+        case (_, s) =>
+          s.stop *> F.delay(println("Operator stopped"))
+      }
+      .use {
+        case (s, _) =>
+          s.compile.drain.as(ExitCode.Success)
       }
 
-  def stop(): F[Unit] =
-    watcher.getAndSet(None) match {
-      case Some(w) =>
-        F.delay(logger.info(s"Stopping '$operatorName' for namespace '$namespace'")) *>
-          F.delay(w.close())
-      case None =>
-        F.delay(logger.debug(s"No watcher to close for '$operatorName' with namespace '$namespace'"))
-    }
+  def start: F[(Stream[F, Unit], StopHandler)] =
+    for {
+      _ <- F.delay {
+        if (operator.isOpenShift) logger.info(s"${ye}OpenShift$xx environment detected.")
+        else logger.info(s"${ye}Kubernetes$xx environment detected.")
+      }
+      watchAndStream <- runForNamespace.onError {
+        case ex: Throwable =>
+          F.delay(logger.error(s"Unable to start operator for $namespace namespace", ex))
+      }
+      (watch, stream) = watchAndStream
 
-  private def runForNamespace(namespace: Namespaces): F[Watch] =
+    } yield (stream, () => F.delay(watch.close()))
+
+  private def runForNamespace: F[(Watch, Stream[F, Unit])] =
     F.defer(startOperator) <* F
       .delay(
         logger
-          .info(s"${AnsiColors.re}Operator $operatorName${AnsiColors.xx} has been started in namespace '$namespace'")
+          .info(s"${re}Operator $operatorName$xx has been started in namespace '$namespace'")
       )
       .onError {
         case e: Throwable =>
-          F.delay(logger.error(s"$operatorName in namespace ${namespace.value} failed to start", e))
+          F.delay(logger.error(s"$operatorName in namespace $namespace failed to start", e))
       }
 
-  private def startOperator: F[Watch] = operator.cfg.validate match {
+  private def startOperator: F[(Watch, Stream[F, Unit])] = operator.cfg.validate match {
     case Left(e) =>
       F.raiseError(new RuntimeException(s"Unable to initialize the operator correctly: $e"))
     case Right(()) =>
-      F.delay(logger.info(s"Starting $operatorName for namespace $namespace")) *>
-        onInit() *>
-        startWatcher <* F.delay(
-        logger.info(
-          s"${AnsiColors.gr}$operatorName running${AnsiColors.xx} for namespace ${if (AllNamespaces == namespace) "'all'"
-          else namespace}"
-        )
-      )
+      for {
+        _ <- F.delay(logger.info(s"Starting $operatorName for namespace $namespace"))
+        _ <- onInit()
+        watchAndStream <- startWatcher
+        _ <- F.delay(logger.info(s"$gr$operatorName running$xx for namespace $namespace"))
+      } yield watchAndStream
   }
 
-  private def startWatcher: F[Watch] =
+  private def startWatcher: F[(Watch, Stream[F, Unit])] =
     for {
-      w <- operator.watcher(recreateWatcher)
-      oldWatch <- F.delay(watcher.getAndSet(w.some))
-      _ <- oldWatch match {
-        case Some(old) => F.delay(logger.warn(s"Closing old watcher for $namespace namespace")) *> F.delay(old.close())
-        case None => F.unit
-      }
-    } yield w
-
-  protected def recreateWatcher(e: KubernetesClientException): F[Unit] =
-    for {
-      _ <- F.delay(logger.error(s"Recreating watcher due to error: $e"))
-      _ <- startWatcher
-      _ <- F.delay(logger.info(s"${operator.watchName} watch recreated in namespace $namespace")).onError {
-        case e: Throwable =>
-          F.delay(logger.error(s"Failed to recreate ${operator.watchName} watch in namespace $namespace", e))
-      }
-    } yield ()
+      q <- Queue.unbounded[F, OperatorEvent[T]]
+      watchAndStream <- operator.makeWatcher(q)
+    } yield watchAndStream
 
   private def onInit(): F[Unit] =
     operator.onInit()

@@ -127,7 +127,7 @@ object CrdDeployer extends LazyLogging {
     pluralName: String
   ): CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder] = {
 
-    val pluralLower = {
+    val pluralLowerCase = {
       if (pluralName.isEmpty) entityName + "s" else pluralName
     }.toLowerCase
 
@@ -136,12 +136,12 @@ object CrdDeployer extends LazyLogging {
     new CustomResourceDefinitionBuilder()
       .withApiVersion("apiextensions.k8s.io/v1beta1")
       .withNewMetadata
-      .withName(s"$pluralLower.$prefix")
+      .withName(s"$pluralLowerCase.$prefix")
       .endMetadata
       .withNewSpec
       .withNewNames
       .withKind(entityName)
-      .withPlural(pluralLower)
+      .withPlural(pluralLowerCase)
       .withShortNames(shortNamesLower: _*)
       .endNames
       .withGroup(prefix)
