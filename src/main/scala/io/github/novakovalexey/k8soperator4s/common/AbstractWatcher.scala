@@ -6,7 +6,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.Watcher.Action._
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watch}
-import io.github.novakovalexey.k8soperator4s.Operator
+import io.github.novakovalexey.k8soperator4s.Controller
 import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
 
 final case class OperatorEvent[T](action: Action, entity: T, meta: Metadata, namespace: String)
@@ -14,7 +14,7 @@ final case class OperatorEvent[T](action: Action, entity: T, meta: Metadata, nam
 abstract class AbstractWatcher[F[_], T] protected (
   val namespace: Namespaces,
   val kind: String,
-  val handler: Operator[F, T]
+  val handler: Controller[F, T]
 )(implicit F: Effect[F])
     extends LazyLogging {
 

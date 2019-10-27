@@ -3,11 +3,6 @@ package io.github.novakovalexey.k8soperator4s.common
 final case class Metadata(name: String, namespace: String)
 final case class AdditionalPrinterColumn(name: String, `type`: String, jsonPath: String)
 
-object OperatorCfg {
-  val CURRENT_NAMESPACE = "~"
-  val ALL_NAMESPACES = "*"
-}
-
 sealed abstract class OperatorCfg[T](
   val forKind: Class[T],
   val prefix: String,

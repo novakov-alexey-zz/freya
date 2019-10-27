@@ -1,13 +1,13 @@
 package io.github.novakovalexey.k8soperator4s.common
 
-import cats.syntax.functor._
 import cats.effect.{Effect, Sync}
+import cats.syntax.functor._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator4s.Operator
+import io.github.novakovalexey.k8soperator4s.Controller
 import io.github.novakovalexey.k8soperator4s.common.crd.{InfoClass, InfoClassDoneable, InfoList}
 
 object CustomResourceWatcher {
@@ -34,7 +34,7 @@ object CustomResourceWatcher {
 final case class CustomResourceWatcher[F[_]: Effect, T](
   override val namespace: Namespaces,
   override val kind: String,
-  override val handler: Operator[F, T],
+  override val handler: Controller[F, T],
   convertCr: InfoClass[_] => (T, Metadata),
   q: Queue[F, OperatorEvent[T]],
   client: KubernetesClient,
@@ -75,7 +75,7 @@ final case class CustomResourceWatcher[F[_]: Effect, T](
     }))
 
     logger.info(s"CustomResource watcher running for kinds '$kind'")
-    watch.map( _ -> q.dequeue.evalMap(handleEvent))
+    watch.map(_ -> q.dequeue.evalMap(handleEvent))
   }
 
 }

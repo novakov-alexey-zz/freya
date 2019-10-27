@@ -1,11 +1,12 @@
 package io.github.novakovalexey.k8soperator4s.common
 
 import cats.effect.{Effect, Sync}
+import cats.syntax.apply._
 import cats.syntax.functor._
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator4s.Operator
+import io.github.novakovalexey.k8soperator4s.Controller
 import io.github.novakovalexey.k8soperator4s.resource.HasDataHelper
 
 import scala.jdk.CollectionConverters._
@@ -16,21 +17,21 @@ object ConfigMapWatcher {
 }
 
 final case class ConfigMapWatcher[F[_]: Effect, T](
-  override val namespace: Namespaces,
-  override val kind: String,
-  override val handler: Operator[F, T],
-  client: KubernetesClient,
-  selector: Map[String, String],
-  isSupported: ConfigMap => Boolean,
-  convert: ConfigMap => (T, Metadata),
-  q: Queue[F, OperatorEvent[T]]
+                                                    override val namespace: Namespaces,
+                                                    override val kind: String,
+                                                    override val handler: Controller[F, T],
+                                                    client: KubernetesClient,
+                                                    selector: Map[String, String],
+                                                    isSupported: ConfigMap => Boolean,
+                                                    convert: ConfigMap => (T, Metadata),
+                                                    q: Queue[F, OperatorEvent[T]]
 ) extends AbstractWatcher[F, T](namespace, kind, handler) {
 
-  //TODO: side-effect
-  io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
-
   override def watch: F[(Watch, fs2.Stream[F, Unit])] =
-    createConfigMapWatch
+    Sync[F].delay(
+      io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
+    ) *>
+      createConfigMapWatch
 
   private def createConfigMapWatch: F[(Watch, fs2.Stream[F, Unit])] = {
     val inAllNs = AllNamespaces == namespace
@@ -43,7 +44,7 @@ final case class ConfigMapWatcher[F[_]: Effect, T](
     val watch = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
         if (isSupported(cm)) {
-          logger.info("ConfigMap in namespace {} was {}\nCM:\n{}\n", namespace, action, cm)
+          logger.info(s"ConfigMap in namespace $namespace was $action\nConfigMap:\n$cm\n")
           val (entity, meta) = convert(cm)
 
           if (entity == null)
