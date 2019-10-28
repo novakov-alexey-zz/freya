@@ -1,16 +1,17 @@
-package io.github.novakovalexey.k8soperator4s
+package io.github.novakovalexey.k8soperator4s.common
 
 import cats.effect.Effect
 import com.typesafe.scalalogging.LazyLogging
+import fs2.Stream
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
-import io.github.novakovalexey.k8soperator4s.common._
+import io.github.novakovalexey.k8soperator4s._
+import io.github.novakovalexey.k8soperator4s.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator4s.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
-import io.github.novakovalexey.k8soperator4s.resource.LabelsHelper
+import io.github.novakovalexey.k8soperator4s.resource.{ConfigMapParser, CrdParser, Labels}
 
-import scala.annotation.unused
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
@@ -25,11 +26,9 @@ sealed abstract class AbstractOperator[F[_]: Effect, T](
   val cfg: OperatorCfg[T],
   val isOpenShift: Boolean
 ) extends LazyLogging {
-  protected val kind: String = AbstractOperator.getKind[T](cfg)
+  protected val kind: String = getKind[T](cfg)
 
   val clientNamespace: Namespaces = Namespace(client.getNamespace)
-
-  val watchName: String
 
   protected[k8soperator4s] def onAdd(entity: T, metadata: Metadata): F[Unit] =
     controller.onAdd(entity, metadata)
@@ -43,29 +42,20 @@ sealed abstract class AbstractOperator[F[_]: Effect, T](
   protected[k8soperator4s] def onInit(): F[Unit] =
     controller.onInit()
 
-  protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, fs2.Stream[F, Unit])]
+  protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, Stream[F, Unit])]
 
   def close(): Unit = client.close()
 }
 
 class ConfigMapOperator[F[_]: Effect, T](
-  operator: Controller[F, T],
+  controller: ConfigMapController[F, T],
   cfg: ConfigMapConfig[T],
   client: KubernetesClient,
   isOpenShift: Boolean
-) extends AbstractOperator[F, T](operator, client, cfg, isOpenShift) {
+) extends AbstractOperator[F, T](controller, client, cfg, isOpenShift) {
 
-  private val selector = LabelsHelper.forKind(kind, cfg.prefix)
+  private val selector = Labels.forKind(kind, cfg.prefix)
 
-  protected def isSupported(@unused cm: ConfigMap): Boolean = true
-
-  val watchName: String = "ConfigMap"
-
-  /**
-   * Call this method in the concrete operator to obtain the desired state of the system.
-   *
-   * @return returns the set of 'T's that correspond to the CMs that have been created in the K8s
-   */
   protected def currentConfigMaps: Map[Metadata, T] = {
     val cms = {
       val _cms = client.configMaps
@@ -79,17 +69,17 @@ class ConfigMapOperator[F[_]: Effect, T](
       .getItems
       .asScala
       .toList
-      // ignore this CM if not convertible
+      // ignore this CM, if it is not convertible
       .flatMap(item => Try(Option(convert(item))).getOrElse(None))
       .map { case (entity, meta) => meta -> entity }
       .toMap
   }
 
   protected def convert(cm: ConfigMap): (T, Metadata) =
-    ConfigMapWatcher.defaultConvert(cfg.forKind, cm)
+    ConfigMapParser.parseCM(cfg.forKind, cm)
 
-  override protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, fs2.Stream[F, Unit])] =
-    ConfigMapWatcher[F, T](cfg.namespace, kind, operator, client, selector, isSupported, convert, q).watch
+  override protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, Stream[F, Unit])] =
+    ConfigMapWatcher[F, T](cfg.namespace, kind, controller, client, selector, convert, q).watch
 }
 
 object CrdOperator {
@@ -101,7 +91,7 @@ object CrdOperator {
   ): Either[Throwable, CustomResourceDefinition] = CrdDeployer.initCrds[T](
     client,
     cfg.prefix,
-    AbstractOperator.getKind[T](cfg),
+    getKind[T](cfg),
     cfg.shortNames,
     cfg.pluralName,
     cfg.additionalPrinterColumns,
@@ -118,13 +108,6 @@ class CrdOperator[F[_]: Effect, T](
   crd: CustomResourceDefinition
 ) extends AbstractOperator[F, T](controller, client, cfg, isOpenShift) {
 
-  val watchName: String = "CustomResource"
-
-  /**
-   * Call this method in the concrete operator to obtain the desired state of the system.
-   *
-   * @return returns the set of 'T's that correspond to the CRs that have been created in the K8s
-   */
   protected def currentResources: Map[Metadata, T] = {
     val crds = {
       val _crds =
@@ -133,18 +116,15 @@ class CrdOperator[F[_]: Effect, T](
     }
 
     crds.list.getItems.asScala.toList
-    // ignore this CR if not convertible
+    // ignore this CRD, if it is not convertible
       .flatMap(i => Try(Option(convertCr(i))).getOrElse(None))
       .map { case (entity, meta) => meta -> entity }
       .toMap
   }
 
   protected def convertCr(info: InfoClass[_]): (T, Metadata) =
-    (
-      CustomResourceWatcher.defaultConvert(cfg.forKind, info),
-      Metadata(info.getMetadata.getName, info.getMetadata.getNamespace)
-    )
+    (CrdParser.parse(cfg.forKind, info), Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
 
-  override protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, fs2.Stream[F, Unit])] =
+  override protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, Stream[F, Unit])] =
     CustomResourceWatcher[F, T](cfg.namespace, kind, controller, convertCr, q, client, crd).watch
 }

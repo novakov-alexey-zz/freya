@@ -2,7 +2,7 @@ package io.github.novakovalexey.k8soperator4s.resource
 
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.ConfigMap
-import io.github.novakovalexey.k8soperator4s.common.Metadata
+import io.github.novakovalexey.k8soperator4s.Metadata
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.Constructor
 import org.yaml.snakeyaml.error.YAMLException
@@ -17,7 +17,7 @@ import scala.util.{Failure, Success, Try}
  * One can create arbitrarily deep configurations by nesting the types in <code>Class&lt;T&gt;</code> and using
  * the Snake yaml or other library as for conversions between YAML and Java objects.
  */
-object HasDataHelper extends LazyLogging {
+object ConfigMapParser extends LazyLogging {
 
   def parseYaml[T](clazz: Class[T], yamlDoc: String): T = {
     val snake = new Yaml(new Constructor(clazz))

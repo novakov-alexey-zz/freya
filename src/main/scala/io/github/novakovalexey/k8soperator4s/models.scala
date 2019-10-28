@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s.common
+package io.github.novakovalexey.k8soperator4s
 
 final case class Metadata(name: String, namespace: String)
 final case class AdditionalPrinterColumn(name: String, `type`: String, jsonPath: String)

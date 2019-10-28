@@ -5,7 +5,7 @@ import io.fabric8.kubernetes.api.model.HasMetadata
 /**
  * A helper for parsing the metadata.labels section inside the K8s resource
  */
-object LabelsHelper {
+object Labels {
 
   /**
    * The kind of a ConfigMap:

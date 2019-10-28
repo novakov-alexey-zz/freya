@@ -34,36 +34,39 @@ object Operator extends LazyLogging {
       httpClient.connectionPool().evictAll()
       val success = response.isSuccessful
 
-      if (success) logger.info(s"$url returned ${response.code}. We are on OpenShift.")
-      else logger.info(s"$url returned ${response.code}. We are not on OpenShift. Assuming, we are on Kubernetes.")
+      if (success) logger.debug(s"$url returned ${response.code}. We are on OpenShift.")
+      else logger.debug(s"$url returned ${response.code}. We are not on OpenShift. Assuming, we are on Kubernetes.")
 
       success
     }.fold(e => {
       logger.error("Failed to distinguish between Kubernetes and OpenShift", e)
-      logger.warn("Let's assume we are on K8s")
+      logger.warn("Let's assume we are on Kubernetes")
       false
     }, identity)
 
   def ofCrd[F[_], T](
-    controller: Controller[F, T],
+    controller: CrdController[F, T],
     cfg: CrdConfig[T],
     client: KubernetesClient = new DefaultKubernetesClient()
   )(implicit F: ConcurrentEffect[F]): Operator[F, T] =
     new Operator[F, T](for {
-      isOpenShift <- F.delay(Operator.checkIfOnOpenshift(client.getMasterUrl))
+      isOpenShift <- isOnOpenShift(client)
       crd <- F.fromEither(CrdOperator.deployCrd(client, cfg, isOpenShift))
       op <- F.delay(new CrdOperator[F, T](controller, cfg, client, isOpenShift, crd))
     } yield op)
 
   def ofConfigMap[F[_], T](
-    controller: Controller[F, T],
+    controller: ConfigMapController[F, T],
     cfg: ConfigMapConfig[T],
     client: KubernetesClient = new DefaultKubernetesClient()
   )(implicit F: ConcurrentEffect[F]): Operator[F, T] =
     new Operator[F, T](for {
-      isOpenShift <- F.delay(Operator.checkIfOnOpenshift(client.getMasterUrl))
+      isOpenShift <- isOnOpenShift(client)
       op <- F.delay(new ConfigMapOperator[F, T](controller, cfg, client, isOpenShift))
     } yield op)
+
+  private def isOnOpenShift[T, F[_]](client: KubernetesClient)(implicit F: ConcurrentEffect[F]) =
+    F.delay(Operator.checkIfOnOpenshift(client.getMasterUrl))
 }
 
 private[k8soperator4s] class Operator[F[_], T](operator: F[AbstractOperator[F, T]])(implicit F: ConcurrentEffect[F])
@@ -102,24 +105,18 @@ private[k8soperator4s] class Operator[F[_], T](operator: F[AbstractOperator[F, T
         if (op.isOpenShift) logger.info(s"${ye}OpenShift$xx environment detected.")
         else logger.info(s"${ye}Kubernetes$xx environment detected.")
       }
-      ws <- runForNamespace(op, meta).onError {
-        case ex: Throwable =>
-          F.delay(logger.error(s"Unable to start operator for ${meta.namespace} namespace", ex))
-      }
+      ws <- F.defer(startOperator(op, meta))
+      _ <- F
+        .delay(
+          logger
+            .info(s"${re}Operator ${meta.name}$xx was started in namespace '${meta.namespace}'")
+        )
+        .onError {
+          case ex: Throwable =>
+            F.delay(logger.error(s"Unable to start operator for ${meta.namespace} namespace", ex))
+        }
       (watch, stream) = ws
-
     } yield (stream, () => F.delay(watch.close()) *> F.delay(op.close()))
-
-  private def runForNamespace(operator: AbstractOperator[F, T], meta: OperatorMeta): F[(Watch, Stream[F, Unit])] =
-    F.defer(startOperator(operator, meta)) <* F
-      .delay(
-        logger
-          .info(s"${re}Operator ${meta.name}$xx has been started in namespace '${meta.namespace}'")
-      )
-      .onError {
-        case e: Throwable =>
-          F.delay(logger.error(s"${meta.name} in namespace ${meta.namespace} failed to start", e))
-      }
 
   private def startOperator(operator: AbstractOperator[F, T], meta: OperatorMeta): F[(Watch, Stream[F, Unit])] =
     operator.cfg.validate match {
@@ -136,6 +133,7 @@ private[k8soperator4s] class Operator[F[_], T](operator: F[AbstractOperator[F, T
 
   private def startWatcher(operator: AbstractOperator[F, T]): F[(Watch, Stream[F, Unit])] =
     for {
+      //TODO: make queue configurable
       q <- Queue.unbounded[F, OperatorEvent[T]]
       ws <- operator.makeWatcher(q)
     } yield ws

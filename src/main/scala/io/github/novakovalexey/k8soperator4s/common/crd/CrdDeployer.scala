@@ -7,7 +7,8 @@ import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, 
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
-import io.github.novakovalexey.k8soperator4s.common.{AdditionalPrinterColumn, JSONSchemaReader}
+import io.github.novakovalexey.k8soperator4s.AdditionalPrinterColumn
+import io.github.novakovalexey.k8soperator4s.common.JSONSchemaReader
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -29,7 +30,7 @@ object CrdDeployer extends LazyLogging {
     val crds = client.customResourceDefinitions.list.getItems.asScala.toList
       .filter(p => kind == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
 
-    val crd = crds match {
+    val crdOrError = crds match {
       case h :: _ =>
         logger.info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping the creation.")
         Right(h)
@@ -37,15 +38,15 @@ object CrdDeployer extends LazyLogging {
         createCrd[T](client, apiPrefix, kind, shortNames, pluralName, additionalPrinterColumns, infoClass, isOpenshift)
     }
 
-    crd.map { crd =>
+    crdOrError.map { crd =>
       // register the new crd for json serialization
       KubernetesDeserializer.registerCustomKind(s"$apiPrefix/${crd.getSpec.getVersion}#$kind", classOf[InfoClass[_]])
       KubernetesDeserializer.registerCustomKind(
         s"$apiPrefix/${crd.getSpec.getVersion}#${kind}List",
         classOf[CustomResourceList[_ <: HasMetadata]]
       )
+      crd
     }
-    crd
   }
 
   private def createCrd[T](

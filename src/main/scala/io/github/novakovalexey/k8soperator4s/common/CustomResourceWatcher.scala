@@ -2,44 +2,21 @@ package io.github.novakovalexey.k8soperator4s.common
 
 import cats.effect.{Effect, Sync}
 import cats.syntax.functor._
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator4s.Controller
 import io.github.novakovalexey.k8soperator4s.common.crd.{InfoClass, InfoClassDoneable, InfoList}
-
-object CustomResourceWatcher {
-
-  def defaultConvert[T](clazz: Class[T], info: InfoClass[_]): T = {
-    val mapper = new ObjectMapper
-    mapper.registerModule(DefaultScalaModule)
-
-    var infoSpec = mapper.convertValue(info.getSpec, clazz)
-
-    if (infoSpec == null) { // empty spec
-      try infoSpec = clazz.getDeclaredConstructor().newInstance()
-      catch {
-        case e: InstantiationException =>
-          e.printStackTrace()
-        case e: IllegalAccessException =>
-          e.printStackTrace()
-      }
-    }
-    infoSpec
-  }
-}
+import io.github.novakovalexey.k8soperator4s.{AllNamespaces, Controller, Metadata, Namespaces}
 
 final case class CustomResourceWatcher[F[_]: Effect, T](
   override val namespace: Namespaces,
   override val kind: String,
-  override val handler: Controller[F, T],
+  override val controller: Controller[F, T],
   convertCr: InfoClass[_] => (T, Metadata),
   q: Queue[F, OperatorEvent[T]],
   client: KubernetesClient,
   crd: CustomResourceDefinition
-) extends AbstractWatcher[F, T](namespace, kind, handler) {
+) extends AbstractWatcher[F, T, Controller[F, T]](namespace, kind, controller) {
 
   override def watch: F[(Watch, fs2.Stream[F, Unit])] =
     createCustomResourceWatch

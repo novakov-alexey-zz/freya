@@ -3,15 +3,14 @@ package io.github.novakovalexey.k8soperator4s
 import cats.effect.{ExitCode, IO, IOApp, Sync}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
-import io.github.novakovalexey.k8soperator4s.common.{CrdConfig, Metadata, Namespace}
 
-class KrbController[F[_]](implicit F: Sync[F]) extends Controller[F, Krb2] with LazyLogging {
+class KrbController[F[_]](implicit F: Sync[F]) extends CrdController[F, Krb2] with LazyLogging {
 
   override def onAdd(krb: Krb2, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"new krb added: $krb, $meta"))
+    F.delay(logger.info(s"new Krb added: $krb, $meta"))
 
   override def onDelete(krb: Krb2, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"krb deleted: $krb, $meta"))
+    F.delay(logger.info(s"Krb deleted: $krb, $meta"))
 }
 
 object TestOperator extends IOApp {
