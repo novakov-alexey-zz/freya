@@ -1,13 +1,12 @@
 package io.github.novakovalexey.k8soperator4s.common
 
-import cats.effect.Effect
-import com.typesafe.scalalogging.LazyLogging
+import cats.effect.{Effect, Sync}
 import fs2.Stream
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
-import io.github.novakovalexey.k8soperator4s._
+import io.github.novakovalexey.k8soperator4s.{ConfigMapController, _}
 import io.github.novakovalexey.k8soperator4s.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator4s.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
 import io.github.novakovalexey.k8soperator4s.resource.{ConfigMapParser, CrdParser, Labels}
@@ -21,38 +20,29 @@ object AbstractOperator {
 }
 
 sealed abstract class AbstractOperator[F[_]: Effect, T](
-  val controller: Controller[F, T],
   val client: KubernetesClient,
   val cfg: OperatorCfg[T],
   val isOpenShift: Boolean
-) extends LazyLogging {
+)  {
+
   protected val kind: String = getKind[T](cfg)
 
   val clientNamespace: Namespaces = Namespace(client.getNamespace)
 
-  protected[k8soperator4s] def onAdd(entity: T, metadata: Metadata): F[Unit] =
-    controller.onAdd(entity, metadata)
-
-  protected[k8soperator4s] def onDelete(entity: T, metadata: Metadata): F[Unit] =
-    controller.onDelete(entity, metadata)
-
-  protected[k8soperator4s] def onModify(entity: T, metadata: Metadata): F[Unit] =
-    controller.onModify(entity, metadata)
-
-  protected[k8soperator4s] def onInit(): F[Unit] =
-    controller.onInit()
-
-  protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, Stream[F, Unit])]
-
   def close(): Unit = client.close()
+
+  def onInit(): F[Unit]
+
+  def watch: F[(Watch, Stream[F, Unit])]
 }
 
 class ConfigMapOperator[F[_]: Effect, T](
   controller: ConfigMapController[F, T],
   cfg: ConfigMapConfig[T],
   client: KubernetesClient,
-  isOpenShift: Boolean
-) extends AbstractOperator[F, T](controller, client, cfg, isOpenShift) {
+  isOpenShift: Boolean,
+  q: Queue[F, OperatorEvent[T]]
+) extends AbstractOperator[F, T](client, cfg, isOpenShift) {
 
   private val selector = Labels.forKind(kind, cfg.prefix)
 
@@ -78,17 +68,19 @@ class ConfigMapOperator[F[_]: Effect, T](
   protected def convert(cm: ConfigMap): (T, Metadata) =
     ConfigMapParser.parseCM(cfg.forKind, cm)
 
-  override protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, Stream[F, Unit])] =
+  override def onInit(): F[Unit] = controller.onInit()
+
+  def watch: F[(Watch, Stream[F, Unit])] =
     ConfigMapWatcher[F, T](cfg.namespace, kind, controller, client, selector, convert, q).watch
 }
 
 object CrdOperator {
 
-  def deployCrd[T](
+  def deployCrd[F[_]: Sync, T](
     client: KubernetesClient,
     cfg: CrdConfig[T],
     isOpenShift: Boolean
-  ): Either[Throwable, CustomResourceDefinition] = CrdDeployer.initCrds[T](
+  ): F[CustomResourceDefinition] = CrdDeployer.initCrds[F, T](
     client,
     cfg.prefix,
     getKind[T](cfg),
@@ -101,12 +93,13 @@ object CrdOperator {
 }
 
 class CrdOperator[F[_]: Effect, T](
-  controller: Controller[F, T],
+  controller: CrdController[F, T],
   cfg: CrdConfig[T],
   client: KubernetesClient,
   isOpenShift: Boolean,
-  crd: CustomResourceDefinition
-) extends AbstractOperator[F, T](controller, client, cfg, isOpenShift) {
+  crd: CustomResourceDefinition,
+  q: Queue[F, OperatorEvent[T]]
+) extends AbstractOperator[F, T](client, cfg, isOpenShift) {
 
   protected def currentResources: Map[Metadata, T] = {
     val crds = {
@@ -125,6 +118,8 @@ class CrdOperator[F[_]: Effect, T](
   protected def convertCr(info: InfoClass[_]): (T, Metadata) =
     (CrdParser.parse(cfg.forKind, info), Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
 
-  override protected[k8soperator4s] def makeWatcher(q: Queue[F, OperatorEvent[T]]): F[(Watch, Stream[F, Unit])] =
-    CustomResourceWatcher[F, T](cfg.namespace, kind, controller, convertCr, q, client, crd).watch
+  override def onInit(): F[Unit] = controller.onInit()
+
+  override def watch: F[(Watch, Stream[F, Unit])] =
+    CustomResourceWatcher[F, T](cfg.namespace, getKind(cfg), controller, convertCr, q, client, crd).watch
 }

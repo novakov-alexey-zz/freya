@@ -7,8 +7,8 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import fs2.Stream
 import fs2.concurrent.Queue
-import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
+import io.fabric8.kubernetes.client.{Watch, _}
 import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
 import io.github.novakovalexey.k8soperator4s.common._
 import okhttp3.{HttpUrl, Request}
@@ -48,22 +48,33 @@ object Operator extends LazyLogging {
     controller: CrdController[F, T],
     cfg: CrdConfig[T],
     client: KubernetesClient = new DefaultKubernetesClient()
-  )(implicit F: ConcurrentEffect[F]): Operator[F, T] =
-    new Operator[F, T](for {
+  )(implicit F: ConcurrentEffect[F]): Operator[F, T] = {
+
+    val operator: F[AbstractOperator[F, T]] = for {
       isOpenShift <- isOnOpenShift(client)
-      crd <- F.fromEither(CrdOperator.deployCrd(client, cfg, isOpenShift))
-      op <- F.delay(new CrdOperator[F, T](controller, cfg, client, isOpenShift, crd))
-    } yield op)
+      crd <- CrdOperator.deployCrd(client, cfg, isOpenShift)
+      q <- Queue.unbounded[F, OperatorEvent[T]]
+      op <- F.delay(new CrdOperator[F, T](controller, cfg, client, isOpenShift, crd, q))
+    } yield op
+
+    new Operator[F, T](operator)
+  }
 
   def ofConfigMap[F[_], T](
     controller: ConfigMapController[F, T],
     cfg: ConfigMapConfig[T],
     client: KubernetesClient = new DefaultKubernetesClient()
-  )(implicit F: ConcurrentEffect[F]): Operator[F, T] =
-    new Operator[F, T](for {
+  )(implicit F: ConcurrentEffect[F]): Operator[F, T] = {
+
+    val operator: F[AbstractOperator[F, T]] = for {
       isOpenShift <- isOnOpenShift(client)
-      op <- F.delay(new ConfigMapOperator[F, T](controller, cfg, client, isOpenShift))
-    } yield op)
+      _ <- F.fromEither(cfg.validate.leftMap(new RuntimeException(_)))
+      q <- Queue.unbounded[F, OperatorEvent[T]]
+      op <- F.delay(new ConfigMapOperator[F, T](controller, cfg, client, isOpenShift, q))
+    } yield op
+
+    new Operator[F, T](operator)
+  }
 
   private def isOnOpenShift[T, F[_]](client: KubernetesClient)(implicit F: ConcurrentEffect[F]) =
     F.delay(Operator.checkIfOnOpenshift(client.getMasterUrl))
@@ -100,6 +111,11 @@ private[k8soperator4s] class Operator[F[_], T](operator: F[AbstractOperator[F, T
   def start: F[(Stream[F, Unit], StopHandler)] =
     for {
       op <- operator
+      _ <- F
+        .fromEither(
+          op.cfg.validate.leftMap(e => new RuntimeException(s"Unable to initialize the operator correctly: $e"))
+        )
+
       meta = operatorMeta(op)
       _ <- F.delay {
         if (op.isOpenShift) logger.info(s"${ye}OpenShift$xx environment detected.")
@@ -119,22 +135,11 @@ private[k8soperator4s] class Operator[F[_], T](operator: F[AbstractOperator[F, T
     } yield (stream, () => F.delay(watch.close()) *> F.delay(op.close()))
 
   private def startOperator(operator: AbstractOperator[F, T], meta: OperatorMeta): F[(Watch, Stream[F, Unit])] =
-    operator.cfg.validate match {
-      case Left(e) =>
-        F.raiseError(new RuntimeException(s"Unable to initialize the operator correctly: $e"))
-      case Right(()) =>
-        for {
-          _ <- F.delay(logger.info(s"Starting ${meta.name} for namespace ${meta.namespace}"))
-          _ <- operator.onInit()
-          ws <- startWatcher(operator)
-          _ <- F.delay(logger.info(s"$gr${meta.name} running$xx for namespace ${meta.namespace}"))
-        } yield ws
-    }
-
-  private def startWatcher(operator: AbstractOperator[F, T]): F[(Watch, Stream[F, Unit])] =
     for {
-      //TODO: make queue configurable
-      q <- Queue.unbounded[F, OperatorEvent[T]]
-      ws <- operator.makeWatcher(q)
+      _ <- F.delay(logger.info(s"Starting ${meta.name} for namespace ${meta.namespace}"))
+      _ <- operator.onInit()
+      ws <- operator.watch
+      _ <- F.delay(logger.info(s"$gr${meta.name} running$xx for namespace ${meta.namespace}"))
     } yield ws
+
 }

@@ -1,5 +1,9 @@
 package io.github.novakovalexey.k8soperator4s.common.crd
 
+import cats.effect.Sync
+//import cats.syntax.applicative._
+//import cats.syntax.apply._
+import cats.implicits._
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.HasMetadata
@@ -15,7 +19,7 @@ import scala.util.Try
 
 object CrdDeployer extends LazyLogging {
 
-  def initCrds[T](
+  def initCrds[F[_]: Sync, T](
     client: KubernetesClient,
     apiPrefix: String,
     kind: String,
@@ -24,32 +28,46 @@ object CrdDeployer extends LazyLogging {
     additionalPrinterColumns: List[AdditionalPrinterColumn],
     infoClass: Class[T],
     isOpenshift: Boolean
-  ): Either[Throwable, CustomResourceDefinition] = {
-    Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+  ): F[CustomResourceDefinition] =
+    for {
+      _ <- Sync[F].delay(Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false))
 
-    val crds = client.customResourceDefinitions.list.getItems.asScala.toList
-      .filter(p => kind == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
-
-    val crdOrError = crds match {
-      case h :: _ =>
-        logger.info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping the creation.")
-        Right(h)
-      case Nil =>
-        createCrd[T](client, apiPrefix, kind, shortNames, pluralName, additionalPrinterColumns, infoClass, isOpenshift)
-    }
-
-    crdOrError.map { crd =>
-      // register the new crd for json serialization
-      KubernetesDeserializer.registerCustomKind(s"$apiPrefix/${crd.getSpec.getVersion}#$kind", classOf[InfoClass[_]])
-      KubernetesDeserializer.registerCustomKind(
-        s"$apiPrefix/${crd.getSpec.getVersion}#${kind}List",
-        classOf[CustomResourceList[_ <: HasMetadata]]
+      crds <- Sync[F].delay(
+        client.customResourceDefinitions.list.getItems.asScala.toList
+          .filter(p => kind == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
       )
-      crd
-    }
-  }
 
-  private def createCrd[T](
+      crd <- crds match {
+        case h :: _ =>
+          Sync[F].delay(
+            logger
+              .info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping the creation.")
+          ) *>
+            h.pure[F]
+        case Nil =>
+          createCrd[F, T](
+            client,
+            apiPrefix,
+            kind,
+            shortNames,
+            pluralName,
+            additionalPrinterColumns,
+            infoClass,
+            isOpenshift
+          )
+      }
+
+      _ <- Sync[F].delay {
+        // register the new crd for json serialization
+        KubernetesDeserializer.registerCustomKind(s"$apiPrefix/${crd.getSpec.getVersion}#$kind", classOf[InfoClass[_]])
+        KubernetesDeserializer.registerCustomKind(
+          s"$apiPrefix/${crd.getSpec.getVersion}#${kind}List",
+          classOf[CustomResourceList[_ <: HasMetadata]]
+        )
+      }
+    } yield crd
+
+  private def createCrd[F[_]: Sync, T](
     client: KubernetesClient,
     apiPrefix: String,
     kind: String,
@@ -60,6 +78,7 @@ object CrdDeployer extends LazyLogging {
     isOpenshift: Boolean
   ) = {
     logger.info(s"Creating CustomResourceDefinition for $kind.")
+    //TODO: side-effect
     val schema = JSONSchemaReader.readSchema(infoClass)
 
     val builder = {
@@ -89,7 +108,7 @@ object CrdDeployer extends LazyLogging {
       }
     }
 
-    Try {
+    Sync[F].fromTry(Try {
       val crd = builder.endSpec.build
       // https://github.com/fabric8io/kubernetes-client/issues/1486
       schema.foreach(_ => crd.getSpec.getValidation.getOpenAPIV3Schema.setDependencies(null))
@@ -106,7 +125,7 @@ object CrdDeployer extends LazyLogging {
         val crd = getCRDBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build
         client.customResourceDefinitions.createOrReplace(crd)
         crd
-    }.toEither
+    })
   }
 
   private def removeDefaultValues(schema: JSONSchemaProps): Unit =

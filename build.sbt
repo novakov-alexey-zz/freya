@@ -4,6 +4,7 @@ ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / organization := "io.github.novakov-alexey"
 
 lazy val root = (project in file(".")).settings(
+  addCompilerPlugin(betterMonadicFor),
   libraryDependencies ++= Seq(
     k8sClient,
     k8sModel,
