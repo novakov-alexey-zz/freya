@@ -4,7 +4,7 @@ import cats.effect.{ExitCode, IO, IOApp, Sync}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
-class KrbController[F[_]](implicit F: Sync[F]) extends CrdController[F, Krb2] with LazyLogging {
+class KrbController[F[_]](implicit F: Sync[F]) extends Controller[F, Krb2] with LazyLogging {
 
   override def onAdd(krb: Krb2, meta: Metadata): F[Unit] =
     F.delay(logger.info(s"new Krb added: $krb, $meta"))

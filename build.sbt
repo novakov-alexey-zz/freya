@@ -9,6 +9,7 @@ lazy val root = (project in file(".")).settings(
     k8sClient,
     k8sModel,
     catsEffect,
+    betterMonadicFor,
     fs2Core,
     //TODO: get rid of scala logging
     scalaLogging,

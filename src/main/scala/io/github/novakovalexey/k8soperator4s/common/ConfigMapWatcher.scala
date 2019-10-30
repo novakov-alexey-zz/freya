@@ -51,16 +51,16 @@ final case class ConfigMapWatcher[F[_]: Effect, T](
             val event = OperatorEvent[T](action, entity, meta, ns)
             unsafeRun(q.enqueue1(event))
           }
-        } else logger.error(s"Unknown CM kind: ${cm.toString}")
+        } else logger.error(s"Unknown ConfigMap kind: ${cm.toString}")
       }
 
       override def onClose(e: KubernetesClientException): Unit =
         ConfigMapWatcher.super.onClose(e)
     }))
 
-    logger.info(s"ConfigMap watcher running for labels $selector")
-
-    watch.map(_ -> q.dequeue.evalMap(handleEvent))
+    Sync[F].delay(logger.info(s"ConfigMap watcher running for labels $selector")) *> watch.map(
+      _ -> q.dequeue.evalMap(handleEvent)
+    )
   }
 
 }

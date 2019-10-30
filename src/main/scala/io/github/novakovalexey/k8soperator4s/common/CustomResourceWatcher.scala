@@ -11,17 +11,14 @@ import io.github.novakovalexey.k8soperator4s._
 final case class CustomResourceWatcher[F[_]: Effect, T](
   override val namespace: Namespaces,
   override val kind: String,
-  override val controller: CrdController[F, T],
+  override val controller: Controller[F, T],
   convertCr: InfoClass[_] => (T, Metadata),
   q: Queue[F, OperatorEvent[T]],
   client: KubernetesClient,
   crd: CustomResourceDefinition
 ) extends AbstractWatcher[F, T, Controller[F, T]](namespace, kind, controller) {
 
-  override def watch: F[(Watch, fs2.Stream[F, Unit])] =
-    createCustomResourceWatch
-
-  protected def createCustomResourceWatch: F[(Watch, fs2.Stream[F, Unit])] = {
+  override def watch: F[(Watch, fs2.Stream[F, Unit])] = {
     val inAllNs = AllNamespaces == namespace
     val watchable = {
       val crds =

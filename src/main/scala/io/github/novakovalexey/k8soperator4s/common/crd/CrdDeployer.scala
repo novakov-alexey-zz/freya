@@ -12,7 +12,6 @@ import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 import io.github.novakovalexey.k8soperator4s.AdditionalPrinterColumn
-import io.github.novakovalexey.k8soperator4s.common.JSONSchemaReader
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -76,57 +75,57 @@ object CrdDeployer extends LazyLogging {
     additionalPrinterColumns: List[AdditionalPrinterColumn],
     infoClass: Class[T],
     isOpenshift: Boolean
-  ) = {
-    logger.info(s"Creating CustomResourceDefinition for $kind.")
-    //TODO: side-effect
-    val schema = JSONSchemaReader.readSchema(infoClass)
+  ) =
+    for {
+      _ <- Sync[F].delay(logger.info(s"Creating CustomResourceDefinition for $kind."))
+      schema <- Sync[F].delay(JSONSchemaReader.readSchema(infoClass))
 
-    val builder = {
-      val crdBuilder = schema match {
-        case Some(s) =>
-          removeDefaultValues(s)
-          getCRDBuilder(apiPrefix, kind, shortNames, pluralName).withNewValidation
-            .withNewOpenAPIV3SchemaLike(s)
-            .endOpenAPIV3Schema
-            .endValidation
-        case None =>
-          getCRDBuilder(apiPrefix, kind, shortNames, pluralName)
+      builder = {
+        val crdBuilder = schema match {
+          case Some(s) =>
+            removeDefaultValues(s)
+            getCRDBuilder(apiPrefix, kind, shortNames, pluralName).withNewValidation
+              .withNewOpenAPIV3SchemaLike(s)
+              .endOpenAPIV3Schema
+              .endValidation
+          case None =>
+            getCRDBuilder(apiPrefix, kind, shortNames, pluralName)
+        }
+
+        additionalPrinterColumns match {
+          case Nil => crdBuilder
+          case _ :: _ =>
+            additionalPrinterColumns.foldLeft(crdBuilder) {
+              case (acc, c) =>
+                acc
+                  .addNewAdditionalPrinterColumn()
+                  .withName(c.name)
+                  .withType(c.`type`)
+                  .withJSONPath(c.jsonPath)
+                  .endAdditionalPrinterColumn
+            }
+        }
       }
 
-      additionalPrinterColumns match {
-        case Nil => crdBuilder
-        case _ :: _ =>
-          additionalPrinterColumns.foldLeft(crdBuilder) {
-            case (acc, c) =>
-              acc
-                .addNewAdditionalPrinterColumn()
-                .withName(c.name)
-                .withType(c.`type`)
-                .withJSONPath(c.jsonPath)
-                .endAdditionalPrinterColumn
-          }
-      }
-    }
-
-    Sync[F].fromTry(Try {
-      val crd = builder.endSpec.build
-      // https://github.com/fabric8io/kubernetes-client/issues/1486
-      schema.foreach(_ => crd.getSpec.getValidation.getOpenAPIV3Schema.setDependencies(null))
-      client.customResourceDefinitions.createOrReplace(crd)
-      crd
-    }.recover {
-      case _: KubernetesClientException =>
-        // old version of K8s/openshift -> don't use schema validation
-        logger.warn(
-          "Consider upgrading the {}. Your version doesn't support schema validation for custom resources.",
-          if (isOpenshift) "OpenShift"
-          else "Kubernetes"
-        )
-        val crd = getCRDBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build
+      crd <- Sync[F].fromTry(Try {
+        val crd = builder.endSpec.build
+        // https://github.com/fabric8io/kubernetes-client/issues/1486
+        schema.foreach(_ => crd.getSpec.getValidation.getOpenAPIV3Schema.setDependencies(null))
         client.customResourceDefinitions.createOrReplace(crd)
         crd
-    })
-  }
+      }.recover {
+        case _: KubernetesClientException =>
+          // old version of K8s/openshift -> don't use schema validation
+          logger.warn(
+            "Consider upgrading the {}. Your version doesn't support schema validation for custom resources.",
+            if (isOpenshift) "OpenShift"
+            else "Kubernetes"
+          )
+          val crd = getCRDBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build
+          client.customResourceDefinitions.createOrReplace(crd)
+          crd
+      })
+    } yield crd
 
   private def removeDefaultValues(schema: JSONSchemaProps): Unit =
     schema match {

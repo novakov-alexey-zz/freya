@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s.common
+package io.github.novakovalexey.k8soperator4s.common.crd
 
 import java.io.IOException
 

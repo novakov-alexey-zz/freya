@@ -51,6 +51,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   protected[common] def onClose(e: KubernetesClientException): Unit =
     if (e != null) {
       logger.error(s"Watcher closed with exception in namespace '$namespace'", e)
+      //TODO: signal with end of stream
     } else
       logger.info(s"Watcher closed in namespace $namespace")
 }

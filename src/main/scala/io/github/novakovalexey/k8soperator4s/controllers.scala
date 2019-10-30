@@ -5,7 +5,7 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 
 import scala.annotation.unused
 
-sealed abstract class Controller[F[_]: Sync, T] {
+abstract class Controller[F[_]: Sync, T] {
   def onAdd(@unused entity: T, @unused metadata: Metadata): F[Unit] =
     Sync[F].unit
 
@@ -18,8 +18,6 @@ sealed abstract class Controller[F[_]: Sync, T] {
   def onInit(): F[Unit] =
     Sync[F].unit
 }
-
-abstract class CrdController[F[_]: Sync, T] extends Controller[F, T] {}
 
 abstract class ConfigMapController[F[_]: Sync, T] extends Controller[F, T] {
   def isSupported(@unused cm: ConfigMap): Boolean = true
