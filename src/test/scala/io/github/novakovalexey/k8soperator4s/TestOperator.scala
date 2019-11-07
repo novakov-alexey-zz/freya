@@ -1,10 +1,10 @@
 package io.github.novakovalexey.k8soperator4s
 
-import cats.effect.{ExitCode, IO, IOApp, Sync}
+import cats.effect.{ConcurrentEffect, ExitCode, IO, IOApp}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
-class KrbController[F[_]](implicit F: Sync[F]) extends Controller[F, Krb2] with LazyLogging {
+class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Krb2] with LazyLogging {
 
   override def onAdd(krb: Krb2, meta: Metadata): F[Unit] =
     F.delay(logger.info(s"new Krb added: $krb, $meta"))
@@ -20,7 +20,7 @@ object TestOperator extends IOApp {
     val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), "io.github.novakov-alexey")
 
     Operator
-      .ofCrd[IO, Krb2](new KrbController, cfg, client)
+      .ofCrd[IO, Krb2](cfg, client, new KrbController[IO])
       .run
   }
 }

@@ -1,15 +1,13 @@
 package io.github.novakovalexey.k8soperator4s.common
 
 import cats.effect.{Effect, Sync}
-import fs2.Stream
-import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
-import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
+import io.fabric8.kubernetes.client.KubernetesClient
+import io.github.novakovalexey.k8soperator4s._
 import io.github.novakovalexey.k8soperator4s.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator4s.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
 import io.github.novakovalexey.k8soperator4s.resource.{ConfigMapParser, CrdParser, Labels}
-import io.github.novakovalexey.k8soperator4s.{ConfigMapController, _}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -27,21 +25,17 @@ sealed abstract class AbstractOperator[F[_]: Effect, T](
 
   val kind: String = getKind[T](cfg)
   val clientNamespace: Namespaces = Namespace(client.getNamespace)
-
-  protected[k8soperator4s] def onInit(): F[Unit]
-
-  protected[k8soperator4s] def watch: F[(Watch, Stream[F, Unit])]
 }
 
-class ConfigMapOperator[F[_]: Effect, T](
-  private val controller: ConfigMapController[F, T],
-  cfg: ConfigMapConfig[T],
-  client: KubernetesClient,
-  isOpenShift: Boolean,
-  q: Queue[F, OperatorEvent[T]]
-) extends AbstractOperator[F, T](client, cfg, isOpenShift) {
+object ConfigMapOperator {
+  def convertCm[T](kind: Class[T])(cm: ConfigMap): (T, Metadata) =
+    ConfigMapParser.parseCM(kind, cm)
+}
 
-  val selector: Map[String, String] = Labels.forKind(kind, cfg.prefix)
+class ConfigMapOperator[F[_]: Effect, T](cfg: ConfigMapConfig[T], client: KubernetesClient, isOpenShift: Boolean)
+    extends AbstractOperator[F, T](client, cfg, isOpenShift) {
+
+  val selector: Map[String, String] = Labels.forKind(getKind[T](cfg), cfg.prefix)
 
   def currentConfigMaps: Map[Metadata, T] = {
     val cms = {
@@ -57,18 +51,10 @@ class ConfigMapOperator[F[_]: Effect, T](
       .asScala
       .toList
       // ignore this CM, if it is not convertible
-      .flatMap(item => Try(Option(convertCm(item))).getOrElse(None))
+      .flatMap(item => Try(Option(ConfigMapOperator.convertCm(cfg.forKind)(item))).getOrElse(None))
       .map { case (entity, meta) => meta -> entity }
       .toMap
   }
-
-  def convertCm(cm: ConfigMap): (T, Metadata) =
-    ConfigMapParser.parseCM(cfg.forKind, cm)
-
-  override protected[k8soperator4s] def onInit(): F[Unit] = controller.onInit()
-
-  protected[k8soperator4s] def watch: F[(Watch, Stream[F, Unit])] =
-    ConfigMapWatcher[F, T](cfg.namespace, kind, controller, client, selector, convertCm, q).watch
 }
 
 object CrdOperator {
@@ -87,18 +73,19 @@ object CrdOperator {
     cfg.forKind,
     isOpenShift
   )
+
+  def convertCr[T](kind: Class[T])(info: InfoClass[_]): (T, Metadata) =
+    (CrdParser.parse(kind, info), Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
 }
 
 class CrdOperator[F[_]: Effect, T](
-  private val controller: Controller[F, T],
   cfg: CrdConfig[T],
   client: KubernetesClient,
   isOpenShift: Boolean,
-  crd: CustomResourceDefinition,
-  q: Queue[F, OperatorEvent[T]]
+  crd: CustomResourceDefinition
 ) extends AbstractOperator[F, T](client, cfg, isOpenShift) {
 
-  protected def currentResources: Map[Metadata, T] = {
+  def currentResources: Map[Metadata, T] = {
     val crds = {
       val _crds =
         client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
@@ -107,16 +94,8 @@ class CrdOperator[F[_]: Effect, T](
 
     crds.list.getItems.asScala.toList
     // ignore this CRD, if it is not convertible
-      .flatMap(i => Try(Option(convertCr(i))).getOrElse(None))
+      .flatMap(i => Try(Option(CrdOperator.convertCr(cfg.forKind)(i))).getOrElse(None))
       .map { case (entity, meta) => meta -> entity }
       .toMap
   }
-
-  def convertCr(info: InfoClass[_]): (T, Metadata) =
-    (CrdParser.parse(cfg.forKind, info), Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
-
-  override protected[k8soperator4s] def onInit(): F[Unit] = controller.onInit()
-
-  override protected[k8soperator4s] def watch: F[(Watch, Stream[F, Unit])] =
-    CustomResourceWatcher[F, T](cfg.namespace, kind, controller, convertCr, q, client, crd).watch
 }

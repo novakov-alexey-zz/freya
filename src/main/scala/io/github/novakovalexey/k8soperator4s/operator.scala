@@ -9,10 +9,13 @@ import fs2.Stream
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
 import io.fabric8.kubernetes.client.{Watch, _}
+import io.github.novakovalexey.k8soperator4s.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
 import io.github.novakovalexey.k8soperator4s.common._
+import io.github.novakovalexey.k8soperator4s.resource.Labels
 import okhttp3.{HttpUrl, Request}
 
+import scala.annotation.unused
 import scala.util.Try
 
 object Operator extends LazyLogging {
@@ -44,35 +47,63 @@ object Operator extends LazyLogging {
       false
     }, identity)
 
-  def ofCrd[F[_], T](
-    controller: Controller[F, T],
-    cfg: CrdConfig[T],
-    client: KubernetesClient = new DefaultKubernetesClient()
+  def ofCrd[F[_], T](cfg: CrdConfig[T], client: KubernetesClient, controller: Controller[F, T])(
+    implicit @unused F: ConcurrentEffect[F]
+  ): Operator[F, T] =
+    ofCrd[F, T](cfg, client)((_: CrdOperator[F, T]) => controller)
+
+  def ofCrd[F[_], T](cfg: CrdConfig[T], client: KubernetesClient = new DefaultKubernetesClient())(
+    controller: CrdOperator[F, T] => Controller[F, T]
   )(implicit F: ConcurrentEffect[F]): Operator[F, T] = {
 
-    val operator: F[AbstractOperator[F, T]] = for {
+    val pipeline = for {
       isOpenShift <- checkEnvAndConfig(client, cfg)
       crd <- CrdOperator.deployCrd(client, cfg, isOpenShift)
       q <- Queue.unbounded[F, OperatorEvent[T]]
-      op <- F.delay(new CrdOperator[F, T](controller, cfg, client, isOpenShift, crd, q))
-    } yield op
+      op <- F.delay(new CrdOperator[F, T](cfg, client, isOpenShift, crd))
+      ctl = controller(op)
+      w <- F.delay(
+        CustomResourceWatcher[F, T](
+          cfg.namespace,
+          AbstractOperator.getKind(cfg),
+          ctl,
+          CrdOperator.convertCr(cfg.forKind),
+          q,
+          client,
+          crd
+        ).watch
+      )
+    } yield OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
 
-    new Operator[F, T](operator, client)
+    new Operator[F, T](pipeline, client)
   }
 
   def ofConfigMap[F[_], T](
-    controller: ConfigMapController[F, T],
+    controller: ConfigMapOperator[F, T] => ConfigMapController[F, T],
     cfg: ConfigMapConfig[T],
     client: KubernetesClient = new DefaultKubernetesClient()
   )(implicit F: ConcurrentEffect[F]): Operator[F, T] = {
 
-    val operator: F[AbstractOperator[F, T]] = for {
+    val pipeline = for {
       isOpenShift <- checkEnvAndConfig(client, cfg)
       q <- Queue.unbounded[F, OperatorEvent[T]]
-      op <- F.delay(new ConfigMapOperator[F, T](controller, cfg, client, isOpenShift, q))
-    } yield op
+      op <- F.delay(new ConfigMapOperator[F, T](cfg, client, isOpenShift))
+      ctl = controller(op)
+      w <- F.delay(
+        ConfigMapWatcher[F, T](
+          cfg.namespace,
+          getKind[T](cfg),
+          ctl,
+          client,
+          Labels.forKind(getKind[T](cfg), cfg.prefix),
+          ConfigMapOperator.convertCm(cfg.forKind),
+          q
+        ).watch
+      )
 
-    new Operator[F, T](operator, client)
+    } yield OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
+
+    new Operator[F, T](pipeline, client)
   }
 
   private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: OperatorCfg[T]): F[Boolean] =
@@ -81,22 +112,18 @@ object Operator extends LazyLogging {
     )
 }
 
-private[k8soperator4s] class Operator[F[_], T](operator: F[AbstractOperator[F, T]], client: KubernetesClient)(
+private case class OperatorPipeline[F[_], T](
+  operator: AbstractOperator[F, T],
+  resources: F[(Watch, Stream[F, Unit])],
+  onInit: F[Unit]
+)
+
+private[k8soperator4s] class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesClient)(
   implicit F: ConcurrentEffect[F]
 ) extends LazyLogging {
 
   trait StopHandler {
     def stop(): F[Unit]
-  }
-
-  private case class OperatorMeta(name: String, namespace: Namespaces)
-
-  private def operatorMeta(operator: AbstractOperator[F, T]): OperatorMeta = {
-    val name = operator.cfg.customKind.getOrElse(operator.cfg.forKind.getSimpleName)
-    val namespace =
-      if (operator.cfg.namespace == CurrentNamespace) operator.clientNamespace
-      else operator.cfg.namespace
-    OperatorMeta(name, namespace)
   }
 
   def run: F[ExitCode] =
@@ -112,34 +139,30 @@ private[k8soperator4s] class Operator[F[_], T](operator: F[AbstractOperator[F, T
 
   def start: F[(Stream[F, Unit], StopHandler)] =
     for {
-      op <- operator
-      meta = operatorMeta(op)
+      pipe <- pipeline
+
+      name = AbstractOperator.getKind(pipe.operator.cfg)
+      namespace = if (pipe.operator.cfg.namespace == CurrentNamespace) pipe.operator.clientNamespace
+      else pipe.operator.cfg.namespace
 
       _ <- F.delay {
-        if (op.isOpenShift) logger.info(s"${ye}OpenShift$xx environment detected.")
+        if (pipe.operator.isOpenShift) logger.info(s"${ye}OpenShift$xx environment detected.")
         else logger.info(s"${ye}Kubernetes$xx environment detected.")
       }
-      (watch, stream) <- F.defer(startOperator(op, meta))
+      _ <- F.delay(logger.info(s"Starting operator $name for namespace $namespace"))
+      _ <- pipe.onInit
+      (watch, stream) <- pipe.resources
       _ <- F
         .delay(
           logger
-            .info(s"${re}Operator ${meta.name}$xx was started in namespace '${meta.namespace}'")
+            .info(s"${re}Operator $name$xx was started in namespace '$namespace'")
         )
         .onError {
           case ex: Throwable =>
-            F.delay(logger.error(s"Unable to start operator for ${meta.namespace} namespace", ex))
+            F.delay(logger.error(s"Unable to start operator for $namespace namespace", ex))
         }
     } yield (stream, stopHandler(watch))
 
   private def stopHandler(watch: Watch): StopHandler =
     () => F.delay(watch.close()) *> F.delay(client.close())
-
-  private def startOperator(operator: AbstractOperator[F, T], meta: OperatorMeta): F[(Watch, Stream[F, Unit])] =
-    for {
-      _ <- F.delay(logger.info(s"Starting operator ${meta.name} for namespace ${meta.namespace}"))
-      _ <- operator.onInit()
-      ws <- operator.watch
-      _ <- F.delay(logger.info(s"Operaotr $gr${meta.name} running$xx for namespace ${meta.namespace}"))
-    } yield ws
-
 }
