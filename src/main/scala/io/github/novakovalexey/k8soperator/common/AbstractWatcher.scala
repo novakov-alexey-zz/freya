@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s.common
+package io.github.novakovalexey.k8soperator.common
 
 import cats.effect.Effect
 import cats.syntax.apply._
@@ -6,8 +6,8 @@ import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.Watcher.Action._
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watch}
-import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
-import io.github.novakovalexey.k8soperator4s.{Controller, Metadata, Namespaces}
+import io.github.novakovalexey.k8soperator.common.AnsiColors._
+import io.github.novakovalexey.k8soperator.{Controller, Metadata, Namespaces}
 
 final case class OperatorEvent[T](action: Action, entity: T, meta: Metadata, namespace: String)
 

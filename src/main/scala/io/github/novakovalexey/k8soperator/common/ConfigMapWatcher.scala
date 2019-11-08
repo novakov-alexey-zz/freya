@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s.common
+package io.github.novakovalexey.k8soperator.common
 
 import cats.effect.{Effect, Sync}
 import cats.syntax.apply._
@@ -7,7 +7,7 @@ import fs2.Stream
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator4s.{AllNamespaces, ConfigMapController, Metadata, Namespaces}
+import io.github.novakovalexey.k8soperator.{AllNamespaces, ConfigMapController, Metadata, Namespaces}
 
 import scala.jdk.CollectionConverters._
 

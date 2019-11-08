@@ -3,7 +3,7 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / organization := "io.github.novakov-alexey"
 
-lazy val root = (project in file(".")).settings(
+lazy val `k8s-operator` = (project in file(".")).settings(
   addCompilerPlugin(betterMonadicFor),
   libraryDependencies ++= Seq(
     k8sClient,

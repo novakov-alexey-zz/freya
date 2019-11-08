@@ -1,12 +1,12 @@
-package io.github.novakovalexey.k8soperator4s.common
+package io.github.novakovalexey.k8soperator.common
 
 import cats.effect.{Effect, Sync}
 import cats.syntax.functor._
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator4s.common.crd.{InfoClass, InfoClassDoneable, InfoList}
-import io.github.novakovalexey.k8soperator4s._
+import io.github.novakovalexey.k8soperator.common.crd.{InfoClass, InfoClassDoneable, InfoList}
+import io.github.novakovalexey.k8soperator._
 
 final case class CustomResourceWatcher[F[_]: Effect, T](
   override val namespace: Namespaces,

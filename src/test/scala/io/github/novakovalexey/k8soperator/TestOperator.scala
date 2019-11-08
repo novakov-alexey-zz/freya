@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s
+package io.github.novakovalexey.k8soperator
 
 import cats.effect.{ConcurrentEffect, ExitCode, IO, IOApp}
 import com.typesafe.scalalogging.LazyLogging

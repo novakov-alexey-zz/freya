@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s
+package io.github.novakovalexey.k8soperator
 
 import java.net.URL
 
@@ -9,10 +9,10 @@ import fs2.Stream
 import fs2.concurrent.Queue
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
 import io.fabric8.kubernetes.client.{Watch, _}
-import io.github.novakovalexey.k8soperator4s.common.AbstractOperator.getKind
-import io.github.novakovalexey.k8soperator4s.common.AnsiColors._
-import io.github.novakovalexey.k8soperator4s.common._
-import io.github.novakovalexey.k8soperator4s.resource.Labels
+import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
+import io.github.novakovalexey.k8soperator.common.AnsiColors._
+import io.github.novakovalexey.k8soperator.common._
+import io.github.novakovalexey.k8soperator.resource.Labels
 import okhttp3.{HttpUrl, Request}
 
 import scala.annotation.unused
@@ -118,7 +118,7 @@ private case class OperatorPipeline[F[_], T](
   onInit: F[Unit]
 )
 
-private[k8soperator4s] class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesClient)(
+class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesClient)(
   implicit F: ConcurrentEffect[F]
 ) extends LazyLogging {
 

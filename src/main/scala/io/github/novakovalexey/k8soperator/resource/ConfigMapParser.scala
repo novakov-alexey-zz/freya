@@ -1,8 +1,8 @@
-package io.github.novakovalexey.k8soperator4s.resource
+package io.github.novakovalexey.k8soperator.resource
 
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.ConfigMap
-import io.github.novakovalexey.k8soperator4s.Metadata
+import io.github.novakovalexey.k8soperator.Metadata
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.Constructor
 import org.yaml.snakeyaml.error.YAMLException

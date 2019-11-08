@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s.common.crd
+package io.github.novakovalexey.k8soperator.common.crd
 
 import cats.effect.Sync
 //import cats.syntax.applicative._
@@ -11,7 +11,7 @@ import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, 
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
-import io.github.novakovalexey.k8soperator4s.AdditionalPrinterColumn
+import io.github.novakovalexey.k8soperator.AdditionalPrinterColumn
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try

@@ -1,8 +1,8 @@
-package io.github.novakovalexey.k8soperator4s.resource
+package io.github.novakovalexey.k8soperator.resource
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import io.github.novakovalexey.k8soperator4s.common.crd.InfoClass
+import io.github.novakovalexey.k8soperator.common.crd.InfoClass
 
 object CrdParser {
 

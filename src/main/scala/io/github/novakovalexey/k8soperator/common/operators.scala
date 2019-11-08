@@ -1,13 +1,13 @@
-package io.github.novakovalexey.k8soperator4s.common
+package io.github.novakovalexey.k8soperator.common
 
 import cats.effect.{Effect, Sync}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
-import io.github.novakovalexey.k8soperator4s._
-import io.github.novakovalexey.k8soperator4s.common.AbstractOperator.getKind
-import io.github.novakovalexey.k8soperator4s.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
-import io.github.novakovalexey.k8soperator4s.resource.{ConfigMapParser, CrdParser, Labels}
+import io.github.novakovalexey.k8soperator._
+import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
+import io.github.novakovalexey.k8soperator.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
+import io.github.novakovalexey.k8soperator.resource.{ConfigMapParser, CrdParser, Labels}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try

@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s.common.crd
+package io.github.novakovalexey.k8soperator.common.crd
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import io.fabric8.kubernetes.client.CustomResourceList

@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator4s
+package io.github.novakovalexey.k8soperator
 
 import cats.effect.Sync
 import io.fabric8.kubernetes.api.model.ConfigMap
