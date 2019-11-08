@@ -1,8 +1,6 @@
 package io.github.novakovalexey.k8soperator.common.crd
 
 import cats.effect.Sync
-//import cats.syntax.applicative._
-//import cats.syntax.apply._
 import cats.implicits._
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.typesafe.scalalogging.LazyLogging

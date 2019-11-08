@@ -2,12 +2,12 @@ package io.github.novakovalexey.k8soperator.common.crd
 
 import io.fabric8.kubernetes.client.CustomResource
 
-class InfoClass[U] extends CustomResource {
-  private var spec: U = _
+class InfoClass[T] extends CustomResource {
+  private var spec: T = _
 
-  def getSpec: U = spec
+  def getSpec: T = spec
 
-  def setSpec(spec: U): Unit = {
+  def setSpec(spec: T): Unit = {
     this.spec = spec
   }
 }

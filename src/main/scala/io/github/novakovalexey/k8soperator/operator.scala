@@ -73,7 +73,7 @@ object Operator extends LazyLogging {
           crd
         ).watch
       )
-    } yield OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
+    } yield createPipeline(op, ctl, w)
 
     new Operator[F, T](pipeline, client)
   }
@@ -101,10 +101,17 @@ object Operator extends LazyLogging {
         ).watch
       )
 
-    } yield OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
+    } yield createPipeline(op, ctl, w)
 
     new Operator[F, T](pipeline, client)
   }
+
+  private def createPipeline[T, F[_]](
+    op: AbstractOperator[F, T],
+    ctl: Controller[F, T],
+    w: F[(Watch, Stream[F, Unit])]
+  )(implicit F: ConcurrentEffect[F]) =
+    OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
 
   private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: OperatorCfg[T]): F[Boolean] =
     Sync[F].fromEither(cfg.validate.leftMap(new RuntimeException(_))) *> Sync[F].delay(
@@ -118,9 +125,8 @@ private case class OperatorPipeline[F[_], T](
   onInit: F[Unit]
 )
 
-class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesClient)(
-  implicit F: ConcurrentEffect[F]
-) extends LazyLogging {
+class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesClient)(implicit F: ConcurrentEffect[F])
+    extends LazyLogging {
 
   trait StopHandler {
     def stop(): F[Unit]

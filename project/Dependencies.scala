@@ -7,10 +7,10 @@ object Dependencies extends AutoPlugin {
   object autoImport {
 
     object DependenciesVersion {
-      val catsVersion                          = "2.0.0"
+      val catsVersion                      = "2.0.0"
       val logbackClassicVersion            = "1.2.3"
       val scalaLoggingVersion              = "3.9.2"
-      val fabric8K8sVersion                    = "4.6.1"
+      val fabric8K8sVersion                = "4.6.3"
       val fs2Version                       = "2.0.1"
       val betterMonadicVersion             = "0.3.1"
     }

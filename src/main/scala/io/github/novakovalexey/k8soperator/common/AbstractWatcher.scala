@@ -23,30 +23,34 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   protected def handleEvent(event: OperatorEvent[T]): F[Unit] =
     event.action match {
       case ADDED =>
-        F.delay(logger.info(s"Event received ${gr}ADDED$xx kind=$kind name=${event.meta.name} in namespace=$namespace")) *>
+        F.delay(
+          logger.info(s"Event received ${gr}ADDED$xx kind=$kind name=${event.meta.name} in namespace '$namespace'")
+        ) *>
           controller.onAdd(event.entity, event.meta) *>
           F.delay(logger.info(s"Event ${gr}ADDED$xx for kind=$kind name=${event.meta.name} has been handled"))
 
       case DELETED =>
         F.delay(
-          logger.info(s"Event received ${gr}DELETED$xx kind=$kind name=${event.meta.name} in namespace=$namespace")
+          logger.info(s"Event received ${gr}DELETED$xx kind=$kind name=${event.meta.name} in namespace '$namespace'")
         ) *>
           controller.onDelete(event.entity, event.meta) *>
-          F.delay(logger.info("Event {}DELETED{} for kind={} name={}  has been handled", gr, xx, kind, event.meta.name))
+          F.delay(logger.info(s"Event ${gr}DELETED$xx for kind=$kind name=${event.meta.name} has been handled"))
 
       case MODIFIED =>
         F.delay(
           logger.info(s"Event received ${gr}MODIFIED$xx kind=$kind name=${event.meta.name} in namespace=$namespace")
         ) *>
           controller.onModify(event.entity, event.meta) *>
-          F.delay(logger.info("Event {}MODIFIED{} for kind={} name={} has been handled", gr, xx, kind, event.meta.name))
+          F.delay(logger.info(s"Event ${gr}MODIFIED$xx for kind=$kind name=${event.meta.name} has been handled"))
 
-      case _ =>
-        F.delay(logger.error(s"Unknown action: ${event.action} in namespace '$namespace'"))
+      case ERROR =>
+        F.delay(
+          logger.error(s"Event received ${re}ERROR$xx for kind=$kind name=${event.meta.name} in namespace '$namespace'")
+        )
     }
 
   protected def unsafeRun(f: F[Unit]): Unit =
-    Effect[F].toIO(f).unsafeRunAsyncAndForget()
+    F.toIO(f).unsafeRunAsyncAndForget()
 
   protected[common] def onClose(e: KubernetesClientException): Unit =
     if (e != null) {
