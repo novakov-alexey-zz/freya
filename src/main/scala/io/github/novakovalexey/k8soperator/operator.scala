@@ -59,7 +59,7 @@ object Operator extends LazyLogging {
     val pipeline = for {
       isOpenShift <- checkEnvAndConfig(client, cfg)
       crd <- CrdOperator.deployCrd(client, cfg, isOpenShift)
-      q <- Queue.unbounded[F, OperatorEvent[T]]
+      q <- Queue.unbounded[F, OperatorAction[T]]
       op <- F.delay(new CrdOperator[F, T](cfg, client, isOpenShift, crd))
       ctl = controller(op)
       w <- F.delay(
@@ -86,7 +86,7 @@ object Operator extends LazyLogging {
 
     val pipeline = for {
       isOpenShift <- checkEnvAndConfig(client, cfg)
-      q <- Queue.unbounded[F, OperatorEvent[T]]
+      q <- Queue.unbounded[F, OperatorAction[T]]
       op <- F.delay(new ConfigMapOperator[F, T](cfg, client, isOpenShift))
       ctl = controller(op)
       w <- F.delay(

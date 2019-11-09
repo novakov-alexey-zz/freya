@@ -1,6 +1,7 @@
 package io.github.novakovalexey.k8soperator.common
 
 import cats.effect.{Effect, Sync}
+import cats.implicits._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
@@ -10,7 +11,6 @@ import io.github.novakovalexey.k8soperator.common.crd.{CrdDeployer, InfoClass, I
 import io.github.novakovalexey.k8soperator.resource.{ConfigMapParser, CrdParser, Labels}
 
 import scala.jdk.CollectionConverters._
-import scala.util.Try
 
 object AbstractOperator {
   def getKind[T](cfg: OperatorCfg[T]): String =
@@ -28,7 +28,7 @@ sealed abstract class AbstractOperator[F[_]: Effect, T](
 }
 
 object ConfigMapOperator {
-  def convertCm[T](kind: Class[T])(cm: ConfigMap): (T, Metadata) =
+  def convertCm[T](kind: Class[T])(cm: ConfigMap): Either[Throwable, (T, Metadata)] =
     ConfigMapParser.parseCM(kind, cm)
 }
 
@@ -37,7 +37,7 @@ class ConfigMapOperator[F[_]: Effect, T](cfg: ConfigMapConfig[T], client: Kubern
 
   val selector: Map[String, String] = Labels.forKind(getKind[T](cfg), cfg.prefix)
 
-  def currentConfigMaps: Map[Metadata, T] = {
+  def currentConfigMaps: Either[Throwable, Map[Metadata, T]] = {
     val cms = {
       val _cms = client.configMaps
       if (AllNamespaces == cfg.namespace) _cms.inAnyNamespace
@@ -50,10 +50,11 @@ class ConfigMapOperator[F[_]: Effect, T](cfg: ConfigMapConfig[T], client: Kubern
       .getItems
       .asScala
       .toList
-      // ignore this CM, if it is not convertible
-      .flatMap(item => Try(Option(ConfigMapOperator.convertCm(cfg.forKind)(item))).getOrElse(None))
-      .map { case (entity, meta) => meta -> entity }
-      .toMap
+      .map(item => ConfigMapOperator.convertCm(cfg.forKind)(item))
+      .sequence
+      .map { l =>
+        l.map { case (entity, meta) => meta -> entity }.toMap
+      }
   }
 }
 
@@ -74,8 +75,11 @@ object CrdOperator {
     isOpenShift
   )
 
-  def convertCr[T](kind: Class[T])(info: InfoClass[_]): (T, Metadata) =
-    (CrdParser.parse(kind, info), Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
+  def convertCr[T](kind: Class[T])(info: InfoClass[T]): Either[Throwable, (T, Metadata)] =
+    for {
+      spec <- CrdParser.parse(kind, info)
+      meta <- Right(Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
+    } yield (spec, meta)
 }
 
 class CrdOperator[F[_]: Effect, T](
@@ -85,7 +89,7 @@ class CrdOperator[F[_]: Effect, T](
   crd: CustomResourceDefinition
 ) extends AbstractOperator[F, T](client, cfg, isOpenShift) {
 
-  def currentResources: Map[Metadata, T] = {
+  def currentResources: Either[Throwable, Map[Metadata, T]] = {
     val crds = {
       val _crds =
         client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
@@ -93,9 +97,11 @@ class CrdOperator[F[_]: Effect, T](
     }
 
     crds.list.getItems.asScala.toList
-    // ignore this CRD, if it is not convertible
-      .flatMap(i => Try(Option(CrdOperator.convertCr(cfg.forKind)(i))).getOrElse(None))
-      .map { case (entity, meta) => meta -> entity }
-      .toMap
+      .map(i => CrdOperator.convertCr(cfg.forKind)(i))
+      .sequence
+      .map { l =>
+        l.map { case (entity, meta) => meta -> entity }.toMap
+      }
+
   }
 }

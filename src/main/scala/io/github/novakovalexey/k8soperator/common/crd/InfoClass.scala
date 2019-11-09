@@ -7,7 +7,6 @@ class InfoClass[T] extends CustomResource {
 
   def getSpec: T = spec
 
-  def setSpec(spec: T): Unit = {
+  def setSpec(spec: T): Unit =
     this.spec = spec
-  }
 }

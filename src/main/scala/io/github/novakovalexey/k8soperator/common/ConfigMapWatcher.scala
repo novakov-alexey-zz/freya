@@ -17,9 +17,9 @@ final case class ConfigMapWatcher[F[_]: Effect, T](
   override val controller: ConfigMapController[F, T],
   client: KubernetesClient,
   selector: Map[String, String],
-  convert: ConfigMap => (T, Metadata),
-  q: Queue[F, OperatorEvent[T]]
-) extends AbstractWatcher[F, T, ConfigMapController[F, T]](namespace, kind, controller) {
+  convert: ConfigMap => Either[Throwable, (T, Metadata)],
+  q: Queue[F, OperatorAction[T]]
+) extends AbstractWatcher[F, T, ConfigMapController[F, T]](namespace, kind, controller, q) {
 
   override def watch: F[(Watch, Stream[F, Unit])] =
     Sync[F].delay(
@@ -28,29 +28,18 @@ final case class ConfigMapWatcher[F[_]: Effect, T](
       createConfigMapWatch
 
   private def createConfigMapWatch: F[(Watch, Stream[F, Unit])] = {
-    val inAllNs = AllNamespaces == namespace
     val watchable = {
       val cms = client.configMaps
-      if (inAllNs) cms.inAnyNamespace.withLabels(selector.asJava)
+      if (AllNamespaces == namespace) cms.inAnyNamespace.withLabels(selector.asJava)
       else cms.inNamespace(namespace.value).withLabels(selector.asJava)
     }
 
     val watch = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
         if (controller.isSupported(cm)) {
-          logger.info(s"ConfigMap in namespace $namespace was $action\nConfigMap:\n$cm\n")
-          val (entity, meta) = convert(cm)
-
-          if (entity == null)
-            logger.error(s"something went wrong, unable to parse $kind definition")
-
-          if (action == Watcher.Action.ERROR)
-            logger.error(s"Failed ConfigMap $cm in namespace $namespace")
-          else {
-            val ns = if (inAllNs) cm.getMetadata.getNamespace else namespace.value
-            val event = OperatorEvent[T](action, entity, meta, ns)
-            unsafeRun(q.enqueue1(event))
-          }
+          logger.debug(s"ConfigMap in namespace $namespace was $action\nConfigMap:\n$cm\n")
+          val converted = convert(cm)
+          enqueueAction(action, converted, cm, None)
         } else logger.error(s"Unknown ConfigMap kind: ${cm.toString}")
       }
 

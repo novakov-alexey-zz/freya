@@ -5,14 +5,13 @@ import cats.implicits._
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.HasMetadata
-import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent, JSONSchemaProps}
+import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent, JSONSchemaProps, JSONSchemaPropsBuilder}
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 import io.github.novakovalexey.k8soperator.AdditionalPrinterColumn
 
 import scala.jdk.CollectionConverters._
-import scala.util.Try
 
 object CrdDeployer extends LazyLogging {
 
@@ -76,14 +75,14 @@ object CrdDeployer extends LazyLogging {
   ) =
     for {
       _ <- Sync[F].delay(logger.info(s"Creating CustomResourceDefinition for $kind."))
-      schema <- Sync[F].delay(JSONSchemaReader.readSchema(infoClass))
+      jsonSchema <- Sync[F].delay(JSONSchemaReader.readSchema(infoClass))
 
       builder = {
-        val crdBuilder = schema match {
+        val crdBuilder = jsonSchema match {
           case Some(s) =>
-            removeDefaultValues(s)
+            val removed = removeDefaultValues(s)
             getCRDBuilder(apiPrefix, kind, shortNames, pluralName).withNewValidation
-              .withNewOpenAPIV3SchemaLike(s)
+              .withNewOpenAPIV3SchemaLike(removed)
               .endOpenAPIV3Schema
               .endValidation
           case None =>
@@ -105,10 +104,10 @@ object CrdDeployer extends LazyLogging {
         }
       }
 
-      crd <- Sync[F].fromTry(Try {
+      crd <- Sync[F].delay {
         val crd = builder.endSpec.build
         // https://github.com/fabric8io/kubernetes-client/issues/1486
-        schema.foreach(_ => crd.getSpec.getValidation.getOpenAPIV3Schema.setDependencies(null))
+        jsonSchema.foreach(_ => crd.getSpec.getValidation.getOpenAPIV3Schema.setDependencies(null))
         client.customResourceDefinitions.createOrReplace(crd)
         crd
       }.recover {
@@ -122,19 +121,21 @@ object CrdDeployer extends LazyLogging {
           val crd = getCRDBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build
           client.customResourceDefinitions.createOrReplace(crd)
           crd
-      })
+      }
     } yield crd
 
-  private def removeDefaultValues(schema: JSONSchemaProps): Unit =
+  private def removeDefaultValues(schema: JSONSchemaProps): JSONSchemaProps =
     schema match {
-      case null => ()
+      case null => schema
       case _ =>
-        schema.setDefault(null)
-        if (null != schema.getProperties) {
-          for (prop <- schema.getProperties.values.asScala) {
+        val newSchema = new JSONSchemaPropsBuilder(schema).build()
+        newSchema.setDefault(null)
+        if (null != newSchema.getProperties) {
+          for (prop <- newSchema.getProperties.values.asScala) {
             removeDefaultValues(prop)
           }
         }
+        newSchema
     }
 
   private def getCRDBuilder(
