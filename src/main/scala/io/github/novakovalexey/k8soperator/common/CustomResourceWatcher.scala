@@ -1,24 +1,24 @@
 package io.github.novakovalexey.k8soperator.common
 
-import cats.effect.{Effect, Sync}
-import cats.syntax.functor._
-import fs2.concurrent.Queue
+import cats.effect.concurrent.MVar
+import cats.effect.{ConcurrentEffect, Sync}
+import cats.implicits._
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator._
 import io.github.novakovalexey.k8soperator.common.crd.{InfoClass, InfoClassDoneable, InfoList}
 
-final case class CustomResourceWatcher[F[_]: Effect, T](
+final case class CustomResourceWatcher[F[_]: ConcurrentEffect, T](
   override val namespace: Namespaces,
   override val kind: String,
   override val controller: Controller[F, T],
   convertCr: InfoClass[T] => Either[Throwable, (T, Metadata)],
-  q: Queue[F, OperatorAction[T]],
+  channel: MVar[F, OperatorAction[T]],
   client: KubernetesClient,
   crd: CustomResourceDefinition
-) extends AbstractWatcher[F, T, Controller[F, T]](namespace, kind, controller, q) {
+) extends AbstractWatcher[F, T, Controller[F, T]](namespace, kind, controller, channel) {
 
-  override def watch: F[(Watch, fs2.Stream[F, Unit])] = {
+  override def watch: F[(Watch, F[Unit])] = {
     val watchable = {
       val crds =
         client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
@@ -31,13 +31,13 @@ final case class CustomResourceWatcher[F[_]: Effect, T](
         logger.debug(s"Custom resource in namespace $namespace was $action\nCR:\n$info")
         val converted = convertCr(info)
         enqueueAction(action, converted, info, Some(info.getSpec))
+        logger.debug(s"action enqueued: $action")
       }
 
       override def onClose(e: KubernetesClientException): Unit =
         CustomResourceWatcher.super.onClose(e)
     }))
 
-    logger.info(s"CustomResource watcher running for kinds '$kind'")
-    watch.map(_ -> q.dequeue.evalMap(handleEvent))
+    Sync[F].delay(logger.info(s"CustomResource watcher running for kinds '$kind'")) *> watch.map(_ -> consumer(channel))
   }
 }

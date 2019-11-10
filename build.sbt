@@ -10,7 +10,6 @@ lazy val `k8s-operator` = (project in file(".")).settings(
     k8sModel,
     catsEffect,
     betterMonadicFor,
-    fs2Core,
     scalaLogging,
     //TODO: get rid of jackson library
     jacksonScala,

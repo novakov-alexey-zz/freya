@@ -2,11 +2,10 @@ package io.github.novakovalexey.k8soperator
 
 import java.net.URL
 
+import cats.effect.concurrent.MVar
 import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import fs2.Stream
-import fs2.concurrent.Queue
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
 import io.fabric8.kubernetes.client.{Watch, _}
 import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
@@ -59,7 +58,7 @@ object Operator extends LazyLogging {
     val pipeline = for {
       isOpenShift <- checkEnvAndConfig(client, cfg)
       crd <- CrdOperator.deployCrd(client, cfg, isOpenShift)
-      q <- Queue.unbounded[F, OperatorAction[T]]
+      m <- MVar[F].empty[OperatorAction[T]]
       op <- F.delay(new CrdOperator[F, T](cfg, client, isOpenShift, crd))
       ctl = controller(op)
       w <- F.delay(
@@ -68,7 +67,7 @@ object Operator extends LazyLogging {
           AbstractOperator.getKind(cfg),
           ctl,
           CrdOperator.convertCr(cfg.forKind),
-          q,
+          m,
           client,
           crd
         ).watch
@@ -86,7 +85,7 @@ object Operator extends LazyLogging {
 
     val pipeline = for {
       isOpenShift <- checkEnvAndConfig(client, cfg)
-      q <- Queue.unbounded[F, OperatorAction[T]]
+      m <- MVar[F].empty[OperatorAction[T]]
       op <- F.delay(new ConfigMapOperator[F, T](cfg, client, isOpenShift))
       ctl = controller(op)
       w <- F.delay(
@@ -97,7 +96,7 @@ object Operator extends LazyLogging {
           client,
           Labels.forKind(getKind[T](cfg), cfg.prefix),
           ConfigMapOperator.convertCm(cfg.forKind),
-          q
+          m
         ).watch
       )
 
@@ -106,11 +105,9 @@ object Operator extends LazyLogging {
     new Operator[F, T](pipeline, client)
   }
 
-  private def createPipeline[T, F[_]](
-    op: AbstractOperator[F, T],
-    ctl: Controller[F, T],
-    w: F[(Watch, Stream[F, Unit])]
-  )(implicit F: ConcurrentEffect[F]) =
+  private def createPipeline[T, F[_]](op: AbstractOperator[F, T], ctl: Controller[F, T], w: F[(Watch, F[Unit])])(
+    implicit F: ConcurrentEffect[F]
+  ) =
     OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
 
   private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: OperatorCfg[T]): F[Boolean] =
@@ -121,7 +118,7 @@ object Operator extends LazyLogging {
 
 private case class OperatorPipeline[F[_], T](
   operator: AbstractOperator[F, T],
-  resources: F[(Watch, Stream[F, Unit])],
+  resources: F[(Watch, F[Unit])],
   onInit: F[Unit]
 )
 
@@ -139,11 +136,10 @@ class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesC
           s.stop *> F.delay(logger.info(s"operator stopped"))
       }
       .use {
-        case (s, _) =>
-          s.compile.drain.as(ExitCode.Success)
+        case (channel, _) => channel.as(ExitCode.Success)
       }
 
-  def start: F[(Stream[F, Unit], StopHandler)] =
+  def start: F[(F[Unit], StopHandler)] =
     for {
       pipe <- pipeline
 
@@ -157,7 +153,7 @@ class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesC
       }
       _ <- F.delay(logger.info(s"Starting operator $name for namespace $namespace"))
       _ <- pipe.onInit
-      (watch, stream) <- pipe.resources
+      (watch, consumer) <- pipe.resources
       _ <- F
         .delay(
           logger
@@ -167,7 +163,7 @@ class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesC
           case ex: Throwable =>
             F.delay(logger.error(s"Unable to start operator for $namespace namespace", ex))
         }
-    } yield (stream, stopHandler(watch))
+    } yield (consumer, stopHandler(watch))
 
   private def stopHandler(watch: Watch): StopHandler =
     () => F.delay(watch.close()) *> F.delay(client.close())

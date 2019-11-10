@@ -1,33 +1,32 @@
 package io.github.novakovalexey.k8soperator.common
 
-import cats.effect.{Effect, Sync}
+import cats.effect.concurrent.MVar
+import cats.effect.{ConcurrentEffect, Sync}
 import cats.syntax.apply._
 import cats.syntax.functor._
-import fs2.Stream
-import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.{AllNamespaces, ConfigMapController, Metadata, Namespaces}
 
 import scala.jdk.CollectionConverters._
 
-final case class ConfigMapWatcher[F[_]: Effect, T](
+final case class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
   override val namespace: Namespaces,
   override val kind: String,
   override val controller: ConfigMapController[F, T],
   client: KubernetesClient,
   selector: Map[String, String],
   convert: ConfigMap => Either[Throwable, (T, Metadata)],
-  q: Queue[F, OperatorAction[T]]
-) extends AbstractWatcher[F, T, ConfigMapController[F, T]](namespace, kind, controller, q) {
+  channel: MVar[F, OperatorAction[T]]
+) extends AbstractWatcher[F, T, ConfigMapController[F, T]](namespace, kind, controller, channel) {
 
-  override def watch: F[(Watch, Stream[F, Unit])] =
+  override def watch: F[(Watch, F[Unit])] =
     Sync[F].delay(
       io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
     ) *>
       createConfigMapWatch
 
-  private def createConfigMapWatch: F[(Watch, Stream[F, Unit])] = {
+  private def createConfigMapWatch: F[(Watch, F[Unit])] = {
     val watchable = {
       val cms = client.configMaps
       if (AllNamespaces == namespace) cms.inAnyNamespace.withLabels(selector.asJava)
@@ -47,9 +46,7 @@ final case class ConfigMapWatcher[F[_]: Effect, T](
         ConfigMapWatcher.super.onClose(e)
     }))
 
-    Sync[F].delay(logger.info(s"ConfigMap watcher running for labels $selector")) *> watch.map(
-      _ -> q.dequeue.evalMap(handleEvent)
-    )
+    Sync[F].delay(logger.info(s"ConfigMap watcher running for labels $selector")) *> watch.map(_ -> consumer(channel))
   }
 
 }

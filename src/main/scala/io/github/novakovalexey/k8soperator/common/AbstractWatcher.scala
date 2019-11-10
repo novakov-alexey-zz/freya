@@ -1,9 +1,11 @@
 package io.github.novakovalexey.k8soperator.common
 
-import cats.effect.Effect
-import cats.syntax.apply._
+import cats.effect.concurrent.MVar
+import cats.effect.{ConcurrentEffect, Sync}
+//import cats.syntax.apply._
+import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import fs2.concurrent.Queue
+//import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.Watcher.Action._
@@ -20,11 +22,11 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   val namespace: Namespaces,
   val kind: String,
   val controller: C,
-  q: Queue[F, OperatorAction[T]]
-)(implicit F: Effect[F])
+  channel: MVar[F, OperatorAction[T]],
+)(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
 
-  def watch: F[(Watch, fs2.Stream[F, Unit])]
+  def watch: F[(Watch, F[Unit])]
 
   protected def enqueueAction(
     wAction: Watcher.Action,
@@ -32,21 +34,29 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
     resource: HasMetadata,
     spec: Option[T]
   ): Unit = {
-    errorOrEntity match {
+    val action = errorOrEntity match {
       case Right((entity, meta)) =>
         val ns = resource.getMetadata.getNamespace
-        val ok = OkAction[T](wAction, entity, meta, ns)
-        unsafeRun(q.enqueue1(ok))
-
+        OkAction[T](wAction, entity, meta, ns)
       case Left(t) =>
         val e =
           new RuntimeException(s"something went wrong, unable to parse '$kind' definition from: $spec", t)
-        val failed = FailedAction[T](wAction, e, resource)
-        unsafeRun(q.enqueue1(failed))
+        FailedAction[T](wAction, e, resource)
     }
+    unsafeRun(channel.put(action))
   }
 
-  protected def handleEvent(action: OperatorAction[T]): F[Unit] = {
+  protected def consumer(channel: MVar[F, OperatorAction[T]]): F[Unit] = {
+    for {
+      a <- channel.take
+      _ <- Sync[F].delay(logger.debug(s"consuming action $a"))
+      _ <- handleAction(a)
+      //TODO: analyze result and stop recursion in case of closed watcher ?
+      r <- consumer(channel)
+    } yield r
+  }
+
+  protected def handleAction(action: OperatorAction[T]): F[Unit] =
     action match {
       case OkAction(wAction, entity, meta, namespace) =>
         wAction match {
@@ -77,8 +87,6 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
       case FailedAction(wAction, e, info) =>
         F.delay(logger.error(s"Failed action $wAction with spec: $info", e))
     }
-
-  }
 
   protected def unsafeRun(f: F[Unit]): Unit =
     F.toIO(f).unsafeRunAsyncAndForget()
