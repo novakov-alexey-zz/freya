@@ -6,7 +6,7 @@ import io.github.novakovalexey.k8soperator.common.crd.InfoClass
 
 import scala.util.Try
 
-object CrdParser {
+private[k8soperator] object CrdParser {
   //TODO: side-effect
   val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)

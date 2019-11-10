@@ -1,19 +1,20 @@
-package io.github.novakovalexey.k8soperator.common
+package io.github.novakovalexey.k8soperator.common.watcher
 
-import cats.effect.concurrent.MVar
 import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator._
 import io.github.novakovalexey.k8soperator.common.crd.{InfoClass, InfoClassDoneable, InfoList}
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
+import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
+import io.github.novakovalexey.k8soperator.{AllNamespaces, Controller, Metadata, Namespaces}
 
 final case class CustomResourceWatcher[F[_]: ConcurrentEffect, T](
   override val namespace: Namespaces,
   override val kind: String,
   override val controller: Controller[F, T],
   convertCr: InfoClass[T] => Either[Throwable, (T, Metadata)],
-  channel: MVar[F, OperatorAction[T]],
+  channel: Channel[F, T],
   client: KubernetesClient,
   crd: CustomResourceDefinition
 ) extends AbstractWatcher[F, T, Controller[F, T]](namespace, kind, controller, channel) {
@@ -29,8 +30,8 @@ final case class CustomResourceWatcher[F[_]: ConcurrentEffect, T](
     val watch = Sync[F].delay(watchable.watch(new Watcher[InfoClass[T]]() {
       override def eventReceived(action: Watcher.Action, info: InfoClass[T]): Unit = {
         logger.debug(s"Custom resource in namespace $namespace was $action\nCR:\n$info")
-        val converted = convertCr(info)
-        enqueueAction(action, converted, info, Some(info.getSpec))
+        val converted = convertCr(info).leftMap[OperatorError[T]](t => ParseResourceError[T](action, t, info))
+        enqueueAction(action, converted, info)
         logger.debug(s"action enqueued: $action")
       }
 

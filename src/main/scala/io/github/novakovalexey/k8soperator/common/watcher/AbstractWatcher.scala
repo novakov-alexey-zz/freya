@@ -1,28 +1,27 @@
-package io.github.novakovalexey.k8soperator.common
+package io.github.novakovalexey.k8soperator.common.watcher
 
 import cats.effect.concurrent.MVar
 import cats.effect.{ConcurrentEffect, Sync}
-//import cats.syntax.apply._
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-//import fs2.concurrent.Queue
 import io.fabric8.kubernetes.api.model.HasMetadata
-import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.Watcher.Action._
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.common.AnsiColors._
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
+import io.github.novakovalexey.k8soperator.common.watcher.actions.{FailedAction, OkAction, OperatorAction}
+import io.github.novakovalexey.k8soperator.errors.{CloseWatcherError, OperatorError, ParseResourceError}
 import io.github.novakovalexey.k8soperator.{Controller, Metadata, Namespaces}
 
-sealed trait OperatorAction[T]
-final case class OkAction[T](watcherAction: Action, entity: T, meta: Metadata, namespace: String)
-    extends OperatorAction[T]
-final case class FailedAction[T](action: Action, e: Throwable, info: HasMetadata) extends OperatorAction[T]
+object AbstractWatcher {
+  type Channel[F[_], T] = MVar[F, Either[OperatorError[T], OperatorAction[T]]]
+}
 
 abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   val namespace: Namespaces,
   val kind: String,
   val controller: C,
-  channel: MVar[F, OperatorAction[T]],
+  channel: Channel[F, T],
 )(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
 
@@ -30,29 +29,33 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
 
   protected def enqueueAction(
     wAction: Watcher.Action,
-    errorOrEntity: Either[Throwable, (T, Metadata)],
-    resource: HasMetadata,
-    spec: Option[T]
+    errorOrEntity: Either[OperatorError[T], (T, Metadata)],
+    resource: HasMetadata
   ): Unit = {
-    val action = errorOrEntity match {
-      case Right((entity, meta)) =>
-        val ns = resource.getMetadata.getNamespace
-        OkAction[T](wAction, entity, meta, ns)
-      case Left(t) =>
-        val e =
-          new RuntimeException(s"something went wrong, unable to parse '$kind' definition from: $spec", t)
-        FailedAction[T](wAction, e, resource)
+    val action = errorOrEntity.map {
+      case (entity, meta) => OkAction[T](wAction, entity, meta, resource.getMetadata.getNamespace)
     }
     unsafeRun(channel.put(action))
   }
 
-  protected def consumer(channel: MVar[F, OperatorAction[T]]): F[Unit] = {
+  protected def consumer(channel: MVar[F, Either[OperatorError[T], OperatorAction[T]]]): F[Unit] = {
     for {
-      a <- channel.take
-      _ <- Sync[F].delay(logger.debug(s"consuming action $a"))
-      _ <- handleAction(a)
-      //TODO: analyze result and stop recursion in case of closed watcher ?
-      r <- consumer(channel)
+      errorOrAction <- channel.take
+      _ <- Sync[F].delay(logger.debug(s"consuming action $errorOrAction"))
+      r <- errorOrAction match {
+        case Right(oa) =>
+          handleAction(oa)
+          consumer(channel)
+        case Left(e) =>
+          e match {
+            case CloseWatcherError(e) =>
+              logger.error("Closing channel before closed operator connection from K8s", e)
+              F.unit
+            case pre: ParseResourceError[_] =>
+              handleAction(FailedAction(pre.action, pre.t, pre.resource))
+              consumer(channel)
+          }
+      }
     } yield r
   }
 
@@ -84,8 +87,8 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
               logger.error(s"Event received ${re}ERROR$xx for kind=$kind name=${meta.name} in namespace '$namespace'")
             )
         }
-      case FailedAction(wAction, e, info) =>
-        F.delay(logger.error(s"Failed action $wAction with spec: $info", e))
+      case FailedAction(wAction, e, resource) =>
+        F.delay(logger.error(s"Failed action $wAction for resource $resource", e))
     }
 
   protected def unsafeRun(f: F[Unit]): Unit =
@@ -94,7 +97,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   protected[common] def onClose(e: KubernetesClientException): Unit =
     if (e != null) {
       logger.error(s"Watcher closed with exception in namespace '$namespace'", e)
-      //TODO: signal with end of stream
+      unsafeRun(channel.put(Left(CloseWatcherError(Some(e)))))
     } else
       logger.info(s"Watcher closed in namespace $namespace")
 }

@@ -1,11 +1,11 @@
-package io.github.novakovalexey.k8soperator.common
+package io.github.novakovalexey.k8soperator.common.watcher
 
-import cats.effect.concurrent.MVar
 import cats.effect.{ConcurrentEffect, Sync}
-import cats.syntax.apply._
-import cats.syntax.functor._
+import cats.implicits._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
+import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
 import io.github.novakovalexey.k8soperator.{AllNamespaces, ConfigMapController, Metadata, Namespaces}
 
 import scala.jdk.CollectionConverters._
@@ -17,7 +17,7 @@ final case class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
   client: KubernetesClient,
   selector: Map[String, String],
   convert: ConfigMap => Either[Throwable, (T, Metadata)],
-  channel: MVar[F, OperatorAction[T]]
+  channel: Channel[F, T]
 ) extends AbstractWatcher[F, T, ConfigMapController[F, T]](namespace, kind, controller, channel) {
 
   override def watch: F[(Watch, F[Unit])] =
@@ -37,8 +37,8 @@ final case class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
         if (controller.isSupported(cm)) {
           logger.debug(s"ConfigMap in namespace $namespace was $action\nConfigMap:\n$cm\n")
-          val converted = convert(cm)
-          enqueueAction(action, converted, cm, None)
+          val converted = convert(cm).leftMap[OperatorError[T]](t => ParseResourceError(action, t, cm))
+          enqueueAction(action, converted, cm)
         } else logger.error(s"Unknown ConfigMap kind: ${cm.toString}")
       }
 

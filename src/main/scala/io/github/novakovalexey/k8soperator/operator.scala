@@ -11,6 +11,9 @@ import io.fabric8.kubernetes.client.{Watch, _}
 import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator.common.AnsiColors._
 import io.github.novakovalexey.k8soperator.common._
+import io.github.novakovalexey.k8soperator.common.watcher.actions.OperatorAction
+import io.github.novakovalexey.k8soperator.common.watcher.{ConfigMapWatcher, CustomResourceWatcher}
+import io.github.novakovalexey.k8soperator.errors.OperatorError
 import io.github.novakovalexey.k8soperator.resource.Labels
 import okhttp3.{HttpUrl, Request}
 
@@ -58,7 +61,7 @@ object Operator extends LazyLogging {
     val pipeline = for {
       isOpenShift <- checkEnvAndConfig(client, cfg)
       crd <- CrdOperator.deployCrd(client, cfg, isOpenShift)
-      m <- MVar[F].empty[OperatorAction[T]]
+      channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       op <- F.delay(new CrdOperator[F, T](cfg, client, isOpenShift, crd))
       ctl = controller(op)
       w <- F.delay(
@@ -67,7 +70,7 @@ object Operator extends LazyLogging {
           AbstractOperator.getKind(cfg),
           ctl,
           CrdOperator.convertCr(cfg.forKind),
-          m,
+          channel,
           client,
           crd
         ).watch
@@ -85,7 +88,7 @@ object Operator extends LazyLogging {
 
     val pipeline = for {
       isOpenShift <- checkEnvAndConfig(client, cfg)
-      m <- MVar[F].empty[OperatorAction[T]]
+      channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       op <- F.delay(new ConfigMapOperator[F, T](cfg, client, isOpenShift))
       ctl = controller(op)
       w <- F.delay(
@@ -96,7 +99,7 @@ object Operator extends LazyLogging {
           client,
           Labels.forKind(getKind[T](cfg), cfg.prefix),
           ConfigMapOperator.convertCm(cfg.forKind),
-          m
+          channel
         ).watch
       )
 

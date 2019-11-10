@@ -9,4 +9,7 @@ class InfoClass[T] extends CustomResource {
 
   def setSpec(spec: T): Unit =
     this.spec = spec
+
+  override def toString: String =
+    super.toString + s", spec: $spec"
 }

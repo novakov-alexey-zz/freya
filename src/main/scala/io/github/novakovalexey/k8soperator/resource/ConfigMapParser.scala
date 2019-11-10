@@ -9,7 +9,7 @@ import org.yaml.snakeyaml.error.YAMLException
 
 import scala.util.{Failure, Success, Try}
 
-object ConfigMapParser extends LazyLogging {
+private[k8soperator] object ConfigMapParser extends LazyLogging {
 
   def parseYaml[T](clazz: Class[T], yamlDoc: String): Either[Throwable, T] = {
     Try {
@@ -37,6 +37,7 @@ object ConfigMapParser extends LazyLogging {
   }
 
   def parseCM[T](clazz: Class[T], cm: ConfigMap): Either[Throwable, (T, Metadata)] = {
+    //TODO: handle null config key exception
     val yaml = cm.getData.get("config")
     val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
     parseYaml(clazz, yaml).map(_ -> meta)
