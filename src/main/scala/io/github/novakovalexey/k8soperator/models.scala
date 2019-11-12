@@ -6,13 +6,13 @@ final case class AdditionalPrinterColumn(name: String, `type`: String, jsonPath:
 sealed abstract class OperatorCfg[T](
   val forKind: Class[T],
   val prefix: String,
-  val namespace: Namespaces = AllNamespaces,
+  val namespace: K8sNamespace = AllNamespaces,
   val customKind: Option[String] = None
 ) {
   def validate: Either[String, Unit] =
-    (forKind, prefix) match {
-      case (null, _) => Left("forKind must not be null")
-      case (_, null) => Left("prefix must not be null")
+    (Option(forKind), Option(prefix)) match {
+      case (None, _) => Left("forKind must not be null")
+      case (_, None) => Left("prefix must not be null")
       case (_, _) if prefix.isEmpty => Left("prefix must not be empty")
       case _ => Right(())
     }
@@ -20,7 +20,7 @@ sealed abstract class OperatorCfg[T](
 
 final case class CrdConfig[T](
   override val forKind: Class[T],
-  override val namespace: Namespaces,
+  override val namespace: K8sNamespace,
   override val prefix: String,
   override val customKind: Option[String] = None,
   shortNames: List[String] = List.empty[String],
@@ -30,23 +30,23 @@ final case class CrdConfig[T](
 
 final case class ConfigMapConfig[T](
   override val forKind: Class[T],
-  override val namespace: Namespaces,
+  override val namespace: K8sNamespace,
   override val prefix: String,
   override val customKind: Option[String] = None,
 ) extends OperatorCfg(forKind, prefix, namespace, customKind)
 
-sealed trait Namespaces {
+sealed trait K8sNamespace {
   val value: String
 }
-case object AllNamespaces extends Namespaces {
+case object AllNamespaces extends K8sNamespace {
   val value: String = "all"
   override def toString: String = value
 }
-case object CurrentNamespace extends Namespaces {
+case object CurrentNamespace extends K8sNamespace {
   val value: String = "current"
   override def toString: String = value
 }
 
-final case class Namespace(value: String) extends Namespaces {
+final case class Namespace(value: String) extends K8sNamespace {
   override def toString: String = value
 }

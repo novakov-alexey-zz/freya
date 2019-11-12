@@ -24,7 +24,7 @@ sealed abstract class AbstractOperator[F[_]: Effect, T](
 ) {
 
   val kind: String = getKind[T](cfg)
-  val clientNamespace: Namespaces = Namespace(client.getNamespace)
+  val clientNamespace: K8sNamespace = Namespace(client.getNamespace)
 }
 
 object ConfigMapOperator {
@@ -50,7 +50,8 @@ class ConfigMapOperator[F[_]: Effect, T](cfg: ConfigMapConfig[T], client: Kubern
       .getItems
       .asScala
       .toList
-      .map(item => ConfigMapOperator.convertCm(cfg.forKind)(item))
+      .map(ConfigMapOperator.convertCm(cfg.forKind)(_))
+      //TODO: use cats Validated to aggregate all errors
       .sequence
       .map { l =>
         l.map { case (entity, meta) => meta -> entity }.toMap
@@ -75,9 +76,9 @@ object CrdOperator {
     isOpenShift
   )
 
-  def convertCr[T](kind: Class[T])(info: InfoClass[T]): Either[Throwable, (T, Metadata)] =
+  def convertCr[T](kind: Class[T], parser: CrdParser)(info: InfoClass[T]): Either[Throwable, (T, Metadata)] =
     for {
-      spec <- CrdParser.parse(kind, info)
+      spec <- parser.parse(kind, info)
       meta <- Right(Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
     } yield (spec, meta)
 }
@@ -86,7 +87,8 @@ class CrdOperator[F[_]: Effect, T](
   cfg: CrdConfig[T],
   client: KubernetesClient,
   isOpenShift: Boolean,
-  crd: CustomResourceDefinition
+  crd: CustomResourceDefinition,
+  parser: CrdParser
 ) extends AbstractOperator[F, T](client, cfg, isOpenShift) {
 
   def currentResources: Either[Throwable, Map[Metadata, T]] = {
@@ -97,7 +99,8 @@ class CrdOperator[F[_]: Effect, T](
     }
 
     crds.list.getItems.asScala.toList
-      .map(i => CrdOperator.convertCr(cfg.forKind)(i))
+      .map(CrdOperator.convertCr(cfg.forKind, parser)(_))
+      //TODO: use cats Validated to aggregate all errors
       .sequence
       .map { l =>
         l.map { case (entity, meta) => meta -> entity }.toMap

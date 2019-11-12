@@ -1,7 +1,7 @@
 package io.github.novakovalexey.k8soperator.common.watcher
 
+import cats.effect.ConcurrentEffect
 import cats.effect.concurrent.MVar
-import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.HasMetadata
@@ -10,15 +10,15 @@ import io.fabric8.kubernetes.client.{KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.common.AnsiColors._
 import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
 import io.github.novakovalexey.k8soperator.common.watcher.actions.{FailedAction, OkAction, OperatorAction}
-import io.github.novakovalexey.k8soperator.errors.{CloseWatcherError, OperatorError, ParseResourceError}
-import io.github.novakovalexey.k8soperator.{Controller, Metadata, Namespaces}
+import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError, WatcherClosedError}
+import io.github.novakovalexey.k8soperator.{Controller, K8sNamespace, Metadata}
 
 object AbstractWatcher {
   type Channel[F[_], T] = MVar[F, Either[OperatorError[T], OperatorAction[T]]]
 }
 
 abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
-  val namespace: Namespaces,
+  val namespace: K8sNamespace,
   val kind: String,
   val controller: C,
   channel: Channel[F, T],
@@ -41,19 +41,17 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   protected def consumer(channel: MVar[F, Either[OperatorError[T], OperatorAction[T]]]): F[Unit] = {
     for {
       errorOrAction <- channel.take
-      _ <- Sync[F].delay(logger.debug(s"consuming action $errorOrAction"))
+      _ <- F.delay(logger.debug(s"consuming action $errorOrAction"))
       r <- errorOrAction match {
         case Right(oa) =>
-          handleAction(oa)
-          consumer(channel)
+          handleAction(oa) *> consumer(channel)
         case Left(e) =>
           e match {
-            case CloseWatcherError(e) =>
-              logger.error("Closing channel before closed operator connection from K8s", e)
+            case WatcherClosedError(e) =>
+              logger.error("K8s closed socket, so closing consumer as well", e)
               F.unit
-            case pre: ParseResourceError[_] =>
-              handleAction(FailedAction(pre.action, pre.t, pre.resource))
-              consumer(channel)
+            case pre: ParseResourceError[T] =>
+              handleAction(FailedAction(pre.action, pre.t, pre.resource)) *> consumer(channel)
           }
       }
     } yield r
@@ -97,7 +95,8 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   protected[common] def onClose(e: KubernetesClientException): Unit =
     if (e != null) {
       logger.error(s"Watcher closed with exception in namespace '$namespace'", e)
-      unsafeRun(channel.put(Left(CloseWatcherError(Some(e)))))
+      unsafeRun(channel.put(Left(WatcherClosedError(Some(e)))))
     } else
-      logger.info(s"Watcher closed in namespace $namespace")
+      //TODO: should it the case to close consumer as well?
+      logger.warn(s"Watcher closed in namespace $namespace")
 }

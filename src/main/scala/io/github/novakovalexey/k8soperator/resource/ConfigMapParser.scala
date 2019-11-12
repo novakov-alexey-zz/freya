@@ -7,6 +7,7 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.Constructor
 import org.yaml.snakeyaml.error.YAMLException
 
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 private[k8soperator] object ConfigMapParser extends LazyLogging {
@@ -36,10 +37,10 @@ private[k8soperator] object ConfigMapParser extends LazyLogging {
     }
   }
 
-  def parseCM[T](clazz: Class[T], cm: ConfigMap): Either[Throwable, (T, Metadata)] = {
-    //TODO: handle null config key exception
-    val yaml = cm.getData.get("config")
-    val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-    parseYaml(clazz, yaml).map(_ -> meta)
-  }
+  def parseCM[T](clazz: Class[T], cm: ConfigMap): Either[Throwable, (T, Metadata)] =
+    for {
+      yaml <- cm.getData.asScala.get("config").toRight(new RuntimeException("ConfigMap is missing 'config' key"))
+      meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      parsed <- parseYaml(clazz, yaml).map(_ -> meta)
+    } yield parsed
 }

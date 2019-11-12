@@ -14,7 +14,7 @@ import io.github.novakovalexey.k8soperator.common._
 import io.github.novakovalexey.k8soperator.common.watcher.actions.OperatorAction
 import io.github.novakovalexey.k8soperator.common.watcher.{ConfigMapWatcher, CustomResourceWatcher}
 import io.github.novakovalexey.k8soperator.errors.OperatorError
-import io.github.novakovalexey.k8soperator.resource.Labels
+import io.github.novakovalexey.k8soperator.resource.{CrdParser, Labels}
 import okhttp3.{HttpUrl, Request}
 
 import scala.annotation.unused
@@ -62,14 +62,15 @@ object Operator extends LazyLogging {
       isOpenShift <- checkEnvAndConfig(client, cfg)
       crd <- CrdOperator.deployCrd(client, cfg, isOpenShift)
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
-      op <- F.delay(new CrdOperator[F, T](cfg, client, isOpenShift, crd))
+      parser <- CrdParser()
+      op <- F.delay(new CrdOperator[F, T](cfg, client, isOpenShift, crd, parser))
       ctl = controller(op)
       w <- F.delay(
         CustomResourceWatcher[F, T](
           cfg.namespace,
           AbstractOperator.getKind(cfg),
           ctl,
-          CrdOperator.convertCr(cfg.forKind),
+          CrdOperator.convertCr(cfg.forKind, parser),
           channel,
           client,
           crd
@@ -136,7 +137,7 @@ class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesC
     Resource
       .make(start) {
         case (_, s) =>
-          s.stop *> F.delay(logger.info(s"operator stopped"))
+          s.stop *> F.delay(logger.info(s"${re}Operator stopped$xx"))
       }
       .use {
         case (channel, _) => channel.as(ExitCode.Success)
@@ -160,7 +161,7 @@ class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesC
       _ <- F
         .delay(
           logger
-            .info(s"${re}Operator $name$xx was started in namespace '$namespace'")
+            .info(s"${gr}Operator $name was started$xx in namespace '$namespace'")
         )
         .onError {
           case ex: Throwable =>

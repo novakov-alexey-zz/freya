@@ -6,12 +6,12 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
-import io.github.novakovalexey.k8soperator.{AllNamespaces, ConfigMapController, Metadata, Namespaces}
+import io.github.novakovalexey.k8soperator.{AllNamespaces, ConfigMapController, K8sNamespace, Metadata}
 
 import scala.jdk.CollectionConverters._
 
 final case class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
-  override val namespace: Namespaces,
+  override val namespace: K8sNamespace,
   override val kind: String,
   override val controller: ConfigMapController[F, T],
   client: KubernetesClient,
