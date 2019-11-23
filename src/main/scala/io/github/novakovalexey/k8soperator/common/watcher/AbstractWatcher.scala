@@ -8,13 +8,14 @@ import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.Watcher.Action._
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.common.AnsiColors._
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.common.watcher.actions.{FailedAction, OkAction, OperatorAction}
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError, WatcherClosedError}
 import io.github.novakovalexey.k8soperator.{Controller, K8sNamespace, Metadata}
 
 object AbstractWatcher {
   type Channel[F[_], T] = MVar[F, Either[OperatorError[T], OperatorAction[T]]]
+  type ConsumerSignal[F[_]] = F[Int]
 }
 
 abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
@@ -25,7 +26,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
 )(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
 
-  def watch: F[(Watch, F[Unit])]
+  def watch: F[(Watch, ConsumerSignal[F])]
 
   protected def enqueueAction(
     wAction: Watcher.Action,
@@ -38,7 +39,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
     unsafeRun(channel.put(action))
   }
 
-  protected def consumer(channel: MVar[F, Either[OperatorError[T], OperatorAction[T]]]): F[Unit] = {
+  protected def consumer(channel: MVar[F, Either[OperatorError[T], OperatorAction[T]]]): ConsumerSignal[F] = {
     for {
       errorOrAction <- channel.take
       _ <- F.delay(logger.debug(s"consuming action $errorOrAction"))
@@ -49,7 +50,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
           e match {
             case WatcherClosedError(e) =>
               logger.error("K8s closed socket, so closing consumer as well", e)
-              F.unit
+              1.pure[F]
             case pre: ParseResourceError[T] =>
               handleAction(FailedAction(pre.action, pre.t, pre.resource)) *> consumer(channel)
           }

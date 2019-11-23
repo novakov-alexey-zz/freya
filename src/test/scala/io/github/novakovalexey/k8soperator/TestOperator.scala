@@ -21,7 +21,7 @@ object TestOperator extends IOApp {
 
     Operator
       .ofCrd[IO, Krb2](cfg, client, new KrbController[IO])
-      .run
+      .withRestart()
   }
 }
 

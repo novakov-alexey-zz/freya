@@ -12,7 +12,7 @@ object Dependencies extends AutoPlugin {
       val scalaLoggingVersion              = "3.9.2"
       val fabric8K8sVersion                = "4.6.3"
       val betterMonadicVersion             = "0.3.1"
-      val jacksonScalaVersion               = "2.10.0"
+      val jacksonScalaVersion              = "2.10.0"
     }
 
     import DependenciesVersion._

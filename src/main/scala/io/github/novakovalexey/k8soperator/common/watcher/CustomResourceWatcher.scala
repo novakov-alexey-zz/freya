@@ -5,7 +5,7 @@ import cats.implicits._
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.common.crd.{InfoClass, InfoClassDoneable, InfoList}
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
 import io.github.novakovalexey.k8soperator.{AllNamespaces, Controller, K8sNamespace, Metadata}
 
@@ -19,7 +19,7 @@ final case class CustomResourceWatcher[F[_]: ConcurrentEffect, T](
   crd: CustomResourceDefinition
 ) extends AbstractWatcher[F, T, Controller[F, T]](namespace, kind, controller, channel) {
 
-  override def watch: F[(Watch, F[Unit])] = {
+  override def watch: F[(Watch, ConsumerSignal[F])] = {
     val watchable = {
       val crds =
         client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])

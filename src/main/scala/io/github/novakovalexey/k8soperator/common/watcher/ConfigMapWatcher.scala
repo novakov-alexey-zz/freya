@@ -4,7 +4,7 @@ import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
 import io.github.novakovalexey.k8soperator.{AllNamespaces, ConfigMapController, K8sNamespace, Metadata}
 
@@ -20,13 +20,13 @@ final case class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
   channel: Channel[F, T]
 ) extends AbstractWatcher[F, T, ConfigMapController[F, T]](namespace, kind, controller, channel) {
 
-  override def watch: F[(Watch, F[Unit])] =
+  override def watch: F[(Watch, ConsumerSignal[F])] =
     Sync[F].delay(
       io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
     ) *>
       createConfigMapWatch
 
-  private def createConfigMapWatch: F[(Watch, F[Unit])] = {
+  private def createConfigMapWatch: F[(Watch, ConsumerSignal[F])] = {
     val watchable = {
       val cms = client.configMaps
       if (AllNamespaces == namespace) cms.inAnyNamespace.withLabels(selector.asJava)

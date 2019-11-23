@@ -3,7 +3,7 @@ package io.github.novakovalexey.k8soperator
 import java.net.URL
 
 import cats.effect.concurrent.MVar
-import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync}
+import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
@@ -11,6 +11,7 @@ import io.fabric8.kubernetes.client.{Watch, _}
 import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator.common.AnsiColors._
 import io.github.novakovalexey.k8soperator.common._
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.ConsumerSignal
 import io.github.novakovalexey.k8soperator.common.watcher.actions.OperatorAction
 import io.github.novakovalexey.k8soperator.common.watcher.{ConfigMapWatcher, CustomResourceWatcher}
 import io.github.novakovalexey.k8soperator.errors.OperatorError
@@ -18,6 +19,7 @@ import io.github.novakovalexey.k8soperator.resource.{CrdParser, Labels}
 import okhttp3.{HttpUrl, Request}
 
 import scala.annotation.unused
+import scala.concurrent.duration._
 import scala.util.Try
 
 object Operator extends LazyLogging {
@@ -78,7 +80,7 @@ object Operator extends LazyLogging {
       )
     } yield createPipeline(op, ctl, w)
 
-    new Operator[F, T](pipeline, client)
+    new Operator[F, T](pipeline)
   }
 
   def ofConfigMap[F[_], T](
@@ -103,15 +105,16 @@ object Operator extends LazyLogging {
           channel
         ).watch
       )
-
     } yield createPipeline(op, ctl, w)
 
-    new Operator[F, T](pipeline, client)
+    new Operator[F, T](pipeline)
   }
 
-  private def createPipeline[T, F[_]](op: AbstractOperator[F, T], ctl: Controller[F, T], w: F[(Watch, F[Unit])])(
-    implicit F: ConcurrentEffect[F]
-  ) =
+  private def createPipeline[T, F[_]](
+    op: AbstractOperator[F, T],
+    ctl: Controller[F, T],
+    w: F[(Watch, ConsumerSignal[F])]
+  )(implicit F: ConcurrentEffect[F]) =
     OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
 
   private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: OperatorCfg[T]): F[Boolean] =
@@ -122,11 +125,11 @@ object Operator extends LazyLogging {
 
 private case class OperatorPipeline[F[_], T](
   operator: AbstractOperator[F, T],
-  resources: F[(Watch, F[Unit])],
+  consumer: F[(Watch, ConsumerSignal[F])],
   onInit: F[Unit]
 )
 
-class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesClient)(implicit F: ConcurrentEffect[F])
+class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
 
   trait StopHandler {
@@ -140,10 +143,26 @@ class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesC
           s.stop *> F.delay(logger.info(s"${re}Operator stopped$xx"))
       }
       .use {
-        case (channel, _) => channel.as(ExitCode.Success)
+        case (consumerSignal, _) =>
+          consumerSignal.flatMap(s => if (s != 0) ExitCode(s).pure[F] else ExitCode.Success.pure[F])
       }
 
-  def start: F[(F[Unit], StopHandler)] =
+  def withRestart(n: Int = 1, delay: FiniteDuration = 1.second)(implicit T: Timer[F]): F[ExitCode] =
+    run.flatMap(loop(_, n, delay)).recoverWith {
+      case e =>
+        logger.error("Got error while running an operator", e)
+        loop(ExitCode.Error, n, delay)
+    }
+
+  private def loop(ec: ExitCode, n: Int, delay: FiniteDuration)(implicit T: Timer[F]) =
+    if (n > 0)
+      T.sleep(delay) *> F.delay(logger.info(s"${re}Going to restart$xx. Restarts left: $n")) *> withRestart(
+        n - 1,
+        delay
+      )
+    else ec.pure[F]
+
+  def start: F[(ConsumerSignal[F], StopHandler)] =
     for {
       pipe <- pipeline
 
@@ -157,7 +176,7 @@ class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesC
       }
       _ <- F.delay(logger.info(s"Starting operator $name for namespace $namespace"))
       _ <- pipe.onInit
-      (watch, consumer) <- pipe.resources
+      (watch, consumer) <- pipe.consumer
       _ <- F
         .delay(
           logger
@@ -170,5 +189,5 @@ class Operator[F[_], T](pipeline: F[OperatorPipeline[F, T]], client: KubernetesC
     } yield (consumer, stopHandler(watch))
 
   private def stopHandler(watch: Watch): StopHandler =
-    () => F.delay(watch.close()) *> F.delay(client.close())
+    () => F.delay(watch.close())
 }
