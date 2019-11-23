@@ -93,11 +93,14 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   protected def unsafeRun(f: F[Unit]): Unit =
     F.toIO(f).unsafeRunAsyncAndForget()
 
-  protected[common] def onClose(e: KubernetesClientException): Unit =
-    if (e != null) {
+  protected[common] def onClose(e: KubernetesClientException): Unit = {
+    val err = if (e != null) {
       logger.error(s"Watcher closed with exception in namespace '$namespace'", e)
-      unsafeRun(channel.put(Left(WatcherClosedError(Some(e)))))
-    } else
-      //TODO: should it the case to close consumer as well?
+      Some(e)
+    } else {
       logger.warn(s"Watcher closed in namespace $namespace")
+      None
+    }
+    unsafeRun(channel.put(Left(WatcherClosedError(err))))
+  }
 }

@@ -112,7 +112,7 @@ object CrdDeployer extends LazyLogging {
         crd
       }.recover {
         case _: KubernetesClientException =>
-          // old version of K8s/openshift -> don't use schema validation
+          // old version of K8s/OpenShift -> don't use schema validation
           logger.warn(
             "Consider upgrading the {}. Your version doesn't support schema validation for custom resources.",
             if (isOpenshift) "OpenShift"

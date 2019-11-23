@@ -129,6 +129,8 @@ private case class OperatorPipeline[F[_], T](
   onInit: F[Unit]
 )
 
+final case class Retry(times: Int = 1, delay: FiniteDuration = 1.second, multiplier: Int = 1)
+
 class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
 
@@ -144,22 +146,25 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
       }
       .use {
         case (consumerSignal, _) =>
-          consumerSignal.flatMap(s => if (s != 0) ExitCode(s).pure[F] else ExitCode.Success.pure[F])
+          consumerSignal.map(s => if (s != 0) ExitCode(s) else ExitCode.Success)
       }
 
-  def withRestart(n: Int = 1, delay: FiniteDuration = 1.second)(implicit T: Timer[F]): F[ExitCode] =
-    run.flatMap(loop(_, n, delay)).recoverWith {
+  def withRestart(retry: Retry = Retry())(implicit T: Timer[F]): F[ExitCode] =
+    run.flatMap(loop(_, retry)).recoverWith {
       case e =>
         logger.error("Got error while running an operator", e)
-        loop(ExitCode.Error, n, delay)
+        loop(ExitCode.Error, retry)
     }
 
-  private def loop(ec: ExitCode, n: Int, delay: FiniteDuration)(implicit T: Timer[F]) =
-    if (n > 0)
-      T.sleep(delay) *> F.delay(logger.info(s"${re}Going to restart$xx. Restarts left: $n")) *> withRestart(
-        n - 1,
-        delay
-      )
+  private def loop(ec: ExitCode, retry: Retry)(implicit T: Timer[F]) =
+    if (retry.times > 0)
+      for {
+        _ <- F.delay(logger.info(s"Sleeping for ${retry.delay}"))
+        _ <- T.sleep(retry.delay)
+        _ <- F.delay(logger.info(s"${re}Going to restart$xx. Restarts left: ${retry.times}"))
+        d <- F.delay(retry.delay * retry.multiplier.toLong)
+        ec <- withRestart(retry.copy(retry.times - 1, delay = d))
+      } yield ec
     else ec.pure[F]
 
   def start: F[(ConsumerSignal[F], StopHandler)] =

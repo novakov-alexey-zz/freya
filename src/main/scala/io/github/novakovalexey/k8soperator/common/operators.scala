@@ -37,7 +37,7 @@ class ConfigMapOperator[F[_]: Effect, T](cfg: ConfigMapConfig[T], client: Kubern
 
   val selector: Map[String, String] = Labels.forKind(getKind[T](cfg), cfg.prefix)
 
-  def currentConfigMaps: Either[Throwable, Map[Metadata, T]] = {
+  def currentConfigMaps: Either[List[Throwable], Map[Metadata, T]] = {
     val cms = {
       val _cms = client.configMaps
       if (AllNamespaces == cfg.namespace) _cms.inAnyNamespace
@@ -50,12 +50,11 @@ class ConfigMapOperator[F[_]: Effect, T](cfg: ConfigMapConfig[T], client: Kubern
       .getItems
       .asScala
       .toList
-      .map(ConfigMapOperator.convertCm(cfg.forKind)(_))
-      //TODO: use cats Validated to aggregate all errors
+      .map(ConfigMapOperator.convertCm(cfg.forKind)(_).toValidatedNec)
       .sequence
-      .map { l =>
-        l.map { case (entity, meta) => meta -> entity }.toMap
-      }
+      .map(_.map { case (entity, meta) => meta -> entity }.toMap)
+      .toEither
+      .leftMap(_.toList)
   }
 }
 
@@ -91,7 +90,7 @@ class CrdOperator[F[_]: Effect, T](
   parser: CrdParser
 ) extends AbstractOperator[F, T](client, cfg, isOpenShift) {
 
-  def currentResources: Either[Throwable, Map[Metadata, T]] = {
+  def currentResources: Either[List[Throwable], Map[Metadata, T]] = {
     val crds = {
       val _crds =
         client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
@@ -99,12 +98,10 @@ class CrdOperator[F[_]: Effect, T](
     }
 
     crds.list.getItems.asScala.toList
-      .map(CrdOperator.convertCr(cfg.forKind, parser)(_))
-      //TODO: use cats Validated to aggregate all errors
+      .map(CrdOperator.convertCr(cfg.forKind, parser)(_).toValidatedNec)
       .sequence
-      .map { l =>
-        l.map { case (entity, meta) => meta -> entity }.toMap
-      }
-
+      .map(_.map { case (entity, meta) => meta -> entity }.toMap)
+      .toEither
+      .leftMap(_.toList)
   }
 }
