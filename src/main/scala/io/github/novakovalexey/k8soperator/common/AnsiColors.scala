@@ -1,6 +1,6 @@
 package io.github.novakovalexey.k8soperator.common
 
-object AnsiColors { // these shouldn't be used directly
+object AnsiColors {
   private val ANSI_R = "\u001B[31m"
   private val ANSI_G = "\u001B[32m"
   private val ANSI_Y = "\u001B[33m"

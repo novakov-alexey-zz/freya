@@ -8,7 +8,7 @@ import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.Watcher.Action._
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.common.AnsiColors._
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, ConsumerSignal}
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, ConsumerSignal, _}
 import io.github.novakovalexey.k8soperator.common.watcher.actions.{FailedAction, OkAction, OperatorAction}
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError, WatcherClosedError}
 import io.github.novakovalexey.k8soperator.{Controller, K8sNamespace, Metadata}
@@ -16,6 +16,7 @@ import io.github.novakovalexey.k8soperator.{Controller, K8sNamespace, Metadata}
 object AbstractWatcher {
   type Channel[F[_], T] = MVar[F, Either[OperatorError[T], OperatorAction[T]]]
   type ConsumerSignal[F[_]] = F[Int]
+  val WatcherClosedSignal = 1
 }
 
 abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
@@ -50,7 +51,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
           e match {
             case WatcherClosedError(e) =>
               logger.error("K8s closed socket, so closing consumer as well", e)
-              1.pure[F]
+              WatcherClosedSignal.pure[F]
             case pre: ParseResourceError[T] =>
               handleAction(FailedAction(pre.action, pre.t, pre.resource)) *> consumer(channel)
           }
@@ -59,7 +60,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   }
 
   protected def handleAction(action: OperatorAction[T]): F[Unit] =
-    action match {
+    (action match {
       case OkAction(wAction, entity, meta, namespace) =>
         wAction match {
           case ADDED =>
@@ -88,7 +89,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
         }
       case FailedAction(wAction, e, resource) =>
         F.delay(logger.error(s"Failed action $wAction for resource $resource", e))
-    }
+    }).handleErrorWith(e => F.delay(logger.error(s"Controller failed to handle action: $action", e)) *> F.unit)
 
   protected def unsafeRun(f: F[Unit]): Unit =
     F.toIO(f).unsafeRunAsyncAndForget()

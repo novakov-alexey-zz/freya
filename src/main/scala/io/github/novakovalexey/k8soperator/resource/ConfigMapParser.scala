@@ -12,7 +12,7 @@ import scala.util.{Failure, Success, Try}
 
 private[k8soperator] object ConfigMapParser extends LazyLogging {
 
-  def parseYaml[T](clazz: Class[T], yamlDoc: String): Either[Throwable, T] = {
+  def parseYaml[T](clazz: Class[T], yamlDoc: String): Either[Throwable, T] =
     Try {
       val snake = new Yaml(new Constructor(clazz))
       snake.load[T](yamlDoc)
@@ -35,7 +35,6 @@ private[k8soperator] object ConfigMapParser extends LazyLogging {
         logger.error("unexpected error", e)
         Left(e)
     }
-  }
 
   def parseCM[T](clazz: Class[T], cm: ConfigMap): Either[Throwable, (T, Metadata)] =
     for {

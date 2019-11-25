@@ -80,9 +80,9 @@ object CrdDeployer extends LazyLogging {
       builder = {
         val crdBuilder = jsonSchema match {
           case Some(s) =>
-            val removed = removeDefaultValues(s)
+            val schema = removeDefaultValues(s)
             getCRDBuilder(apiPrefix, kind, shortNames, pluralName).withNewValidation
-              .withNewOpenAPIV3SchemaLike(removed)
+              .withNewOpenAPIV3SchemaLike(schema)
               .endOpenAPIV3Schema
               .endValidation
           case None =>
