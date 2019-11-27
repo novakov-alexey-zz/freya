@@ -7,7 +7,8 @@ sealed abstract class OperatorCfg[T](
   val forKind: Class[T],
   val prefix: String,
   val namespace: K8sNamespace = AllNamespaces,
-  val customKind: Option[String] = None
+  val customKind: Option[String] = None,
+  val checkK8sOnStartup: Boolean = false,
 ) {
   def validate: Either[String, Unit] =
     (Option(forKind), Option(prefix)) match {
@@ -23,6 +24,8 @@ final case class CrdConfig[T](
   override val namespace: K8sNamespace,
   override val prefix: String,
   override val customKind: Option[String] = None,
+  override val checkK8sOnStartup: Boolean = false,
+  readOrCreateCrd: Boolean = false,
   shortNames: List[String] = List.empty[String],
   pluralName: String = "",
   additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
@@ -33,6 +36,7 @@ final case class ConfigMapConfig[T](
   override val namespace: K8sNamespace,
   override val prefix: String,
   override val customKind: Option[String] = None,
+  override val checkK8sOnStartup: Boolean = false
 ) extends OperatorCfg(forKind, prefix, namespace, customKind)
 
 sealed trait K8sNamespace {

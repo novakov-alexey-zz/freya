@@ -4,20 +4,21 @@ import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, ConsumerSignal}
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
+import io.github.novakovalexey.k8soperator.common.watcher.WatchMaker.ConsumerSignal
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
 import io.github.novakovalexey.k8soperator.{AllNamespaces, ConfigMapController, K8sNamespace, Metadata}
 
 import scala.jdk.CollectionConverters._
 
-final case class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
+protected[k8soperator] class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
   override val namespace: K8sNamespace,
   override val kind: String,
   override val controller: ConfigMapController[F, T],
+  convert: ConfigMap => Either[Throwable, (T, Metadata)],
+  channel: Channel[F, T],
   client: KubernetesClient,
   selector: Map[String, String],
-  convert: ConfigMap => Either[Throwable, (T, Metadata)],
-  channel: Channel[F, T]
 ) extends AbstractWatcher[F, T, ConfigMapController[F, T]](namespace, kind, controller, channel) {
 
   override def watch: F[(Watch, ConsumerSignal[F])] =

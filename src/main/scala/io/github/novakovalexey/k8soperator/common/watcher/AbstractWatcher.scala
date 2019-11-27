@@ -6,16 +6,16 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.Watcher.Action._
-import io.fabric8.kubernetes.client.{KubernetesClientException, Watch, Watcher}
+import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 import io.github.novakovalexey.k8soperator.common.AnsiColors._
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, ConsumerSignal, _}
+import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, _}
+import io.github.novakovalexey.k8soperator.common.watcher.WatchMaker.ConsumerSignal
 import io.github.novakovalexey.k8soperator.common.watcher.actions.{FailedAction, OkAction, OperatorAction}
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError, WatcherClosedError}
 import io.github.novakovalexey.k8soperator.{Controller, K8sNamespace, Metadata}
 
 object AbstractWatcher {
   type Channel[F[_], T] = MVar[F, Either[OperatorError[T], OperatorAction[T]]]
-  type ConsumerSignal[F[_]] = F[Int]
   val WatcherClosedSignal = 1
 }
 
@@ -25,9 +25,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   val controller: C,
   channel: Channel[F, T],
 )(implicit F: ConcurrentEffect[F])
-    extends LazyLogging {
-
-  def watch: F[(Watch, ConsumerSignal[F])]
+    extends LazyLogging with WatchMaker[F] {
 
   protected def enqueueAction(
     wAction: Watcher.Action,
@@ -40,7 +38,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
     unsafeRun(channel.put(action))
   }
 
-  protected def consumer(channel: MVar[F, Either[OperatorError[T], OperatorAction[T]]]): ConsumerSignal[F] = {
+  protected def consumer(channel: MVar[F, Either[OperatorError[T], OperatorAction[T]]]): ConsumerSignal[F] =
     for {
       errorOrAction <- channel.take
       _ <- F.delay(logger.debug(s"consuming action $errorOrAction"))
@@ -57,7 +55,6 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
           }
       }
     } yield r
-  }
 
   protected def handleAction(action: OperatorAction[T]): F[Unit] =
     (action match {
@@ -92,7 +89,10 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
     }).handleErrorWith(e => F.delay(logger.error(s"Controller failed to handle action: $action", e)) *> F.unit)
 
   protected def unsafeRun(f: F[Unit]): Unit =
-    F.toIO(f).unsafeRunAsyncAndForget()
+    F.toIO(f).unsafeRunAsync {
+      case Right(_) => ()
+      case Left(t) => logger.error("Could not evaluate effect", t)
+    }
 
   protected[common] def onClose(e: KubernetesClientException): Unit = {
     val err = if (e != null) {

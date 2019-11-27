@@ -16,7 +16,7 @@ class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F,
 object TestOperator extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
-    val client = new DefaultKubernetesClient
+    val client = IO(new DefaultKubernetesClient)
     val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), "io.github.novakov-alexey")
 
     Operator

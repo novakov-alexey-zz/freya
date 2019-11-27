@@ -10,6 +10,7 @@ import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
 import io.github.novakovalexey.k8soperator.resource.{ConfigMapParser, CrdParser, Labels}
 
+import scala.annotation.unused
 import scala.jdk.CollectionConverters._
 
 object AbstractOperator {
@@ -17,12 +18,7 @@ object AbstractOperator {
     cfg.customKind.getOrElse(cfg.forKind.getSimpleName)
 }
 
-sealed abstract class AbstractOperator[F[_]: Effect, T](
-  val client: KubernetesClient,
-  val cfg: OperatorCfg[T],
-  val isOpenShift: Boolean
-) {
-
+sealed abstract class AbstractOperator[F[_]: Effect, T](val client: KubernetesClient, val cfg: OperatorCfg[T]) {
   val kind: String = getKind[T](cfg)
   val clientNamespace: K8sNamespace = Namespace(client.getNamespace)
 }
@@ -32,8 +28,11 @@ object ConfigMapOperator {
     ConfigMapParser.parseCM(kind, cm)
 }
 
-class ConfigMapOperator[F[_]: Effect, T](cfg: ConfigMapConfig[T], client: KubernetesClient, isOpenShift: Boolean)
-    extends AbstractOperator[F, T](client, cfg, isOpenShift) {
+class ConfigMapOperator[F[_]: Effect, T](
+  cfg: ConfigMapConfig[T],
+  client: KubernetesClient,
+  @unused isOpenShift: Option[Boolean]
+) extends AbstractOperator[F, T](client, cfg) {
 
   val selector: Map[String, String] = Labels.forKind(getKind[T](cfg), cfg.prefix)
 
@@ -63,7 +62,7 @@ object CrdOperator {
   def deployCrd[F[_]: Sync, T](
     client: KubernetesClient,
     cfg: CrdConfig[T],
-    isOpenShift: Boolean
+    isOpenShift: Option[Boolean]
   ): F[CustomResourceDefinition] = CrdDeployer.initCrds[F, T](
     client,
     cfg.prefix,
@@ -85,10 +84,10 @@ object CrdOperator {
 class CrdOperator[F[_]: Effect, T](
   cfg: CrdConfig[T],
   client: KubernetesClient,
-  isOpenShift: Boolean,
+  @unused isOpenShift: Option[Boolean],
   crd: CustomResourceDefinition,
   parser: CrdParser
-) extends AbstractOperator[F, T](client, cfg, isOpenShift) {
+) extends AbstractOperator[F, T](client, cfg) {
 
   def currentResources: Either[List[Throwable], Map[Metadata, T]] = {
     val crds = {

@@ -23,7 +23,7 @@ object CrdDeployer extends LazyLogging {
     pluralName: String,
     additionalPrinterColumns: List[AdditionalPrinterColumn],
     infoClass: Class[T],
-    isOpenshift: Boolean
+    isOpenshift: Option[Boolean]
   ): F[CustomResourceDefinition] =
     for {
       _ <- Sync[F].delay(Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false))
@@ -71,7 +71,7 @@ object CrdDeployer extends LazyLogging {
     pluralName: String,
     additionalPrinterColumns: List[AdditionalPrinterColumn],
     infoClass: Class[T],
-    isOpenshift: Boolean
+    isOpenshift: Option[Boolean]
   ) =
     for {
       _ <- Sync[F].delay(logger.info(s"Creating CustomResourceDefinition for $kind."))
@@ -115,7 +115,7 @@ object CrdDeployer extends LazyLogging {
           // old version of K8s/OpenShift -> don't use schema validation
           logger.warn(
             "Consider upgrading the {}. Your version doesn't support schema validation for custom resources.",
-            if (isOpenshift) "OpenShift"
+            if (isOpenshift.contains(true)) "OpenShift"
             else "Kubernetes"
           )
           val crd = getCRDBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build

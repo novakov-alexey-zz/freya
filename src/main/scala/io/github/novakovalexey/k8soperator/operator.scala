@@ -1,84 +1,77 @@
 package io.github.novakovalexey.k8soperator
 
-import java.net.URL
-
 import cats.effect.concurrent.MVar
 import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import io.fabric8.kubernetes.client.utils.HttpClientUtils
+import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.{Watch, _}
+import io.github.novakovalexey.k8soperator.OperatorUtils._
 import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator.common.AnsiColors._
 import io.github.novakovalexey.k8soperator.common._
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.ConsumerSignal
+import io.github.novakovalexey.k8soperator.common.watcher.WatchMaker.ConsumerSignal
 import io.github.novakovalexey.k8soperator.common.watcher.actions.OperatorAction
-import io.github.novakovalexey.k8soperator.common.watcher.{ConfigMapWatcher, CustomResourceWatcher}
+import io.github.novakovalexey.k8soperator.common.watcher.{ConfigMapWatcher, CrdWatcherContext, CustomResourceWatcher, WatchMaker}
 import io.github.novakovalexey.k8soperator.errors.OperatorError
 import io.github.novakovalexey.k8soperator.resource.{CrdParser, Labels}
-import okhttp3.{HttpUrl, Request}
 
 import scala.annotation.unused
 import scala.concurrent.duration._
-import scala.util.Try
+
+trait CrdWatchMaker[F[_], T] {
+  def make(context: CrdWatcherContext[F, T]): WatchMaker[F]
+}
+
+trait CrdDeployer[F[_], T] {
+  def deployCrd(client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]): F[CustomResourceDefinition]
+}
+
+object CrdDeployer {
+  implicit def deployer[F[_]: Sync, T]: CrdDeployer[F, T] =
+    (client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]) =>
+      CrdOperator.deployCrd(client, cfg, isOpenShift)
+}
+
+object CrdWatchMaker {
+  implicit def crd[F[_]: ConcurrentEffect, T]: CrdWatchMaker[F, T] =
+    (context: CrdWatcherContext[F, T]) => new CustomResourceWatcher(context)
+}
 
 object Operator extends LazyLogging {
 
-  def checkIfOnOpenshift(masterURL: URL): Boolean =
-    Try {
-      val urlBuilder = new HttpUrl.Builder().host(masterURL.getHost)
-
-      if (masterURL.getPort == -1) urlBuilder.port(masterURL.getDefaultPort)
-      else urlBuilder.port(masterURL.getPort)
-
-      if (masterURL.getProtocol == "https") urlBuilder.scheme("https")
-
-      val url = urlBuilder.addPathSegment("apis/route.openshift.io/v1").build()
-
-      val httpClient = HttpClientUtils.createHttpClient(new ConfigBuilder().build)
-      val response = httpClient.newCall(new Request.Builder().url(url).build).execute
-      response.body().close()
-      httpClient.connectionPool().evictAll()
-      val success = response.isSuccessful
-
-      if (success) logger.debug(s"$url returned ${response.code}. We are on OpenShift.")
-      else logger.debug(s"$url returned ${response.code}. We are not on OpenShift. Assuming, we are on Kubernetes.")
-
-      success
-    }.fold(e => {
-      logger.error("Failed to distinguish between Kubernetes and OpenShift", e)
-      logger.warn("Let's assume we are on Kubernetes")
-      false
-    }, identity)
-
-  def ofCrd[F[_], T](cfg: CrdConfig[T], client: KubernetesClient, controller: Controller[F, T])(
-    implicit @unused F: ConcurrentEffect[F]
-  ): Operator[F, T] =
+  def ofCrd[F[_], T](
+    cfg: CrdConfig[T],
+    client: F[KubernetesClient],
+    controller: Controller[F, T]
+  )(implicit @unused F: ConcurrentEffect[F], W: CrdWatchMaker[F, T], D: CrdDeployer[F, T]): Operator[F, T] =
     ofCrd[F, T](cfg, client)((_: CrdOperator[F, T]) => controller)
 
-  def ofCrd[F[_], T](cfg: CrdConfig[T], client: KubernetesClient = new DefaultKubernetesClient())(
+  def ofCrd[F[_], T](cfg: CrdConfig[T], client: F[KubernetesClient])(
     controller: CrdOperator[F, T] => Controller[F, T]
-  )(implicit F: ConcurrentEffect[F]): Operator[F, T] = {
+  )(implicit F: ConcurrentEffect[F], W: CrdWatchMaker[F, T], D: CrdDeployer[F, T]): Operator[F, T] = {
 
     val pipeline = for {
-      isOpenShift <- checkEnvAndConfig(client, cfg)
-      crd <- CrdOperator.deployCrd(client, cfg, isOpenShift)
+      c <- client
+      isOpenShift <- checkEnvAndConfig(c, cfg)
+      crd <- D.deployCrd(c, cfg, isOpenShift)
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       parser <- CrdParser()
-      op <- F.delay(new CrdOperator[F, T](cfg, client, isOpenShift, crd, parser))
-      ctl = controller(op)
-      w <- F.delay(
-        CustomResourceWatcher[F, T](
-          cfg.namespace,
-          AbstractOperator.getKind(cfg),
-          ctl,
-          CrdOperator.convertCr(cfg.forKind, parser),
-          channel,
-          client,
-          crd
-        ).watch
+
+      operator = new CrdOperator[F, T](cfg, c, isOpenShift, crd, parser)
+      ctl = controller(operator)
+      context = CrdWatcherContext(
+        cfg.namespace,
+        getKind(cfg),
+        ctl,
+        CrdOperator.convertCr(cfg.forKind, parser),
+        channel,
+        c,
+        crd
       )
-    } yield createPipeline(op, ctl, w)
+
+      w <- F.delay(W.make(context).watch)
+    } yield createPipeline(operator, ctl, w)
 
     new Operator[F, T](pipeline)
   }
@@ -86,23 +79,26 @@ object Operator extends LazyLogging {
   def ofConfigMap[F[_], T](
     controller: ConfigMapOperator[F, T] => ConfigMapController[F, T],
     cfg: ConfigMapConfig[T],
-    client: KubernetesClient = new DefaultKubernetesClient()
+    client: F[KubernetesClient]
   )(implicit F: ConcurrentEffect[F]): Operator[F, T] = {
 
     val pipeline = for {
-      isOpenShift <- checkEnvAndConfig(client, cfg)
+      c <- client
+      isOpenShift <- checkEnvAndConfig(c, cfg)
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
-      op <- F.delay(new ConfigMapOperator[F, T](cfg, client, isOpenShift))
+
+      op = new ConfigMapOperator[F, T](cfg, c, isOpenShift)
       ctl = controller(op)
+
       w <- F.delay(
-        ConfigMapWatcher[F, T](
+        new ConfigMapWatcher[F, T](
           cfg.namespace,
           getKind[T](cfg),
           ctl,
-          client,
-          Labels.forKind(getKind[T](cfg), cfg.prefix),
           ConfigMapOperator.convertCm(cfg.forKind),
-          channel
+          channel,
+          c,
+          Labels.forKind(getKind[T](cfg), cfg.prefix)
         ).watch
       )
     } yield createPipeline(op, ctl, w)
@@ -117,10 +113,19 @@ object Operator extends LazyLogging {
   )(implicit F: ConcurrentEffect[F]) =
     OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
 
-  private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: OperatorCfg[T]): F[Boolean] =
-    Sync[F].fromEither(cfg.validate.leftMap(new RuntimeException(_))) *> Sync[F].delay(
-      Operator.checkIfOnOpenshift(client.getMasterUrl)
-    )
+  private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: OperatorCfg[T]): F[Option[Boolean]] =
+    for {
+      _ <- Sync[F].fromEither(cfg.validate.leftMap(new RuntimeException(_)))
+      check <- if (cfg.checkK8sOnStartup) checkKubeEnv(client) else Option.empty[Boolean].pure[F]
+    } yield check
+
+  private def checkKubeEnv[T, F[_]: Sync](client: KubernetesClient) =
+    Sync[F].delay {
+      val (onOpenShift, code) = checkIfOnOpenshift(client.getMasterUrl)
+      if (onOpenShift) logger.debug(s"Returned code: $code. We are on OpenShift.")
+      else logger.debug(s"Returned code: $code. We are not on OpenShift. Assuming, we are on Kubernetes.")
+      onOpenShift.some
+    }
 }
 
 private case class OperatorPipeline[F[_], T](
@@ -175,10 +180,6 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
       namespace = if (pipe.operator.cfg.namespace == CurrentNamespace) pipe.operator.clientNamespace
       else pipe.operator.cfg.namespace
 
-      _ <- F.delay {
-        if (pipe.operator.isOpenShift) logger.info(s"${ye}OpenShift$xx environment detected.")
-        else logger.info(s"${ye}Kubernetes$xx environment detected.")
-      }
       _ <- F.delay(logger.info(s"Starting operator $name for namespace $namespace"))
       _ <- pipe.onInit
       (watch, consumer) <- pipe.consumer

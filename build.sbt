@@ -11,6 +11,7 @@ lazy val `k8s-operator` = (project in file(".")).settings(
     catsEffect,
     scalaLogging,
     jacksonScala,
+    scalaTest,
     logbackClassic % Test,
   )
 )
