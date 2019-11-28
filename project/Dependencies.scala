@@ -14,6 +14,7 @@ object Dependencies extends AutoPlugin {
       val logbackClassicVersion            = "1.2.3"
       val scalaLoggingVersion              = "3.9.2"
       val scalaTestVersion                 = "3.0.8"
+      val scalaCheckVersion                = "1.14.2"
     }
 
     import DependenciesVersion._
@@ -26,5 +27,6 @@ object Dependencies extends AutoPlugin {
     val betterMonadicFor         = "com.olegpy"                 %% "better-monadic-for"        % betterMonadicVersion
     val jacksonScala             = "com.fasterxml.jackson.module" %% "jackson-module-scala"    % jacksonScalaVersion
     val scalaTest                = "org.scalatest"             %%  "scalatest"                 % scalaTestVersion % Test
+    val scalaCheck               = "org.scalacheck"            %% "scalacheck"                 % scalaCheckVersion % Test
   }
 }

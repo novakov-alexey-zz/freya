@@ -3,6 +3,7 @@ package io.github.novakovalexey.k8soperator
 import cats.effect.{ConcurrentEffect, ExitCode, IO, IOApp}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
+import org.scalacheck.Gen
 
 class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Krb2] with LazyLogging {
 
@@ -26,4 +27,20 @@ object TestOperator extends IOApp {
 }
 
 final case class Principal(name: String, password: String, value: String = "")
+object Principal {
+  def gen: Gen[Principal] =
+    for {
+      name <- Gen.alphaNumStr
+      password <- Gen.alphaNumStr
+      value <- Gen.alphaNumStr
+    } yield Principal(name, password, value)
+}
+
 final case class Krb2(realm: String, principals: List[Principal])
+object Krb2 {
+  def gen: Gen[Krb2] =
+    for {
+      realm <- Gen.alphaUpperStr
+      principals <- Gen.listOf(Principal.gen)
+    } yield Krb2(realm, principals)
+}
