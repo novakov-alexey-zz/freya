@@ -1,17 +1,17 @@
-package io.github.novakovalexey.k8soperator.common.watcher
+package io.github.novakovalexey.k8soperator.watcher
 
 import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
 import io.fabric8.kubernetes.api.model.ConfigMap
-import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.Channel
-import io.github.novakovalexey.k8soperator.common.watcher.WatchMaker.ConsumerSignal
+import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watcher}
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
+import io.github.novakovalexey.k8soperator.watcher.AbstractWatcher.Channel
+import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.{AllNamespaces, ConfigMapController, K8sNamespace, Metadata}
 
 import scala.jdk.CollectionConverters._
 
-protected[k8soperator] class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
+class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
   override val namespace: K8sNamespace,
   override val kind: String,
   override val controller: ConfigMapController[F, T],
@@ -21,13 +21,13 @@ protected[k8soperator] class ConfigMapWatcher[F[_]: ConcurrentEffect, T](
   selector: Map[String, String],
 ) extends AbstractWatcher[F, T, ConfigMapController[F, T]](namespace, kind, controller, channel) {
 
-  override def watch: F[(Watch, ConsumerSignal[F])] =
+  override def watch: F[(Consumer, ConsumerSignal[F])] =
     Sync[F].delay(
       io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
     ) *>
       createConfigMapWatch
 
-  private def createConfigMapWatch: F[(Watch, ConsumerSignal[F])] = {
+  private def createConfigMapWatch: F[(Consumer, ConsumerSignal[F])] = {
     val watchable = {
       val cms = client.configMaps
       if (AllNamespaces == namespace) cms.inAnyNamespace.withLabels(selector.asJava)

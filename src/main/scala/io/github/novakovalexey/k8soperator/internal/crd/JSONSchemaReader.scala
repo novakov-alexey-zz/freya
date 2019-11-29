@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator.common.crd
+package io.github.novakovalexey.k8soperator.internal.crd
 
 import java.io.IOException
 
@@ -8,7 +8,7 @@ import io.fabric8.kubernetes.api.model.apiextensions.JSONSchemaProps
 
 import scala.util.Try
 
-object JSONSchemaReader extends LazyLogging {
+private[k8soperator] object JSONSchemaReader extends LazyLogging {
   def readSchema(infoClass: Class[_]): Option[JSONSchemaProps] = {
     val mapper = new ObjectMapper
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

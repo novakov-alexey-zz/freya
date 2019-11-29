@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator.common.watcher
+package io.github.novakovalexey.k8soperator.watcher
 
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.Watcher.Action

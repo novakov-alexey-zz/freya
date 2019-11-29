@@ -1,6 +1,11 @@
 package io.github.novakovalexey.k8soperator
 
+import scala.concurrent.duration.{FiniteDuration, _}
+
+final case class Retry(times: Int = 1, delay: FiniteDuration = 1.second, multiplier: Int = 1)
+
 final case class Metadata(name: String, namespace: String)
+
 final case class AdditionalPrinterColumn(name: String, `type`: String, jsonPath: String)
 
 sealed abstract class OperatorCfg[T](

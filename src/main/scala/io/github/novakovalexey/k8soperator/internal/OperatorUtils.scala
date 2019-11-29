@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator
+package io.github.novakovalexey.k8soperator.internal
 
 import java.net.URL
 
@@ -9,7 +9,7 @@ import okhttp3.{HttpUrl, Request}
 
 import scala.util.Try
 
-object OperatorUtils extends LazyLogging {
+private[k8soperator] object OperatorUtils extends LazyLogging {
 
   def checkIfOnOpenshift(masterURL: URL): (Boolean, Int) =
     Try {

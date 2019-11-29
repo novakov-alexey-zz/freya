@@ -7,8 +7,9 @@ import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 import io.github.novakovalexey.k8soperator._
 import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
-import io.github.novakovalexey.k8soperator.common.crd.{CrdDeployer, InfoClass, InfoClassDoneable, InfoList}
-import io.github.novakovalexey.k8soperator.resource.{ConfigMapParser, CrdParser, Labels}
+import io.github.novakovalexey.k8soperator.internal.crd.{CrdDeployer, InfoClassDoneable, InfoList}
+import io.github.novakovalexey.k8soperator.internal.resource.{ConfigMapParser, CrdParser, Labels}
+import io.github.novakovalexey.k8soperator.watcher.InfoClass
 
 import scala.annotation.unused
 import scala.jdk.CollectionConverters._

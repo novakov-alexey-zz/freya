@@ -1,22 +1,22 @@
-package io.github.novakovalexey.k8soperator.common.watcher
+package io.github.novakovalexey.k8soperator.watcher
 
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, ExitCode}
 import cats.effect.concurrent.MVar
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.Watcher.Action._
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
-import io.github.novakovalexey.k8soperator.common.AnsiColors._
-import io.github.novakovalexey.k8soperator.common.watcher.AbstractWatcher.{Channel, _}
-import io.github.novakovalexey.k8soperator.common.watcher.WatchMaker.ConsumerSignal
-import io.github.novakovalexey.k8soperator.common.watcher.actions.{FailedAction, OkAction, OperatorAction}
+import io.github.novakovalexey.k8soperator.internal.AnsiColors._
+import io.github.novakovalexey.k8soperator.watcher.AbstractWatcher.{Channel, _}
+import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.ConsumerSignal
+import io.github.novakovalexey.k8soperator.watcher.actions.{FailedAction, OkAction, OperatorAction}
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError, WatcherClosedError}
 import io.github.novakovalexey.k8soperator.{Controller, K8sNamespace, Metadata}
 
 object AbstractWatcher {
   type Channel[F[_], T] = MVar[F, Either[OperatorError[T], OperatorAction[T]]]
-  val WatcherClosedSignal = 1
+  val WatcherClosedSignal = 2
 }
 
 abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
@@ -25,7 +25,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
   val controller: C,
   channel: Channel[F, T],
 )(implicit F: ConcurrentEffect[F])
-    extends LazyLogging with WatchMaker[F] {
+    extends LazyLogging with WatcherMaker[F] {
 
   protected def enqueueAction(
     wAction: Watcher.Action,
@@ -49,7 +49,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
           e match {
             case WatcherClosedError(e) =>
               logger.error("K8s closed socket, so closing consumer as well", e)
-              WatcherClosedSignal.pure[F]
+              ExitCode(WatcherClosedSignal).pure[F]
             case pre: ParseResourceError[T] =>
               handleAction(FailedAction(pre.action, pre.t, pre.resource)) *> consumer(channel)
           }
@@ -94,7 +94,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
       case Left(t) => logger.error("Could not evaluate effect", t)
     }
 
-  protected[common] def onClose(e: KubernetesClientException): Unit = {
+  protected def onClose(e: KubernetesClientException): Unit = {
     val err = if (e != null) {
       logger.error(s"Watcher closed with exception in namespace '$namespace'", e)
       Some(e)

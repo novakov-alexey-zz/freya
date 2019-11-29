@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator.resource
+package io.github.novakovalexey.k8soperator.internal.resource
 
 import io.fabric8.kubernetes.api.model.HasMetadata
 

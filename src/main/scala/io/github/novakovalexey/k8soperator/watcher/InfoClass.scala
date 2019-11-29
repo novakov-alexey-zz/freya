@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator.common.crd
+package io.github.novakovalexey.k8soperator.watcher
 
 import io.fabric8.kubernetes.client.CustomResource
 

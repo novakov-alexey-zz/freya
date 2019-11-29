@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator.common.crd
+package io.github.novakovalexey.k8soperator.internal.crd
 
 import cats.effect.Sync
 import cats.implicits._
@@ -10,10 +10,11 @@ import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 import io.github.novakovalexey.k8soperator.AdditionalPrinterColumn
+import io.github.novakovalexey.k8soperator.watcher.InfoClass
 
 import scala.jdk.CollectionConverters._
 
-object CrdDeployer extends LazyLogging {
+private[k8soperator] object CrdDeployer extends LazyLogging {
 
   def initCrds[F[_]: Sync, T](
     client: KubernetesClient,

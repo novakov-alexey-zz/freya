@@ -5,22 +5,26 @@ import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
-import io.fabric8.kubernetes.client.{Watch, _}
-import io.github.novakovalexey.k8soperator.OperatorUtils._
+import io.fabric8.kubernetes.client._
 import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
-import io.github.novakovalexey.k8soperator.common.AnsiColors._
 import io.github.novakovalexey.k8soperator.common._
-import io.github.novakovalexey.k8soperator.common.watcher.WatchMaker.ConsumerSignal
-import io.github.novakovalexey.k8soperator.common.watcher.actions.OperatorAction
-import io.github.novakovalexey.k8soperator.common.watcher.{ConfigMapWatcher, CrdWatcherContext, CustomResourceWatcher, WatchMaker}
 import io.github.novakovalexey.k8soperator.errors.OperatorError
-import io.github.novakovalexey.k8soperator.resource.{CrdParser, Labels}
+import io.github.novakovalexey.k8soperator.internal.AnsiColors._
+import io.github.novakovalexey.k8soperator.internal.OperatorUtils._
+import io.github.novakovalexey.k8soperator.internal.resource.{CrdParser, Labels}
+import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
+import io.github.novakovalexey.k8soperator.watcher.actions.OperatorAction
+import io.github.novakovalexey.k8soperator.watcher.{ConfigMapWatcher, CrdWatcherContext, CustomResourceWatcher, WatcherMaker}
 
 import scala.annotation.unused
-import scala.concurrent.duration._
 
 trait CrdWatchMaker[F[_], T] {
-  def make(context: CrdWatcherContext[F, T]): WatchMaker[F]
+  def make(context: CrdWatcherContext[F, T]): WatcherMaker[F]
+}
+
+object CrdWatchMaker {
+  implicit def crd[F[_]: ConcurrentEffect, T]: CrdWatchMaker[F, T] =
+    (context: CrdWatcherContext[F, T]) => new CustomResourceWatcher(context)
 }
 
 trait CrdDeployer[F[_], T] {
@@ -31,11 +35,6 @@ object CrdDeployer {
   implicit def deployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]) =>
       CrdOperator.deployCrd(client, cfg, isOpenShift)
-}
-
-object CrdWatchMaker {
-  implicit def crd[F[_]: ConcurrentEffect, T]: CrdWatchMaker[F, T] =
-    (context: CrdWatcherContext[F, T]) => new CustomResourceWatcher(context)
 }
 
 object Operator extends LazyLogging {
@@ -109,7 +108,7 @@ object Operator extends LazyLogging {
   private def createPipeline[T, F[_]](
     op: AbstractOperator[F, T],
     ctl: Controller[F, T],
-    w: F[(Watch, ConsumerSignal[F])]
+    w: F[(Consumer, ConsumerSignal[F])]
   )(implicit F: ConcurrentEffect[F]) =
     OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
 
@@ -130,11 +129,9 @@ object Operator extends LazyLogging {
 
 private case class OperatorPipeline[F[_], T](
   operator: AbstractOperator[F, T],
-  consumer: F[(Watch, ConsumerSignal[F])],
+  consumer: F[(Consumer, ConsumerSignal[F])],
   onInit: F[Unit]
 )
-
-final case class Retry(times: Int = 1, delay: FiniteDuration = 1.second, multiplier: Int = 1)
 
 class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
@@ -150,8 +147,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           s.stop *> F.delay(logger.info(s"${re}Operator stopped$xx"))
       }
       .use {
-        case (consumerSignal, _) =>
-          consumerSignal.map(s => if (s != 0) ExitCode(s) else ExitCode.Success)
+        case (consumerSignal, _) => consumerSignal
       }
 
   def withRestart(retry: Retry = Retry())(implicit T: Timer[F]): F[ExitCode] =
@@ -182,7 +178,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
 
       _ <- F.delay(logger.info(s"Starting operator $name for namespace $namespace"))
       _ <- pipe.onInit
-      (watch, consumer) <- pipe.consumer
+      (consumer, signal) <- pipe.consumer
       _ <- F
         .delay(
           logger
@@ -192,8 +188,8 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           case ex: Throwable =>
             F.delay(logger.error(s"Unable to start operator for $namespace namespace", ex))
         }
-    } yield (consumer, stopHandler(watch))
+    } yield (signal, stopHandler(consumer))
 
-  private def stopHandler(watch: Watch): StopHandler =
-    () => F.delay(watch.close())
+  private def stopHandler(consumer: Consumer): StopHandler =
+    () => F.delay(consumer.close())
 }

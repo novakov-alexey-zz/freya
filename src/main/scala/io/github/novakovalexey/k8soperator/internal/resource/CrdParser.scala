@@ -1,9 +1,9 @@
-package io.github.novakovalexey.k8soperator.resource
+package io.github.novakovalexey.k8soperator.internal.resource
 
 import cats.effect.Sync
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import io.github.novakovalexey.k8soperator.common.crd.InfoClass
+import io.github.novakovalexey.k8soperator.watcher.InfoClass
 
 import scala.util.Try
 

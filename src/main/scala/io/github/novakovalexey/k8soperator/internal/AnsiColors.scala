@@ -1,4 +1,4 @@
-package io.github.novakovalexey.k8soperator.common
+package io.github.novakovalexey.k8soperator.internal
 
 private[k8soperator] object AnsiColors {
   private val ANSI_R = "\u001B[31m"
