@@ -72,7 +72,7 @@ class OperatorsTest extends PropSpec with Matchers with Eventually with Checkers
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
-  class CrdTestController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Krb2] {
+  class CrdTestController[F[_]](implicit override val F: ConcurrentEffect[F]) extends Controller[F, Krb2] {
     val events: mutable.Set[(Action, Krb2, Metadata)] = mutable.Set.empty
     var initialized: Boolean = false
 
@@ -89,7 +89,7 @@ class OperatorsTest extends PropSpec with Matchers with Eventually with Checkers
       F.delay(this.initialized = true)
   }
 
-  class ConfigMapTestController[F[_]](implicit F: ConcurrentEffect[F]) extends CrdTestController[F] with CMController {
+  class ConfigMapTestController[F[_]: ConcurrentEffect] extends CrdTestController[F] with CMController {
     override def isSupported(cm: ConfigMap): Boolean = true
   }
 
@@ -162,7 +162,7 @@ class OperatorsTest extends PropSpec with Matchers with Eventually with Checkers
       singleWatcher.foreach(_.eventReceived(action, cm))
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
       val spec =
-        parser.parseCM(classOf[Krb2], cm).getOrElse(fail("Error when transforming ConfigMap to Krb2 CRD"))._1
+        parser.parseCM(classOf[Krb2], cm).getOrElse(fail("Error when transforming ConfigMap to Krb2"))._1
 
       //then
       eventually {

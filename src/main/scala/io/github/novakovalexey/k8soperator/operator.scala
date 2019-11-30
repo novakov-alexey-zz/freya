@@ -151,19 +151,10 @@ private case class OperatorPipeline[F[_], T](
 class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
 
-  trait StopHandler {
-    def stop(): F[Unit]
-  }
-
   def run: F[ExitCode] =
     Resource
-      .make(start) {
-        case (_, s) =>
-          s.stop *> F.delay(logger.info(s"${re}Operator stopped$xx"))
-      }
-      .use {
-        case (consumerSignal, _) => consumerSignal
-      }
+      .make(start)(c => F.delay(c._2.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx")))
+      .use(_._1)
 
   def withRestart(retry: Retry = Retry())(implicit T: Timer[F]): F[ExitCode] =
     run.flatMap(loop(_, retry)).recoverWith {
@@ -183,7 +174,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
       } yield ec
     else ec.pure[F]
 
-  def start: F[(ConsumerSignal[F], StopHandler)] =
+  def start: F[(ConsumerSignal[F], Consumer)] =
     for {
       pipe <- pipeline
 
@@ -203,8 +194,5 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           case ex: Throwable =>
             F.delay(logger.error(s"Unable to start operator for $namespace namespace", ex))
         }
-    } yield (signal, stopHandler(consumer))
-
-  private def stopHandler(consumer: Consumer): StopHandler =
-    () => F.delay(consumer.close())
+    } yield (signal, consumer)
 }

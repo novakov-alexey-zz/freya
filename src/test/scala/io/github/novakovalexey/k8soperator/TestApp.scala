@@ -5,7 +5,9 @@ import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import org.scalacheck.Gen
 
-class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Krb2] with LazyLogging {
+class KrbController[F[_]](implicit override val F: ConcurrentEffect[F])
+    extends Controller[F, Krb2]
+    with LazyLogging {
 
   override def onAdd(krb: Krb2, meta: Metadata): F[Unit] =
     F.delay(logger.info(s"new Krb added: $krb, $meta"))

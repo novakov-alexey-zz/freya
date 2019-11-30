@@ -5,7 +5,9 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 
 import scala.annotation.unused
 
-abstract class Controller[F[_], T](implicit F: Sync[F]) {
+trait Controller[F[_], T] {
+  protected[this] implicit val F: Sync[F]
+
   def onAdd(@unused entity: T, @unused metadata: Metadata): F[Unit] = F.unit
 
   def onDelete(@unused entity: T, @unused metadata: Metadata): F[Unit] = F.unit
