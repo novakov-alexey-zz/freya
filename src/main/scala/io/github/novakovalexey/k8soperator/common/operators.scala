@@ -25,14 +25,15 @@ sealed abstract class AbstractOperator[F[_]: Effect, T](val client: KubernetesCl
 }
 
 object ConfigMapOperator {
-  def convertCm[T](kind: Class[T])(cm: ConfigMap): Either[Throwable, (T, Metadata)] =
-    ConfigMapParser.parseCM(kind, cm)
+  def convertCm[T](kind: Class[T], parser: ConfigMapParser)(cm: ConfigMap): Either[Throwable, (T, Metadata)] =
+    parser.parseCM(kind, cm)
 }
 
 class ConfigMapOperator[F[_]: Effect, T](
   cfg: ConfigMapConfig[T],
   client: KubernetesClient,
-  @unused isOpenShift: Option[Boolean]
+  @unused isOpenShift: Option[Boolean],
+  parser: ConfigMapParser
 ) extends AbstractOperator[F, T](client, cfg) {
 
   val selector: Map[String, String] = Labels.forKind(getKind[T](cfg), cfg.prefix)
@@ -50,7 +51,7 @@ class ConfigMapOperator[F[_]: Effect, T](
       .getItems
       .asScala
       .toList
-      .map(ConfigMapOperator.convertCm(cfg.forKind)(_).toValidatedNec)
+      .map(ConfigMapOperator.convertCm(cfg.forKind, parser)(_).toValidatedNec)
       .sequence
       .map(_.map { case (entity, meta) => meta -> entity }.toMap)
       .toEither

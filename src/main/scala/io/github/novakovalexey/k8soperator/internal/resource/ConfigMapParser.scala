@@ -1,40 +1,54 @@
 package io.github.novakovalexey.k8soperator.internal.resource
 
+import cats.effect.Sync
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
+import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.github.novakovalexey.k8soperator.Metadata
-import org.yaml.snakeyaml.Yaml
-import org.yaml.snakeyaml.constructor.Constructor
-import org.yaml.snakeyaml.error.YAMLException
 
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
-private[k8soperator] object ConfigMapParser extends LazyLogging {
+private[k8soperator] object ConfigMapParser {
+  def apply[F[_]: Sync](): F[ConfigMapParser] =
+    Sync[F].delay(new ConfigMapParser)
+}
 
-  def parseYaml[T](clazz: Class[T], yamlDoc: String): Either[Throwable, T] =
-    Try {
-      val snake = new Yaml(new Constructor(clazz))
-      snake.load[T](yamlDoc)
-    }.orElse(Try(clazz.getDeclaredConstructor().newInstance())) match {
-      case Success(v) =>
-        Option(v).toRight(new RuntimeException(s"Failed to parse $yamlDoc as $clazz"))
-      case e @ Failure(_: InstantiationException | _: IllegalAccessException) =>
-        logger.error("failed to create new instance", e.exception)
-        Left(e.exception)
-      case Failure(e: YAMLException) =>
+private[k8soperator] class ConfigMapParser extends LazyLogging {
+  val mapper = new ObjectMapper(new YAMLFactory()) with ScalaObjectMapper
+  mapper.registerModule(DefaultScalaModule)
+
+  private def parseYaml[T](clazz: Class[T], yamlDoc: String): Either[Throwable, T] = {
+    val spec = Try(mapper.readValue(yamlDoc, clazz)).toEither
+
+    spec match {
+      case Right(s) =>
+        if (s == null) { // empty spec
+          try {
+            val emptySpec = clazz.getDeclaredConstructor().newInstance()
+            Right(emptySpec)
+          } catch {
+            case e: InstantiationException =>
+              val msg = "Failed to parse ConfigMap data"
+              Left(new RuntimeException(msg, e))
+            case e: IllegalAccessException =>
+              val msg = s"Failed to instantiate ConfigMap data as $clazz"
+              Left(new RuntimeException(msg, e))
+          }
+        } else
+          Right(s)
+      case Left(t) =>
         val msg =
           s"""Unable to parse yaml definition of ConfigMap, check if you don't have typo:
              |'
              |$yamlDoc
              |'
              |""".stripMargin
-        logger.error(msg)
-        Left(new IllegalStateException(e))
-      case Failure(e) =>
-        logger.error("unexpected error", e)
-        Left(e)
+        Left(new RuntimeException(msg, t))
     }
+  }
 
   def parseCM[T](clazz: Class[T], cm: ConfigMap): Either[Throwable, (T, Metadata)] =
     for {

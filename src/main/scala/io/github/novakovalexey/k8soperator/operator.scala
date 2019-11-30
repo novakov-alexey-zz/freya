@@ -6,15 +6,16 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client._
+import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
 import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator.common._
 import io.github.novakovalexey.k8soperator.errors.OperatorError
 import io.github.novakovalexey.k8soperator.internal.AnsiColors._
 import io.github.novakovalexey.k8soperator.internal.OperatorUtils._
-import io.github.novakovalexey.k8soperator.internal.resource.{CrdParser, Labels}
+import io.github.novakovalexey.k8soperator.internal.resource.{ConfigMapParser, CrdParser, Labels}
 import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
+import io.github.novakovalexey.k8soperator.watcher._
 import io.github.novakovalexey.k8soperator.watcher.actions.OperatorAction
-import io.github.novakovalexey.k8soperator.watcher.{ConfigMapWatcher, CrdWatcherContext, CustomResourceWatcher, WatcherMaker}
 
 import scala.annotation.unused
 
@@ -25,6 +26,15 @@ trait CrdWatchMaker[F[_], T] {
 object CrdWatchMaker {
   implicit def crd[F[_]: ConcurrentEffect, T]: CrdWatchMaker[F, T] =
     (context: CrdWatcherContext[F, T]) => new CustomResourceWatcher(context)
+}
+
+trait ConfigMapWatchMaker[F[_], T] {
+  def make(context: ConfigMapWatcherContext[F, T]): WatcherMaker[F]
+}
+
+object ConfigMapWatchMaker {
+  implicit def cm[F[_]: ConcurrentEffect, T]: ConfigMapWatchMaker[F, T] =
+    (context: ConfigMapWatcherContext[F, T]) => new ConfigMapWatcher(context)
 }
 
 trait CrdDeployer[F[_], T] {
@@ -75,31 +85,36 @@ object Operator extends LazyLogging {
     new Operator[F, T](pipeline)
   }
 
-  def ofConfigMap[F[_], T](
-    controller: ConfigMapOperator[F, T] => ConfigMapController[F, T],
+  def ofConfigMap[F[_]: ConcurrentEffect, T](
     cfg: ConfigMapConfig[T],
-    client: F[KubernetesClient]
-  )(implicit F: ConcurrentEffect[F]): Operator[F, T] = {
+    client: F[KubernetesClient],
+    controller: ConfigMapController[F, T]
+  )(implicit W: ConfigMapWatchMaker[F, T]): Operator[F, T] =
+    ofConfigMap[F, T](cfg, client)((_: ConfigMapOperator[F, T]) => controller)
+
+  def ofConfigMap[F[_], T](cfg: ConfigMapConfig[T], client: F[KubernetesClient])(
+    controller: ConfigMapOperator[F, T] => ConfigMapController[F, T]
+  )(implicit F: ConcurrentEffect[F], W: ConfigMapWatchMaker[F, T]): Operator[F, T] = {
 
     val pipeline = for {
       c <- client
       isOpenShift <- checkEnvAndConfig(c, cfg)
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
+      parser <- ConfigMapParser()
 
-      op = new ConfigMapOperator[F, T](cfg, c, isOpenShift)
+      op = new ConfigMapOperator[F, T](cfg, c, isOpenShift, parser)
       ctl = controller(op)
-
-      w <- F.delay(
-        new ConfigMapWatcher[F, T](
-          cfg.namespace,
-          getKind[T](cfg),
-          ctl,
-          ConfigMapOperator.convertCm(cfg.forKind),
-          channel,
-          c,
-          Labels.forKind(getKind[T](cfg), cfg.prefix)
-        ).watch
+      context = ConfigMapWatcherContext(
+        cfg.namespace,
+        getKind[T](cfg),
+        ctl,
+        ConfigMapOperator.convertCm(cfg.forKind, parser),
+        channel,
+        c,
+        Labels.forKind(getKind[T](cfg), cfg.prefix)
       )
+
+      w <- F.delay(W.make(context).watch)
     } yield createPipeline(op, ctl, w)
 
     new Operator[F, T](pipeline)

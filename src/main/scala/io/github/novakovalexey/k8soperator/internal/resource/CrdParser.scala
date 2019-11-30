@@ -13,7 +13,6 @@ private[k8soperator] object CrdParser {
 }
 
 private[k8soperator] class CrdParser {
-  // mapper and module registration can throw exceptions, so new instances is wrapped into F
   private val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
 

@@ -15,6 +15,10 @@ abstract class Controller[F[_], T](implicit F: Sync[F]) {
   def onInit(): F[Unit] = F.unit
 }
 
-abstract class ConfigMapController[F[_]: Sync, T] extends Controller[F, T] {
+object Controller {
+  type ConfigMapController[F[_], T] = Controller[F, T] with CMController
+}
+
+trait CMController {
   def isSupported(@unused cm: ConfigMap): Boolean = true
 }
