@@ -13,6 +13,7 @@ lazy val `k8s-operator` = (project in file(".")).settings(
     jacksonScala,
     scalaTest,
     scalaCheck,
+    scalaTestCheck,
     logbackClassic % Test,
   )
 )

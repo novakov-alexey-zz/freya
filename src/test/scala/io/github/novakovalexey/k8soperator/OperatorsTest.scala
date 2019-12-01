@@ -15,15 +15,16 @@ import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, Consu
 import io.github.novakovalexey.k8soperator.watcher._
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.Eventually
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.propspec.AnyPropSpec
 import org.scalatest.time.{Millis, Seconds, Span}
-import org.scalatest.{Matchers, PropSpec}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 
-class OperatorsTest extends PropSpec with Matchers with Eventually with Checkers with ScalaCheckPropertyChecks {
+class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Checkers with ScalaCheckPropertyChecks {
   implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))

@@ -9,11 +9,12 @@ object Dependencies extends AutoPlugin {
     object DependenciesVersion {
       val betterMonadicVersion             = "0.3.1"
       val catsVersion                      = "2.0.0"
-      val fabric8K8sVersion                = "4.6.3"
-      val jacksonScalaVersion              = "2.10.0"
+      val fabric8K8sVersion                = "4.6.4"
+      val jacksonScalaVersion              = "2.10.1"
       val logbackClassicVersion            = "1.2.3"
       val scalaLoggingVersion              = "3.9.2"
-      val scalaTestVersion                 = "3.0.8"
+      val scalaTestVersion                 = "3.1.0"
+      val scalaTestCheckVersion            = "3.1.0.0-RC2"
       val scalaCheckVersion                = "1.14.2"
     }
 
@@ -27,6 +28,7 @@ object Dependencies extends AutoPlugin {
     val betterMonadicFor         = "com.olegpy"                 %% "better-monadic-for"        % betterMonadicVersion
     val jacksonScala             = "com.fasterxml.jackson.module" %% "jackson-module-scala"    % jacksonScalaVersion
     val scalaTest                = "org.scalatest"             %%  "scalatest"                 % scalaTestVersion % Test
+    val scalaTestCheck           = "org.scalatestplus"         %% "scalatestplus-scalacheck"   % scalaTestCheckVersion
     val scalaCheck               = "org.scalacheck"            %% "scalacheck"                 % scalaCheckVersion % Test
   }
 }
