@@ -1,19 +1,22 @@
 package io.github.novakovalexey.k8soperator
 
-import cats.effect.{ConcurrentEffect, ContextShift, IO, Sync, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
+import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, ObjectMeta}
 import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.dsl.Watchable
-import io.fabric8.kubernetes.client.{KubernetesClient, Watch, Watcher}
+import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
+import io.github.novakovalexey.k8soperator.common.CrdOperator
 import io.github.novakovalexey.k8soperator.internal.resource.ConfigMapParser
 import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.watcher._
 import org.scalacheck.{Arbitrary, Gen}
+import org.scalactic.anyvals.PosInt
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
@@ -22,6 +25,7 @@ import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 
 class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Checkers with ScalaCheckPropertyChecks {
@@ -29,6 +33,9 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
   implicit lazy val arbInfoClass: Arbitrary[Krb2] = Arbitrary(Krb2.gen)
+  implicit lazy val arbBooleab: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
+
+  def arbitrary[T](implicit a: Arbitrary[T]): Gen[T] = a.arbitrary
 
   val prefix = "io.github.novakov-alexey"
 
@@ -41,6 +48,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     val watchable = new Watchable[Watch, Watcher[U]] {
       override def watch(watcher: Watcher[U]): Watch = {
         singleWatcher += watcher
+
         () =>
           singleWatcher -= watcher
       }
@@ -73,7 +81,9 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
-  class CrdTestController[F[_]](implicit override val F: ConcurrentEffect[F]) extends Controller[F, Krb2] {
+  class CrdTestController[F[_]](implicit override val F: ConcurrentEffect[F])
+      extends Controller[F, Krb2]
+      with LazyLogging {
     val events: mutable.Set[(Action, Krb2, Metadata)] = mutable.Set.empty
     var initialized: Boolean = false
 
@@ -87,7 +97,10 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
       F.delay(events += ((Action.MODIFIED, krb, meta)))
 
     override def onInit(): F[Unit] =
-      F.delay(this.initialized = true)
+      F.delay({
+        this.initialized = true
+        logger.debug("Controller initialized")
+      })
   }
 
   class ConfigMapTestController[F[_]: ConcurrentEffect] extends CrdTestController[F] with CMController {
@@ -95,7 +108,6 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
   }
 
   def configMapOperator[F[_]: ConcurrentEffect](controller: ConfigMapController[F, Krb2]) = {
-
     val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
     val cfg = ConfigMapConfig(classOf[Krb2], AllNamespaces, prefix)
@@ -103,39 +115,82 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     Operator.ofConfigMap[F, Krb2](cfg, client[F], controller) -> singleWatcher
   }
 
-  def crdOperator[F[_]: ConcurrentEffect](controller: Controller[F, Krb2]) = {
+  def crdOperator[F[_]: ConcurrentEffect](controller: CrdOperator[F, Krb2] => Controller[F, Krb2]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, InfoClass[Krb2]]
     implicit val watchable: Watchable[Watch, Watcher[InfoClass[Krb2]]] = fakeWatchable
     val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), prefix)
 
-    Operator.ofCrd[F, Krb2](cfg, client[F], controller) -> singleWatcher
+    Operator.ofCrd[F, Krb2](cfg, client[F])(controller) -> singleWatcher
   }
 
   property("Crd Operator handles different events") {
     //given
     val controller = new CrdTestController[IO]
-    val (operator, singleWatcher) = crdOperator[IO](controller)
+    val (operator, singleWatcher) = crdOperator[IO](_ => controller)
 
-    // launch operator in background
-    val cancelable = operator.run.unsafeRunCancelable {
-      case Right(ec) =>
-        println(s"Operator stopped with exit code: $ec")
-      case Left(t) =>
-        println("Failed to start operator")
-        t.printStackTrace()
-    }
+    //when
+    val cancelable = startOperator(operator.run)
 
+    //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, InfoClass.gen[Krb2]) { (action, crd) =>
-      //when
-      singleWatcher.foreach(_.eventReceived(action, crd))
-      val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+    forAll(WatcherAction.gen, InfoClass.gen[Krb2]) {
+      (action, crd) =>
+        //when
 
-      //then
-      eventually {
-        controller.events should contain((action, crd.getSpec, meta))
-      }
+        //when
+        singleWatcher.foreach(_.eventReceived(action, crd))
+
+        val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+
+        //then
+        eventually {
+          controller.events should contain((action, crd.getSpec, meta))
+        }
+    }
+
+    cancelable.unsafeRunSync()
+  }
+
+  property("Crd Operator handles different events on restarts") {
+    //given
+    val controller = new CrdTestController[IO]
+    val (operator, singleWatcher) = crdOperator[IO](_ => controller)
+    val maxRestarts = PosInt(20)
+
+    //when
+    val cancelable = startOperator(operator.withRestart(Retry(maxRestarts, 0.seconds)))
+    var oldWatcher = singleWatcher.head
+
+    //then
+    controller.initialized should ===(true)
+
+    forAll(WatcherAction.gen, InfoClass.gen[Krb2], arbitrary[Boolean], minSuccessful(maxRestarts)) {
+      (action, crd, close) =>
+        //when
+        if (close) {
+          singleWatcher.foreach { w =>
+            val ex = if (arbitrary[Boolean].sample.get) new KubernetesClientException("test exception") else null
+            w.onClose(ex)
+          }
+          eventually {
+            //then
+            singleWatcher.size should ===(1)
+            oldWatcher should !==(singleWatcher.head) // checking that set of watchers is updated
+          }
+        }
+
+        oldWatcher = singleWatcher.head
+
+        //when
+        singleWatcher.foreach(_.eventReceived(action, crd))
+
+        val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+
+        //then
+        eventually {
+          controller.events should contain((action, crd.getSpec, meta))
+        }
     }
 
     cancelable.unsafeRunSync()
@@ -146,19 +201,14 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     val controller = new ConfigMapTestController[IO]
     val (operator, singleWatcher) = configMapOperator[IO](controller)
 
-    // launch operator in background
-    val cancelable = operator.run.unsafeRunCancelable {
-      case Right(ec) =>
-        println(s"Operator stopped with exit code: $ec")
-      case Left(t) =>
-        println("Failed to start operator")
-        t.printStackTrace()
-    }
+    //when
+    val cancelable = startOperator(operator.run)
 
+    //then
     controller.initialized should ===(true)
-    val parser = ConfigMapParser[IO]().unsafeRunSync()
 
-    forAll(WatcherAction.gen, CM.gen) { (action, cm) =>
+    val parser = ConfigMapParser[IO]().unsafeRunSync()
+    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
@@ -173,6 +223,15 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
 
     cancelable.unsafeRunSync()
   }
+
+  private def startOperator(io: IO[ExitCode]) =
+    io.unsafeRunCancelable {
+      case Right(ec) =>
+        println(s"Operator stopped with exit code: $ec")
+      case Left(t) =>
+        println("Failed to start operator")
+        t.printStackTrace()
+    }
 
   object ObjectMeta {
     def apply(name: String, namespace: String): ObjectMeta = {
@@ -190,9 +249,9 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
   }
 
   object InfoClass {
-    def gen[T](implicit A: Arbitrary[T]): Gen[InfoClass[T]] =
+    def gen[T: Arbitrary]: Gen[InfoClass[T]] =
       for {
-        spec <- Arbitrary.arbitrary[T]
+        spec <- arbitrary[T]
         meta <- ObjectMeta.gen
       } yield {
         val ic = new InfoClass[T]
