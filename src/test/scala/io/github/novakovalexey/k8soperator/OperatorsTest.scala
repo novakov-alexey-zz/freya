@@ -11,7 +11,6 @@ import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
-import io.github.novakovalexey.k8soperator.common.CrdOperator
 import io.github.novakovalexey.k8soperator.internal.resource.ConfigMapParser
 import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.watcher._
@@ -115,18 +114,18 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     Operator.ofConfigMap[F, Krb2](cfg, client[F], controller) -> singleWatcher
   }
 
-  def crdOperator[F[_]: ConcurrentEffect](controller: CrdOperator[F, Krb2] => Controller[F, Krb2]) = {
+  def crdOperator[F[_]: ConcurrentEffect](controller: Controller[F, Krb2]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, InfoClass[Krb2]]
     implicit val watchable: Watchable[Watch, Watcher[InfoClass[Krb2]]] = fakeWatchable
     val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), prefix)
 
-    Operator.ofCrd[F, Krb2](cfg, client[F])(controller) -> singleWatcher
+    Operator.ofCrd[F, Krb2](cfg, client[F], controller) -> singleWatcher
   }
 
   property("Crd Operator handles different events") {
     //given
     val controller = new CrdTestController[IO]
-    val (operator, singleWatcher) = crdOperator[IO](_ => controller)
+    val (operator, singleWatcher) = crdOperator[IO](controller)
 
     //when
     val cancelable = startOperator(operator.run)
@@ -134,19 +133,15 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, InfoClass.gen[Krb2]) {
-      (action, crd) =>
-        //when
+    forAll(WatcherAction.gen, InfoClass.gen[Krb2]) { (action, crd) =>
+      //when
+      singleWatcher.foreach(_.eventReceived(action, crd))
 
-        //when
-        singleWatcher.foreach(_.eventReceived(action, crd))
-
-        val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
-
-        //then
-        eventually {
-          controller.events should contain((action, crd.getSpec, meta))
-        }
+      val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+      //then
+      eventually {
+        controller.events should contain((action, crd.getSpec, meta))
+      }
     }
 
     cancelable.unsafeRunSync()
@@ -155,7 +150,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
   property("Crd Operator handles different events on restarts") {
     //given
     val controller = new CrdTestController[IO]
-    val (operator, singleWatcher) = crdOperator[IO](_ => controller)
+    val (operator, singleWatcher) = crdOperator[IO](controller)
     val maxRestarts = PosInt(20)
 
     //when
@@ -168,17 +163,8 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     forAll(WatcherAction.gen, InfoClass.gen[Krb2], arbitrary[Boolean], minSuccessful(maxRestarts)) {
       (action, crd, close) =>
         //when
-        if (close) {
-          singleWatcher.foreach { w =>
-            val ex = if (arbitrary[Boolean].sample.get) new KubernetesClientException("test exception") else null
-            w.onClose(ex)
-          }
-          eventually {
-            //then
-            singleWatcher.size should ===(1)
-            oldWatcher should !==(singleWatcher.head) // checking that set of watchers is updated
-          }
-        }
+        if (close)
+          closeCurrentWatcher[InfoClass[Krb2]](singleWatcher, oldWatcher)
 
         oldWatcher = singleWatcher.head
 
@@ -194,6 +180,54 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     }
 
     cancelable.unsafeRunSync()
+  }
+
+  property("ConfigMap Operator handles different events on restarts") {
+    //given
+    val controller = new ConfigMapTestController[IO]
+    val (operator, singleWatcher) = configMapOperator[IO](controller)
+    val maxRestarts = PosInt(20)
+
+    //when
+    val cancelable = startOperator(operator.withRestart(Retry(maxRestarts, 0.seconds)))
+    var oldWatcher = singleWatcher.head
+
+    //then
+    controller.initialized should ===(true)
+    val parser = ConfigMapParser[IO]().unsafeRunSync()
+
+    forAll(WatcherAction.gen, CM.gen[Krb2], arbitrary[Boolean], minSuccessful(maxRestarts)) { (action, cm, close) =>
+      //when
+      if (close)
+        closeCurrentWatcher[ConfigMap](singleWatcher, oldWatcher)
+
+      oldWatcher = singleWatcher.head
+
+      //when
+      singleWatcher.foreach(_.eventReceived(action, cm))
+
+      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      val spec = parseCM(parser, cm)
+
+      //then
+      eventually {
+        controller.events should contain((action, spec, meta))
+      }
+    }
+
+    cancelable.unsafeRunSync()
+  }
+
+  private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], oldWatcher: Watcher[T]) = {
+    singleWatcher.foreach { w =>
+      val ex = if (arbitrary[Boolean].sample.get) new KubernetesClientException("test exception") else null
+      w.onClose(ex)
+    }
+    eventually {
+      //then
+      singleWatcher.size should ===(1)
+      oldWatcher should !==(singleWatcher.head) // checking that the Set with single watcher is updated with new watcher after restart
+    }
   }
 
   property("ConfigMap Operator handles different events") {
@@ -212,8 +246,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-      val spec =
-        parser.parseCM(classOf[Krb2], cm).getOrElse(fail("Error when transforming ConfigMap to Krb2"))._1
+      val spec = parseCM(parser, cm)
 
       //then
       eventually {
@@ -223,6 +256,9 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
 
     cancelable.unsafeRunSync()
   }
+
+  private def parseCM(parser: ConfigMapParser, cm: ConfigMap) =
+    parser.parseCM(classOf[Krb2], cm).getOrElse(fail("Error when transforming ConfigMap to Krb2"))._1
 
   private def startOperator(io: IO[ExitCode]) =
     io.unsafeRunCancelable {
