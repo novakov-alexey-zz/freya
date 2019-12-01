@@ -190,7 +190,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
 
     //when
     val cancelable = startOperator(operator.withRestart(Retry(maxRestarts, 0.seconds)))
-    var oldWatcher = singleWatcher.head
+    var currentWatcher = singleWatcher.head
 
     //then
     controller.initialized should ===(true)
@@ -199,9 +199,9 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     forAll(WatcherAction.gen, CM.gen[Krb2], arbitrary[Boolean], minSuccessful(maxRestarts)) { (action, cm, close) =>
       //when
       if (close)
-        closeCurrentWatcher[ConfigMap](singleWatcher, oldWatcher)
+        closeCurrentWatcher[ConfigMap](singleWatcher, currentWatcher)
 
-      oldWatcher = singleWatcher.head
+      currentWatcher = singleWatcher.head
 
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
@@ -218,7 +218,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     cancelable.unsafeRunSync()
   }
 
-  private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], oldWatcher: Watcher[T]) = {
+  private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T]) = {
     singleWatcher.foreach { w =>
       val ex = if (arbitrary[Boolean].sample.get) new KubernetesClientException("test exception") else null
       w.onClose(ex)
@@ -226,7 +226,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     eventually {
       //then
       singleWatcher.size should ===(1)
-      oldWatcher should !==(singleWatcher.head) // checking that the Set with single watcher is updated with new watcher after restart
+      currentWatcher should !==(singleWatcher.head) // waiting until the Set with single watcher is updated with new watcher after Operator restart
     }
   }
 
@@ -252,6 +252,105 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
       eventually {
         controller.events should contain((action, spec, meta))
       }
+    }
+
+    cancelable.unsafeRunSync()
+  }
+
+  property("Operator handles parser errors") {
+    //given
+    var failed: Int = 0
+
+    val controller: ConfigMapTestController[IO] = new ConfigMapTestController[IO] {
+      override def onAdd(krb: Krb2, meta: Metadata): IO[Unit] = {
+        if (krb.failInTest)
+          failed = failed + 1
+        super.onAdd(krb, meta)
+      }
+
+      override def onDelete(krb: Krb2, meta: Metadata): IO[Unit] = {
+        if (krb.failInTest)
+          failed = failed + 1
+        super.onDelete(krb, meta)
+      }
+
+      override def onModify(krb: Krb2, meta: Metadata): IO[Unit] = {
+        if (krb.failInTest)
+          failed = failed + 1
+        super.onModify(krb, meta)
+      }
+    }
+
+    val (operator, singleWatcher) = configMapOperator[IO](controller)
+
+    //when
+    val cancelable = startOperator(operator.run)
+    val parser = ConfigMapParser[IO]().unsafeRunSync()
+
+    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
+      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      val spec = parseCM(parser, cm)
+
+      if (spec.failInTest)
+        cm.getData.put("config", "error")
+
+      //when
+      singleWatcher.foreach(_.eventReceived(action, cm))
+
+      //then
+      if (!spec.failInTest)
+        eventually {
+          controller.events should contain((action, spec, meta))
+        } else
+        controller.events should not contain ((action, spec, meta))
+
+      failed should ===(0)
+    }
+
+    cancelable.unsafeRunSync()
+  }
+
+  property("Operator handles controller failures") {
+    //given
+    val controller = new ConfigMapTestController[IO] {
+      val error: IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
+
+      override def onAdd(krb: Krb2, meta: Metadata): IO[Unit] =
+        if (krb.failInTest)
+          error
+        else
+          super.onAdd(krb, meta)
+
+      override def onDelete(krb: Krb2, meta: Metadata): IO[Unit] =
+        if (krb.failInTest)
+          error
+        else
+          super.onDelete(krb, meta)
+
+      override def onModify(krb: Krb2, meta: Metadata): IO[Unit] =
+        if (krb.failInTest)
+          error
+        else
+          super.onModify(krb, meta)
+    }
+
+    val (operator, singleWatcher) = configMapOperator[IO](controller)
+
+    //when
+    val cancelable = startOperator(operator.run)
+
+    val parser = ConfigMapParser[IO]().unsafeRunSync()
+    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
+      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      val spec = parseCM(parser, cm)
+      //when
+      singleWatcher.foreach(_.eventReceived(action, cm))
+
+      //then
+      if (!spec.failInTest)
+        eventually {
+          controller.events should contain((action, spec, meta))
+        }
     }
 
     cancelable.unsafeRunSync()
