@@ -4,29 +4,31 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
 import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, ObjectMeta, ObjectMetaBuilder}
-import io.github.novakovalexey.k8soperator.watcher._
 import io.fabric8.kubernetes.client.Watcher.Action
+import io.github.novakovalexey.k8soperator.generators.arbitrary
+import io.github.novakovalexey.k8soperator.watcher._
 import org.scalacheck.{Arbitrary, Gen}
 
 import scala.jdk.CollectionConverters._
-import generators.arbitrary
 
 object generators {
   def arbitrary[T](implicit a: Arbitrary[T]): Gen[T] = a.arbitrary
 }
 
 object ObjectMetaTest {
-  def apply(name: String, namespace: String): ObjectMeta =
-    new ObjectMetaBuilder().withName(name).withNamespace(namespace).build()
+  def apply(name: String, namespace: String, labels: Map[String, String]): ObjectMeta =
+    new ObjectMetaBuilder().withName(name).withNamespace(namespace).withLabels(labels.asJava).build()
 
   val maxStrGen: Int => Gen[String] = (max: Int) =>
     Gen.alphaStr.map(str => if (str.length <= max) str else str.substring(0, max)).suchThat(_.nonEmpty)
 
-  def gen: Gen[ObjectMeta] =
+  def gen: Gen[ObjectMeta] = gen(Map.empty)
+
+  def gen(labels: Map[String, String]): Gen[ObjectMeta] =
     for {
       name <- maxStrGen(63)
       namespace <- maxStrGen(63)
-    } yield ObjectMetaTest(name, namespace)
+    } yield ObjectMetaTest(name, namespace, labels)
 }
 
 object InfoClass {
@@ -53,10 +55,12 @@ object CM {
   val mapper = new ObjectMapper(new YAMLFactory()) with ScalaObjectMapper
   mapper.registerModule(DefaultScalaModule)
 
-  def gen[T](implicit A: Arbitrary[T]): Gen[ConfigMap] =
+  def gen[T](implicit A: Arbitrary[T]): Gen[ConfigMap] = gen[T](Map.empty[String, String])
+
+  def gen[T](labels: Map[String, String])(implicit A: Arbitrary[T]): Gen[ConfigMap] =
     for {
       spec <- Arbitrary.arbitrary[T]
-      meta <- ObjectMetaTest.gen
+      meta <- ObjectMetaTest.gen(labels)
     } yield {
 
       new ConfigMapBuilder()

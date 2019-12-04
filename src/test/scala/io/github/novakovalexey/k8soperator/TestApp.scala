@@ -1,9 +1,11 @@
 package io.github.novakovalexey.k8soperator
 
-import cats.effect.{ConcurrentEffect, ExitCode, IO, IOApp}
+import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import org.scalacheck.{Arbitrary, Gen}
+
+import scala.concurrent.ExecutionContext
 
 class KrbController[F[_]](implicit override val F: ConcurrentEffect[F]) extends Controller[F, Krb2] with LazyLogging {
 
@@ -15,6 +17,7 @@ class KrbController[F[_]](implicit override val F: ConcurrentEffect[F]) extends 
 }
 
 object TestOperator extends IOApp {
+  implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)

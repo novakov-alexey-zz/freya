@@ -18,7 +18,7 @@ private[k8soperator] object OperatorUtils extends LazyLogging {
       if (masterURL.getPort == -1) urlBuilder.port(masterURL.getDefaultPort)
       else urlBuilder.port(masterURL.getPort)
 
-      if (masterURL.getProtocol == "https") urlBuilder.scheme("https")
+      if (masterURL.getProtocol == "https") urlBuilder.scheme("https") else urlBuilder.scheme("http")
 
       val url = urlBuilder.addPathSegment("apis/route.openshift.io/v1").build()
 

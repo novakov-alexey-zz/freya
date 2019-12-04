@@ -1,22 +1,18 @@
 package io.github.novakovalexey.k8soperator
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
+import io.fabric8.kubernetes.api.model.NamespaceBuilder
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
-import io.github.novakovalexey.k8soperator.internal.resource.ConfigMapParser
-import org.scalatest.{DoNotDiscover, Ignore}
-//import io.github.novakovalexey.k8soperator.common.CrdOperator
 import io.github.novakovalexey.k8soperator.internal.crd.{InfoClassDoneable, InfoList}
+import io.github.novakovalexey.k8soperator.internal.resource.ConfigMapParser
 import io.github.novakovalexey.k8soperator.watcher.InfoClass
-import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
 import org.scalatest.time.{Millis, Seconds, Span}
+import org.scalatest.{BeforeAndAfter, DoNotDiscover, Ignore}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
-import io.fabric8.kubernetes.api.model.NamespaceBuilder
-
-import scala.concurrent.ExecutionContext
 
 @DoNotDiscover
 @Ignore
@@ -26,10 +22,9 @@ class ServerMockTest
     with Checkers
     with ScalaCheckPropertyChecks
     with Eventually
-    with BeforeAndAfterAll
+    with BeforeAndAfter
     with LazyLogging {
 
-  implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(25, Seconds)), scaled(Span(50, Millis)))
 
   val server = new KubernetesServer(false, true)
@@ -72,7 +67,7 @@ class ServerMockTest
     val operator = Operator.ofConfigMap[IO, Krb2](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)
 
-    val parser = ConfigMapParser[IO]().unsafeRunSync()
+    val parser = new ConfigMapParser()
     forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
       //when
       val ns = new NamespaceBuilder().withNewMetadata.withName(cm.getMetadata.getNamespace).endMetadata.build
@@ -90,9 +85,11 @@ class ServerMockTest
     cancelable.unsafeRunSync()
   }
 
-  override protected def beforeAll(): Unit =
+  before {
     server.before()
+  }
 
-  override protected def afterAll(): Unit =
+  after {
     server.after()
+  }
 }

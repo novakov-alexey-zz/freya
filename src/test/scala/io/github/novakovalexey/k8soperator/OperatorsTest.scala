@@ -1,6 +1,6 @@
 package io.github.novakovalexey.k8soperator
 
-import cats.effect.{ConcurrentEffect, ContextShift, IO, Sync, Timer}
+import cats.effect.{ConcurrentEffect, IO, Sync, Timer}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
@@ -22,11 +22,8 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Checkers with ScalaCheckPropertyChecks {
-  implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
-
-  val prefix = "io.github.novakov-alexey"
 
   def client[F[_]: Sync]: F[KubernetesClient] =
     Sync[F].delay(new JavaK8sClientMock())
@@ -69,7 +66,9 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
-  def configMapOperator[F[_]: ConcurrentEffect](controller: ConfigMapController[F, Krb2]) = {
+  def configMapOperator[F[_]: ConcurrentEffect](
+    controller: ConfigMapController[F, Krb2]
+  ): (Operator[F, Krb2], mutable.Set[Watcher[ConfigMap]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
     val cfg = ConfigMapConfig(classOf[Krb2], AllNamespaces, prefix, checkK8sOnStartup = false)
@@ -77,7 +76,9 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     Operator.ofConfigMap[F, Krb2](cfg, client[F], controller) -> singleWatcher
   }
 
-  def crdOperator[F[_]: ConcurrentEffect](controller: Controller[F, Krb2]) = {
+  def crdOperator[F[_]: ConcurrentEffect](
+    controller: Controller[F, Krb2]
+  ): (Operator[F, Krb2], mutable.Set[Watcher[InfoClass[Krb2]]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, InfoClass[Krb2]]
     implicit val watchable: Watchable[Watch, Watcher[InfoClass[Krb2]]] = fakeWatchable
     val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), prefix, checkK8sOnStartup = false)
@@ -276,7 +277,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
 
   property("Operator handles controller failures") {
     //given
-    val controller = new ConfigMapTestController[IO] {
+    val controller: ConfigMapTestController[IO] = new ConfigMapTestController[IO] {
       val error: IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
 
       override def onAdd(krb: Krb2, meta: Metadata): IO[Unit] =

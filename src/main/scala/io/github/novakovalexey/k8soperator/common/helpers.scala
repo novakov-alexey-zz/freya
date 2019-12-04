@@ -13,22 +13,22 @@ import io.github.novakovalexey.k8soperator.watcher.InfoClass
 import scala.annotation.unused
 import scala.jdk.CollectionConverters._
 
-sealed abstract class AbstractOperator[F[_]: Effect, T](val client: KubernetesClient, val cfg: OperatorCfg[T]) {
+sealed abstract class AbstractHelper[F[_]: Effect, T](val client: KubernetesClient, val cfg: OperatorCfg[T]) {
   val kind: String = cfg.getKind
   val clientNamespace: K8sNamespace = Namespace(client.getNamespace)
 }
 
-object ConfigMapOperator {
+object ConfigMapHelper {
   def convertCm[T](kind: Class[T], parser: ConfigMapParser)(cm: ConfigMap): Either[Throwable, (T, Metadata)] =
     parser.parseCM(kind, cm)
 }
 
-class ConfigMapOperator[F[_]: Effect, T](
+class ConfigMapHelper[F[_]: Effect, T](
   cfg: ConfigMapConfig[T],
   client: KubernetesClient,
   @unused isOpenShift: Option[Boolean],
   parser: ConfigMapParser
-) extends AbstractOperator[F, T](client, cfg) {
+) extends AbstractHelper[F, T](client, cfg) {
 
   val selector: Map[String, String] = Labels.forKind(cfg.getKind, cfg.prefix)
 
@@ -45,7 +45,7 @@ class ConfigMapOperator[F[_]: Effect, T](
       .getItems
       .asScala
       .toList
-      .map(ConfigMapOperator.convertCm(cfg.forKind, parser)(_).toValidatedNec)
+      .map(ConfigMapHelper.convertCm(cfg.forKind, parser)(_).toValidatedNec)
       .sequence
       .map(_.map { case (entity, meta) => meta -> entity }.toMap)
       .toEither
@@ -53,7 +53,7 @@ class ConfigMapOperator[F[_]: Effect, T](
   }
 }
 
-object CrdOperator {
+object CrdHelper {
 
   def deployCrd[F[_]: Sync, T](
     client: KubernetesClient,
@@ -64,7 +64,7 @@ object CrdOperator {
     cfg.prefix,
     cfg.getKind,
     cfg.shortNames,
-    cfg.pluralName,
+    cfg.getPluralCaseInsensitive,
     cfg.additionalPrinterColumns,
     cfg.forKind,
     isOpenShift
@@ -77,13 +77,13 @@ object CrdOperator {
     } yield (spec, meta)
 }
 
-class CrdOperator[F[_]: Effect, T](
+class CrdHelper[F[_]: Effect, T](
   cfg: CrdConfig[T],
   client: KubernetesClient,
   @unused val isOpenShift: Option[Boolean],
   val crd: CustomResourceDefinition,
   val parser: CrdParser
-) extends AbstractOperator[F, T](client, cfg) {
+) extends AbstractHelper[F, T](client, cfg) {
 
   def currentResources: Either[List[Throwable], Map[Metadata, T]] = {
     val crds = {
@@ -93,7 +93,7 @@ class CrdOperator[F[_]: Effect, T](
     }
 
     crds.list.getItems.asScala.toList
-      .map(CrdOperator.convertCr(cfg.forKind, parser)(_).toValidatedNec)
+      .map(CrdHelper.convertCr(cfg.forKind, parser)(_).toValidatedNec)
       .sequence
       .map(_.map { case (entity, meta) => meta -> entity }.toMap)
       .toEither

@@ -5,7 +5,7 @@ import cats.implicits._
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.HasMetadata
-import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent, JSONSchemaProps, JSONSchemaPropsBuilder}
+import io.fabric8.kubernetes.api.model.apiextensions._
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
@@ -40,7 +40,7 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
             logger
               .info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping the creation.")
           ) *>
-            h.pure[F]
+              h.pure[F]
         case Nil =>
           createCrd[F, T](
             client,
@@ -146,21 +146,17 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
     pluralName: String
   ): CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder] = {
 
-    val pluralLowerCase = {
-      if (pluralName.isEmpty) entityName + "s" else pluralName
-    }.toLowerCase
-
     val shortNamesLower = shortNames.map(_.toLowerCase())
 
     new CustomResourceDefinitionBuilder()
       .withApiVersion("apiextensions.k8s.io/v1beta1")
       .withNewMetadata
-      .withName(s"$pluralLowerCase.$prefix")
+      .withName(s"$pluralName.$prefix")
       .endMetadata
       .withNewSpec
       .withNewNames
       .withKind(entityName)
-      .withPlural(pluralLowerCase)
+      .withPlural(pluralName)
       .withShortNames(shortNamesLower: _*)
       .endNames
       .withGroup(prefix)

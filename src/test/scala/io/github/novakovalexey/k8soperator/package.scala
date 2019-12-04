@@ -1,13 +1,18 @@
 package io.github.novakovalexey
 
-import cats.effect.{CancelToken, ExitCode, IO}
+import cats.effect.{CancelToken, ContextShift, ExitCode, IO}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.github.novakovalexey.k8soperator.internal.resource.ConfigMapParser
 import org.scalacheck.{Arbitrary, Gen}
 
+import scala.concurrent.ExecutionContext
+
 package object k8soperator {
+  implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
   implicit lazy val arbInfoClass: Arbitrary[Krb2] = Arbitrary(Krb2.gen)
   implicit lazy val arbBooleab: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
+
+  val prefix = "io.github.novakov-alexey"
 
   def startOperator(io: IO[ExitCode]): CancelToken[IO] =
     io.unsafeRunCancelable {

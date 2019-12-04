@@ -43,7 +43,7 @@ trait CrdDeployer[F[_], T] {
 object CrdDeployer {
   implicit def deployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]) =>
-      CrdOperator.deployCrd(client, cfg, isOpenShift)
+      CrdHelper.deployCrd(client, cfg, isOpenShift)
 }
 
 object Operator extends LazyLogging {
@@ -53,10 +53,10 @@ object Operator extends LazyLogging {
     client: F[KubernetesClient],
     controller: Controller[F, T]
   )(implicit @unused F: ConcurrentEffect[F], W: CrdWatchMaker[F, T], D: CrdDeployer[F, T]): Operator[F, T] =
-    ofCrd[F, T](cfg, client)((_: CrdOperator[F, T]) => controller)
+    ofCrd[F, T](cfg, client)((_: CrdHelper[F, T]) => controller)
 
   def ofCrd[F[_], T](cfg: CrdConfig[T], client: F[KubernetesClient])(
-    controller: CrdOperator[F, T] => Controller[F, T]
+    controller: CrdHelper[F, T] => Controller[F, T]
   )(implicit F: ConcurrentEffect[F], W: CrdWatchMaker[F, T], D: CrdDeployer[F, T]): Operator[F, T] = {
 
     val pipeline = for {
@@ -66,20 +66,20 @@ object Operator extends LazyLogging {
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       parser <- CrdParser()
 
-      operator = new CrdOperator[F, T](cfg, c, isOpenShift, crd, parser)
-      ctl = controller(operator)
+      helper = new CrdHelper[F, T](cfg, c, isOpenShift, crd, parser)
+      ctl = controller(helper)
       context = CrdWatcherContext(
         cfg.namespace,
         cfg.getKind,
         ctl,
-        CrdOperator.convertCr(cfg.forKind, parser),
+        CrdHelper.convertCr(cfg.forKind, parser),
         channel,
         c,
         crd
       )
 
       w <- F.delay(W.make(context).watch)
-    } yield createPipeline(operator, ctl, w)
+    } yield createPipeline(helper, ctl, w)
 
     new Operator[F, T](pipeline)
   }
@@ -89,10 +89,10 @@ object Operator extends LazyLogging {
     client: F[KubernetesClient],
     controller: ConfigMapController[F, T]
   )(implicit W: ConfigMapWatchMaker[F, T]): Operator[F, T] =
-    ofConfigMap[F, T](cfg, client)((_: ConfigMapOperator[F, T]) => controller)
+    ofConfigMap[F, T](cfg, client)((_: ConfigMapHelper[F, T]) => controller)
 
   def ofConfigMap[F[_], T](cfg: ConfigMapConfig[T], client: F[KubernetesClient])(
-    controller: ConfigMapOperator[F, T] => ConfigMapController[F, T]
+    controller: ConfigMapHelper[F, T] => ConfigMapController[F, T]
   )(implicit F: ConcurrentEffect[F], W: ConfigMapWatchMaker[F, T]): Operator[F, T] = {
 
     val pipeline = for {
@@ -101,26 +101,26 @@ object Operator extends LazyLogging {
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       parser <- ConfigMapParser()
 
-      op = new ConfigMapOperator[F, T](cfg, c, isOpenShift, parser)
-      ctl = controller(op)
+      helper = new ConfigMapHelper[F, T](cfg, c, isOpenShift, parser)
+      ctl = controller(helper)
       context = ConfigMapWatcherContext(
         cfg.namespace,
         cfg.getKind,
         ctl,
-        ConfigMapOperator.convertCm(cfg.forKind, parser),
+        ConfigMapHelper.convertCm(cfg.forKind, parser),
         channel,
         c,
         Labels.forKind(cfg.getKind, cfg.prefix)
       )
 
       w <- F.delay(W.make(context).watch)
-    } yield createPipeline(op, ctl, w)
+    } yield createPipeline(helper, ctl, w)
 
     new Operator[F, T](pipeline)
   }
 
   private def createPipeline[T, F[_]](
-    op: AbstractOperator[F, T],
+    op: AbstractHelper[F, T],
     ctl: Controller[F, T],
     w: F[(Consumer, ConsumerSignal[F])]
   )(implicit F: ConcurrentEffect[F]) =
@@ -142,7 +142,7 @@ object Operator extends LazyLogging {
 }
 
 private case class OperatorPipeline[F[_], T](
-  operator: AbstractOperator[F, T],
+  operator: AbstractHelper[F, T],
   consumer: F[(Consumer, ConsumerSignal[F])],
   onInit: F[Unit]
 )
