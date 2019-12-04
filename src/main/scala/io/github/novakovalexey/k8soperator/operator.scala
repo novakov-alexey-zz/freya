@@ -7,7 +7,6 @@ import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client._
 import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
-import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator.common._
 import io.github.novakovalexey.k8soperator.errors.OperatorError
 import io.github.novakovalexey.k8soperator.internal.AnsiColors._
@@ -71,7 +70,7 @@ object Operator extends LazyLogging {
       ctl = controller(operator)
       context = CrdWatcherContext(
         cfg.namespace,
-        getKind(cfg),
+        cfg.getKind,
         ctl,
         CrdOperator.convertCr(cfg.forKind, parser),
         channel,
@@ -106,12 +105,12 @@ object Operator extends LazyLogging {
       ctl = controller(op)
       context = ConfigMapWatcherContext(
         cfg.namespace,
-        getKind[T](cfg),
+        cfg.getKind,
         ctl,
         ConfigMapOperator.convertCm(cfg.forKind, parser),
         channel,
         c,
-        Labels.forKind(getKind[T](cfg), cfg.prefix)
+        Labels.forKind(cfg.getKind, cfg.prefix)
       )
 
       w <- F.delay(W.make(context).watch)
@@ -178,7 +177,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
     for {
       pipe <- pipeline
 
-      name = AbstractOperator.getKind(pipe.operator.cfg)
+      name = pipe.operator.cfg.getKind
       namespace = if (pipe.operator.cfg.namespace == CurrentNamespace) pipe.operator.clientNamespace
       else pipe.operator.cfg.namespace
 

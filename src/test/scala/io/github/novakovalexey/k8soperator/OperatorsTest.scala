@@ -1,20 +1,15 @@
 package io.github.novakovalexey.k8soperator
 
-import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
-import com.typesafe.scalalogging.LazyLogging
+import cats.effect.{ConcurrentEffect, ContextShift, IO, Sync, Timer}
+import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
-import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, ObjectMeta}
-import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
+import io.github.novakovalexey.k8soperator.generators.arbitrary
 import io.github.novakovalexey.k8soperator.internal.resource.ConfigMapParser
 import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.watcher._
-import org.scalacheck.{Arbitrary, Gen}
 import org.scalactic.anyvals.PosInt
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
@@ -25,16 +20,11 @@ import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.jdk.CollectionConverters._
 
 class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Checkers with ScalaCheckPropertyChecks {
   implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
-  implicit lazy val arbInfoClass: Arbitrary[Krb2] = Arbitrary(Krb2.gen)
-  implicit lazy val arbBooleab: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
-
-  def arbitrary[T](implicit a: Arbitrary[T]): Gen[T] = a.arbitrary
 
   val prefix = "io.github.novakov-alexey"
 
@@ -48,8 +38,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
       override def watch(watcher: Watcher[U]): Watch = {
         singleWatcher += watcher
 
-        () =>
-          singleWatcher -= watcher
+        () => singleWatcher -= watcher
       }
 
       override def watch(resourceVersion: String, watcher: Watcher[U]): Watch =
@@ -66,7 +55,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
       new ConfigMapWatcher(context) {
         override def watch: F[(Consumer, ConsumerSignal[F])] =
           registerWatcher(watchable)
-    }
+      }
 
   implicit def crdWatch[F[_]: ConcurrentEffect, T](
     implicit watchable: Watchable[Watch, Watcher[InfoClass[T]]]
@@ -75,41 +64,15 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
       new CustomResourceWatcher(context) {
         override def watch: F[(Consumer, ConsumerSignal[F])] =
           registerWatcher(watchable)
-    }
+      }
 
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
-  class CrdTestController[F[_]](implicit override val F: ConcurrentEffect[F])
-      extends Controller[F, Krb2]
-      with LazyLogging {
-    val events: mutable.Set[(Action, Krb2, Metadata)] = mutable.Set.empty
-    var initialized: Boolean = false
-
-    override def onAdd(krb: Krb2, meta: Metadata): F[Unit] =
-      F.delay(events += ((Action.ADDED, krb, meta)))
-
-    override def onDelete(krb: Krb2, meta: Metadata): F[Unit] =
-      F.delay(events += ((Action.DELETED, krb, meta)))
-
-    override def onModify(krb: Krb2, meta: Metadata): F[Unit] =
-      F.delay(events += ((Action.MODIFIED, krb, meta)))
-
-    override def onInit(): F[Unit] =
-      F.delay({
-        this.initialized = true
-        logger.debug("Controller initialized")
-      })
-  }
-
-  class ConfigMapTestController[F[_]: ConcurrentEffect] extends CrdTestController[F] with CMController {
-    override def isSupported(cm: ConfigMap): Boolean = true
-  }
-
   def configMapOperator[F[_]: ConcurrentEffect](controller: ConfigMapController[F, Krb2]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
-    val cfg = ConfigMapConfig(classOf[Krb2], AllNamespaces, prefix)
+    val cfg = ConfigMapConfig(classOf[Krb2], AllNamespaces, prefix, checkK8sOnStartup = false)
 
     Operator.ofConfigMap[F, Krb2](cfg, client[F], controller) -> singleWatcher
   }
@@ -117,7 +80,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
   def crdOperator[F[_]: ConcurrentEffect](controller: Controller[F, Krb2]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, InfoClass[Krb2]]
     implicit val watchable: Watchable[Watch, Watcher[InfoClass[Krb2]]] = fakeWatchable
-    val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), prefix)
+    val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), prefix, checkK8sOnStartup = false)
 
     Operator.ofCrd[F, Krb2](cfg, client[F], controller) -> singleWatcher
   }
@@ -257,30 +220,31 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     cancelable.unsafeRunSync()
   }
 
-  property("Operator handles parser errors") {
-    //given
+  class CountingFailureFlagController extends ConfigMapTestController[IO] {
     var failed: Int = 0
 
-    val controller: ConfigMapTestController[IO] = new ConfigMapTestController[IO] {
-      override def onAdd(krb: Krb2, meta: Metadata): IO[Unit] = {
-        if (krb.failInTest)
-          failed = failed + 1
-        super.onAdd(krb, meta)
-      }
-
-      override def onDelete(krb: Krb2, meta: Metadata): IO[Unit] = {
-        if (krb.failInTest)
-          failed = failed + 1
-        super.onDelete(krb, meta)
-      }
-
-      override def onModify(krb: Krb2, meta: Metadata): IO[Unit] = {
-        if (krb.failInTest)
-          failed = failed + 1
-        super.onModify(krb, meta)
-      }
+    override def onAdd(krb: Krb2, meta: Metadata): IO[Unit] = {
+      if (krb.failInTest)
+        failed = failed + 1
+      super.onAdd(krb, meta)
     }
 
+    override def onDelete(krb: Krb2, meta: Metadata): IO[Unit] = {
+      if (krb.failInTest)
+        failed = failed + 1
+      super.onDelete(krb, meta)
+    }
+
+    override def onModify(krb: Krb2, meta: Metadata): IO[Unit] = {
+      if (krb.failInTest)
+        failed = failed + 1
+      super.onModify(krb, meta)
+    }
+  }
+
+  property("Operator handles parser errors") {
+    //given
+    val controller = new CountingFailureFlagController()
     val (operator, singleWatcher) = configMapOperator[IO](controller)
 
     //when
@@ -304,7 +268,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
         } else
         controller.events should not contain ((action, spec, meta))
 
-      failed should ===(0)
+      controller.failed should ===(0)
     }
 
     cancelable.unsafeRunSync()
@@ -356,65 +320,38 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     cancelable.unsafeRunSync()
   }
 
-  private def parseCM(parser: ConfigMapParser, cm: ConfigMap) =
-    parser.parseCM(classOf[Krb2], cm).getOrElse(fail("Error when transforming ConfigMap to Krb2"))._1
+  property("ConfigMap operator handles only supported ConfigMaps") {
+    //given
+    val parser = ConfigMapParser[IO]().unsafeRunSync()
 
-  private def startOperator(io: IO[ExitCode]) =
-    io.unsafeRunCancelable {
-      case Right(ec) =>
-        println(s"Operator stopped with exit code: $ec")
-      case Left(t) =>
-        println("Failed to start operator")
-        t.printStackTrace()
+    val controller = new CountingFailureFlagController() {
+      override def isSupported(cm: ConfigMap): Boolean = {
+        val spec = parseCM(parser, cm)
+        !spec.failInTest
+      }
+    }
+    val (operator, singleWatcher) = configMapOperator[IO](controller)
+
+    //when
+    val cancelable = startOperator(operator.run)
+
+    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
+      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      val spec = parseCM(parser, cm)
+
+      //when
+      singleWatcher.foreach(_.eventReceived(action, cm))
+
+      //then
+      if (!spec.failInTest)
+        eventually {
+          controller.events should contain((action, spec, meta))
+        } else
+        controller.events should not contain ((action, spec, meta))
+
+      controller.failed should ===(0)
     }
 
-  object ObjectMeta {
-    def apply(name: String, namespace: String): ObjectMeta = {
-      val meta = new ObjectMeta()
-      meta.setName(name)
-      meta.setNamespace(namespace)
-      meta
-    }
-
-    def gen: Gen[ObjectMeta] =
-      for {
-        name <- Gen.alphaNumStr
-        namespace <- Gen.alphaNumStr
-      } yield ObjectMeta(name, namespace)
-  }
-
-  object InfoClass {
-    def gen[T: Arbitrary]: Gen[InfoClass[T]] =
-      for {
-        spec <- arbitrary[T]
-        meta <- ObjectMeta.gen
-      } yield {
-        val ic = new InfoClass[T]
-        ic.setSpec(spec)
-        ic.setMetadata(meta)
-        ic
-      }
-  }
-
-  object WatcherAction {
-    def gen: Gen[Action] =
-      Gen.oneOf(Action.ADDED, Action.DELETED, Action.MODIFIED)
-  }
-
-  object CM {
-    val mapper = new ObjectMapper(new YAMLFactory()) with ScalaObjectMapper
-    mapper.registerModule(DefaultScalaModule)
-
-    def gen[T](implicit A: Arbitrary[T]): Gen[ConfigMap] =
-      for {
-        spec <- Arbitrary.arbitrary[T]
-        meta <- ObjectMeta.gen
-      } yield {
-
-        new ConfigMapBuilder()
-          .withMetadata(meta)
-          .withData(Map("config" -> mapper.writeValueAsString(spec)).asJava)
-          .build()
-      }
+    cancelable.unsafeRunSync()
   }
 }

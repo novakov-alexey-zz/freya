@@ -8,6 +8,7 @@ lazy val `k8s-operator` = (project in file(".")).settings(
   libraryDependencies ++= Seq(
     k8sClient,
     k8sModel,
+    k8sServerMock,
     catsEffect,
     scalaLogging,
     jacksonScala,

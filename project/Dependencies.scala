@@ -23,6 +23,7 @@ object Dependencies extends AutoPlugin {
     val catsEffect               = "org.typelevel"             %% "cats-effect"                % catsVersion
     val k8sClient                = "io.fabric8"                % "kubernetes-client"           % fabric8K8sVersion
     val k8sModel                 = "io.fabric8"                % "kubernetes-model"            % fabric8K8sVersion
+    val k8sServerMock            = "io.fabric8"                % "kubernetes-server-mock"      % fabric8K8sVersion % Test
     val logbackClassic           = "ch.qos.logback"            %   "logback-classic"           % logbackClassicVersion
     val scalaLogging             = "com.typesafe.scala-logging" %% "scala-logging"             % scalaLoggingVersion
     val betterMonadicFor         = "com.olegpy"                 %% "better-monadic-for"        % betterMonadicVersion

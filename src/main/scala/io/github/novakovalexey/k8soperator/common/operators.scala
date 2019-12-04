@@ -6,7 +6,6 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 import io.github.novakovalexey.k8soperator._
-import io.github.novakovalexey.k8soperator.common.AbstractOperator.getKind
 import io.github.novakovalexey.k8soperator.internal.crd.{CrdDeployer, InfoClassDoneable, InfoList}
 import io.github.novakovalexey.k8soperator.internal.resource.{ConfigMapParser, CrdParser, Labels}
 import io.github.novakovalexey.k8soperator.watcher.InfoClass
@@ -14,13 +13,8 @@ import io.github.novakovalexey.k8soperator.watcher.InfoClass
 import scala.annotation.unused
 import scala.jdk.CollectionConverters._
 
-object AbstractOperator {
-  def getKind[T](cfg: OperatorCfg[T]): String =
-    cfg.customKind.getOrElse(cfg.forKind.getSimpleName)
-}
-
 sealed abstract class AbstractOperator[F[_]: Effect, T](val client: KubernetesClient, val cfg: OperatorCfg[T]) {
-  val kind: String = getKind[T](cfg)
+  val kind: String = cfg.getKind
   val clientNamespace: K8sNamespace = Namespace(client.getNamespace)
 }
 
@@ -36,7 +30,7 @@ class ConfigMapOperator[F[_]: Effect, T](
   parser: ConfigMapParser
 ) extends AbstractOperator[F, T](client, cfg) {
 
-  val selector: Map[String, String] = Labels.forKind(getKind[T](cfg), cfg.prefix)
+  val selector: Map[String, String] = Labels.forKind(cfg.getKind, cfg.prefix)
 
   def currentConfigMaps: Either[List[Throwable], Map[Metadata, T]] = {
     val cms = {
@@ -68,7 +62,7 @@ object CrdOperator {
   ): F[CustomResourceDefinition] = CrdDeployer.initCrds[F, T](
     client,
     cfg.prefix,
-    getKind[T](cfg),
+    cfg.getKind,
     cfg.shortNames,
     cfg.pluralName,
     cfg.additionalPrinterColumns,
@@ -86,9 +80,9 @@ object CrdOperator {
 class CrdOperator[F[_]: Effect, T](
   cfg: CrdConfig[T],
   client: KubernetesClient,
-  @unused isOpenShift: Option[Boolean],
-  crd: CustomResourceDefinition,
-  parser: CrdParser
+  @unused val isOpenShift: Option[Boolean],
+  val crd: CustomResourceDefinition,
+  val parser: CrdParser
 ) extends AbstractOperator[F, T](client, cfg) {
 
   def currentResources: Either[List[Throwable], Map[Metadata, T]] = {
