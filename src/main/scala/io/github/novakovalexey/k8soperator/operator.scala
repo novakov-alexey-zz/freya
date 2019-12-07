@@ -3,9 +3,11 @@ package io.github.novakovalexey.k8soperator
 import cats.effect.concurrent.MVar
 import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync, Timer}
 import cats.implicits._
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client._
+import io.fabric8.kubernetes.client.utils.Serialization
 import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
 import io.github.novakovalexey.k8soperator.common._
 import io.github.novakovalexey.k8soperator.errors.OperatorError
@@ -177,7 +179,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
   def start: F[(ConsumerSignal[F], Consumer)] =
     (for {
       pipe <- pipeline
-
+      _ <- F.delay(Serialization.jsonMapper().registerModule(DefaultScalaModule))
       name = pipe.operator.cfg.getKind
       namespace = if (pipe.operator.cfg.namespace == CurrentNamespace) pipe.operator.clientNamespace
       else pipe.operator.cfg.namespace

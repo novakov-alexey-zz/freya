@@ -4,7 +4,6 @@ import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
-import scala.beans.BeanProperty
 import scala.concurrent.ExecutionContext
 
 class KrbController[F[_]](implicit override val F: ConcurrentEffect[F]) extends Controller[F, Kerb] with LazyLogging {
@@ -29,13 +28,5 @@ object TestOperator extends IOApp {
   }
 }
 
-final case class Principal(
-  @BeanProperty val name: String,
-  @BeanProperty val password: String,
-  @BeanProperty val value: String = ""
-)
-final case class Kerb(
-  @BeanProperty val realm: String,
-  @BeanProperty val principals: List[Principal],
-  @BeanProperty val failInTest: Boolean
-)
+final case class Principal(name: String, password: String, value: String = "")
+final case class Kerb(realm: String, principals: List[Principal], failInTest: Boolean)
