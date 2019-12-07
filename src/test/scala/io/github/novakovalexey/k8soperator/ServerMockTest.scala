@@ -28,7 +28,6 @@ class ServerMockTest
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(25, Seconds)), scaled(Span(50, Millis)))
 
   val server = new KubernetesServer(false, true)
-  val prefix = "io.github.novakov-alexey"
 
   property("Crd operator handles different events") {
     val client = server.getClient

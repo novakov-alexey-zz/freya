@@ -119,12 +119,12 @@ object Operator extends LazyLogging {
     new Operator[F, T](pipeline)
   }
 
-  private def createPipeline[T, F[_]](
+  private def createPipeline[T, F[_]: ConcurrentEffect](
     op: AbstractHelper[F, T],
     ctl: Controller[F, T],
     w: F[(Consumer, ConsumerSignal[F])]
-  )(implicit F: ConcurrentEffect[F]) =
-    OperatorPipeline[F, T](op, w, F.defer(ctl.onInit()))
+  ) =
+    OperatorPipeline[F, T](op, w, ctl.onInit())
 
   private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: OperatorCfg[T]): F[Option[Boolean]] =
     for {
@@ -154,13 +154,14 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
     Resource
       .make(start)(c => F.delay(c._2.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx")))
       .use(_._1)
+      .recoverWith {
+        case e =>
+          logger.error("Got error while running an operator", e)
+          ExitCode.Error.pure[F]
+      }
 
   def withRestart(retry: Retry = Retry())(implicit T: Timer[F]): F[ExitCode] =
-    run.flatMap(loop(_, retry)).recoverWith {
-      case e =>
-        logger.error("Got error while running an operator", e)
-        loop(ExitCode.Error, retry)
-    }
+    run.flatMap(loop(_, retry))
 
   private def loop(ec: ExitCode, retry: Retry)(implicit T: Timer[F]) =
     if (retry.times > 0)
@@ -174,7 +175,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
     else ec.pure[F]
 
   def start: F[(ConsumerSignal[F], Consumer)] =
-    for {
+    (for {
       pipe <- pipeline
 
       name = pipe.operator.cfg.getKind
@@ -189,9 +190,8 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           logger
             .info(s"${gr}Operator $name was started$xx in namespace '$namespace'")
         )
-        .onError {
-          case ex: Throwable =>
-            F.delay(logger.error(s"Unable to start operator for $namespace namespace", ex))
-        }
-    } yield (signal, consumer)
+    } yield (signal, consumer)).onError {
+      case ex: Throwable =>
+        F.delay(logger.error(s"Unable to start operator", ex))
+    }
 }

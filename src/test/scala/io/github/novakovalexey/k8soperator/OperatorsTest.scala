@@ -1,6 +1,6 @@
 package io.github.novakovalexey.k8soperator
 
-import cats.effect.{ConcurrentEffect, IO, Sync, Timer}
+import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
@@ -10,6 +10,7 @@ import io.github.novakovalexey.k8soperator.generators.arbitrary
 import io.github.novakovalexey.k8soperator.internal.resource.ConfigMapParser
 import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.watcher._
+import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
@@ -18,8 +19,8 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext}
 
 class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Checkers with ScalaCheckPropertyChecks {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
@@ -180,6 +181,52 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     }
 
     cancelable.unsafeRunSync()
+  }
+
+  property("Operators restarts n times in case of failure") {
+    //given
+    val controller = new ConfigMapTestController[IO]
+    val (operator, singleWatcher) = configMapOperator[IO](controller)
+    val maxRestarts = PosInt(3)
+
+    //when
+    val exitCode = operator.withRestart(Retry(maxRestarts, 0.seconds)).unsafeToFuture()
+
+    var currentWatcher = singleWatcher.head
+    val parser = ConfigMapParser[IO]().unsafeRunSync()
+
+    forAll(WatcherAction.gen, CM.gen[Kerb], minSuccessful(maxRestarts)) { (action, cm) =>
+      //when
+      singleWatcher.foreach(_.onClose(null))
+      closeCurrentWatcher(singleWatcher, currentWatcher)
+      currentWatcher = singleWatcher.head
+      singleWatcher.foreach(_.eventReceived(action, cm))
+
+      //then
+      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      val spec = parseCM(parser, cm)
+      eventually {
+        controller.events should contain((action, spec, meta))
+      }
+    }
+
+    singleWatcher.foreach(_.onClose(null))
+
+    eventually {
+      exitCode.isCompleted should ===(true)
+      val ec = Await.result(exitCode, 0.second)
+      ec should ===(ExitCode(AbstractWatcher.WatcherClosedSignal))
+    }
+  }
+
+  property("Operator return Error code on failure") {
+    val controller = new ConfigMapTestController[IO] {
+      override def onInit(): IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
+    }
+    val (operator, _) = configMapOperator[IO](controller)
+    forAll(Gen.alphaLowerStr) { _ =>
+      operator.run.unsafeRunSync() should ===(ExitCode.Error)
+    }
   }
 
   private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T]) = {

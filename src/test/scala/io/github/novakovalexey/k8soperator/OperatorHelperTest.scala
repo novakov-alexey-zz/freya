@@ -26,9 +26,17 @@ class OperatorHelperTest
 
   val server = new KubernetesServer(false, true)
 
-  property("ConfigMap helper should return current ConfigMaps") {
+  property("ConfigMap helper should return current ConfigMaps in all namespaces") {
+    testCmHelper(AllNamespaces)
+  }
+
+  property("ConfigMap helper should return current ConfigMaps in test namespace") {
+    testCmHelper(Namespace("test"))
+  }
+
+  private def testCmHelper(ns: K8sNamespace) = {
     //given
-    val cfg = ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
+    val cfg = ConfigMapConfig(classOf[Kerb], ns, prefix)
     val client = server.getClient
     val parser = new ConfigMapParser()
     val helper = new ConfigMapHelper[IO, Kerb](cfg, client, None, parser)
@@ -37,11 +45,12 @@ class OperatorHelperTest
     maps should be(Right(Map.empty))
 
     val currentCms = mutable.Map.empty[Metadata, Kerb]
+    val namespace = new NamespaceBuilder().withNewMetadata.withName(ns.value).endMetadata.build
+    client.namespaces().create(namespace)
 
     forAll(CM.gen[Kerb](helper.selector)) { cm =>
       //when
-      val ns = new NamespaceBuilder().withNewMetadata.withName(cm.getMetadata.getNamespace).endMetadata.build
-      client.namespaces().create(ns)
+      cm.getMetadata.setNamespace(ns.value)
       client.configMaps().inNamespace(cm.getMetadata.getNamespace).create(cm)
 
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
@@ -53,7 +62,7 @@ class OperatorHelperTest
     }
   }
 
-  ignore("Crd helper should return current Crds") {
+  ignore("Crd helper should return current CRDs") {
     //given
     val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
     val client = new DefaultKubernetesClient() // mock server does not work properly with CRDs
