@@ -20,7 +20,7 @@ object ObjectMetaTest {
     new ObjectMetaBuilder().withName(name).withNamespace(namespace).withLabels(labels.asJava).build()
 
   val maxStrGen: Int => Gen[String] = (max: Int) =>
-    Gen.alphaStr.map(str => if (str.length <= max) str else str.substring(0, max)).suchThat(_.nonEmpty)
+    Gen.alphaLowerStr.map(str => if (str.length <= max) str else str.substring(0, max)).suchThat(_.nonEmpty)
 
   def gen: Gen[ObjectMeta] = gen(Map.empty)
 
@@ -33,15 +33,16 @@ object ObjectMetaTest {
 
 object InfoClass {
 
-  def gen[T: Arbitrary]: Gen[InfoClass[T]] =
+  def gen[T: Arbitrary](kind: String): Gen[InfoClass[T]] =
     for {
       spec <- arbitrary[T]
       meta <- ObjectMetaTest.gen
     } yield {
       val ic = new InfoClass[T]
+      ic.setApiVersion("io.github.novakov-alexey/v1")
+      ic.setKind(kind)
       ic.setSpec(spec)
       ic.setMetadata(meta)
-      ic.setApiVersion("io.github.novakov-alexey/v1")
       ic
     }
 }
@@ -68,4 +69,23 @@ object CM {
         .withData(Map("config" -> mapper.writeValueAsString(spec)).asJava)
         .build()
     }
+}
+
+object Gens {
+  val nonEmptyString: Gen[String] = Gen.nonEmptyListOf[Char](Gen.alphaChar).map(_.mkString)
+  implicit lazy val arbBooleab: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
+
+  def krb2: Gen[Kerb] =
+    for {
+      realm <- Gen.alphaUpperStr.suchThat(_.nonEmpty)
+      principals <- Gen.nonEmptyListOf(principal)
+      failInTest <- Arbitrary.arbitrary[Boolean]
+    } yield Kerb(realm, principals, failInTest)
+
+  def principal: Gen[Principal] =
+    for {
+      name <- nonEmptyString
+      password <- nonEmptyString
+      value <- nonEmptyString
+    } yield Principal(name, password, value)
 }

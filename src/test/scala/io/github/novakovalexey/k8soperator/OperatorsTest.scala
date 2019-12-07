@@ -24,6 +24,7 @@ import scala.concurrent.duration._
 class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Checkers with ScalaCheckPropertyChecks {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
+  val cfg: CrdConfig[Kerb] = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
 
   def client[F[_]: Sync]: F[KubernetesClient] =
     Sync[F].delay(new JavaK8sClientMock())
@@ -67,23 +68,22 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
   def configMapOperator[F[_]: ConcurrentEffect](
-    controller: ConfigMapController[F, Krb2]
-  ): (Operator[F, Krb2], mutable.Set[Watcher[ConfigMap]]) = {
-    val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, ConfigMap]
+    controller: ConfigMapController[F, Kerb]
+  ): (Operator[F, Kerb], mutable.Set[Watcher[ConfigMap]]) = {
+    val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
-    val cfg = ConfigMapConfig(classOf[Krb2], AllNamespaces, prefix, checkK8sOnStartup = false)
+    val cfg = ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
 
-    Operator.ofConfigMap[F, Krb2](cfg, client[F], controller) -> singleWatcher
+    Operator.ofConfigMap[F, Kerb](cfg, client[F], controller) -> singleWatcher
   }
 
   def crdOperator[F[_]: ConcurrentEffect](
-    controller: Controller[F, Krb2]
-  ): (Operator[F, Krb2], mutable.Set[Watcher[InfoClass[Krb2]]]) = {
-    val (fakeWatchable, singleWatcher) = makeWatchable[Krb2, InfoClass[Krb2]]
-    implicit val watchable: Watchable[Watch, Watcher[InfoClass[Krb2]]] = fakeWatchable
-    val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), prefix, checkK8sOnStartup = false)
+    controller: Controller[F, Kerb]
+  ): (Operator[F, Kerb], mutable.Set[Watcher[InfoClass[Kerb]]]) = {
+    val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, InfoClass[Kerb]]
+    implicit val watchable: Watchable[Watch, Watcher[InfoClass[Kerb]]] = fakeWatchable
 
-    Operator.ofCrd[F, Krb2](cfg, client[F], controller) -> singleWatcher
+    Operator.ofCrd[F, Kerb](cfg, client[F], controller) -> singleWatcher
   }
 
   property("Crd Operator handles different events") {
@@ -97,7 +97,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, InfoClass.gen[Krb2]) { (action, crd) =>
+    forAll(WatcherAction.gen, InfoClass.gen[Kerb](cfg.getKind)) { (action, crd) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
@@ -124,11 +124,11 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, InfoClass.gen[Krb2], arbitrary[Boolean], minSuccessful(maxRestarts)) {
+    forAll(WatcherAction.gen, InfoClass.gen[Kerb](cfg.getKind), arbitrary[Boolean], minSuccessful(maxRestarts)) {
       (action, crd, close) =>
         //when
         if (close)
-          closeCurrentWatcher[InfoClass[Krb2]](singleWatcher, oldWatcher)
+          closeCurrentWatcher[InfoClass[Kerb]](singleWatcher, oldWatcher)
 
         oldWatcher = singleWatcher.head
 
@@ -160,7 +160,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     controller.initialized should ===(true)
     val parser = ConfigMapParser[IO]().unsafeRunSync()
 
-    forAll(WatcherAction.gen, CM.gen[Krb2], arbitrary[Boolean], minSuccessful(maxRestarts)) { (action, cm, close) =>
+    forAll(WatcherAction.gen, CM.gen[Kerb], arbitrary[Boolean], minSuccessful(maxRestarts)) { (action, cm, close) =>
       //when
       if (close)
         closeCurrentWatcher[ConfigMap](singleWatcher, currentWatcher)
@@ -206,7 +206,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     controller.initialized should ===(true)
 
     val parser = ConfigMapParser[IO]().unsafeRunSync()
-    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
+    forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
@@ -224,19 +224,19 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
   class CountingFailureFlagController extends ConfigMapTestController[IO] {
     var failed: Int = 0
 
-    override def onAdd(krb: Krb2, meta: Metadata): IO[Unit] = {
+    override def onAdd(krb: Kerb, meta: Metadata): IO[Unit] = {
       if (krb.failInTest)
         failed = failed + 1
       super.onAdd(krb, meta)
     }
 
-    override def onDelete(krb: Krb2, meta: Metadata): IO[Unit] = {
+    override def onDelete(krb: Kerb, meta: Metadata): IO[Unit] = {
       if (krb.failInTest)
         failed = failed + 1
       super.onDelete(krb, meta)
     }
 
-    override def onModify(krb: Krb2, meta: Metadata): IO[Unit] = {
+    override def onModify(krb: Kerb, meta: Metadata): IO[Unit] = {
       if (krb.failInTest)
         failed = failed + 1
       super.onModify(krb, meta)
@@ -252,7 +252,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     val cancelable = startOperator(operator.run)
     val parser = ConfigMapParser[IO]().unsafeRunSync()
 
-    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
+    forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
       val spec = parseCM(parser, cm)
 
@@ -280,19 +280,19 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     val controller: ConfigMapTestController[IO] = new ConfigMapTestController[IO] {
       val error: IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
 
-      override def onAdd(krb: Krb2, meta: Metadata): IO[Unit] =
+      override def onAdd(krb: Kerb, meta: Metadata): IO[Unit] =
         if (krb.failInTest)
           error
         else
           super.onAdd(krb, meta)
 
-      override def onDelete(krb: Krb2, meta: Metadata): IO[Unit] =
+      override def onDelete(krb: Kerb, meta: Metadata): IO[Unit] =
         if (krb.failInTest)
           error
         else
           super.onDelete(krb, meta)
 
-      override def onModify(krb: Krb2, meta: Metadata): IO[Unit] =
+      override def onModify(krb: Kerb, meta: Metadata): IO[Unit] =
         if (krb.failInTest)
           error
         else
@@ -305,7 +305,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     val cancelable = startOperator(operator.run)
 
     val parser = ConfigMapParser[IO]().unsafeRunSync()
-    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
+    forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
       val spec = parseCM(parser, cm)
       //when
@@ -336,7 +336,7 @@ class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Check
     //when
     val cancelable = startOperator(operator.run)
 
-    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
+    forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
       val spec = parseCM(parser, cm)
 

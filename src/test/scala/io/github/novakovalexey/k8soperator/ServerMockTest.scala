@@ -32,24 +32,23 @@ class ServerMockTest
 
   property("Crd operator handles different events") {
     val client = server.getClient
-    val cfg = CrdConfig(classOf[Krb2], AllNamespaces, prefix)
+    val cfg = CrdConfig(classOf[Kerb], AllNamespaces, prefix)
 
     val controller = new CrdTestController[IO]
-    val operator = Operator.ofCrd[IO, Krb2](cfg, IO.pure(client), controller).run
+    val operator = Operator.ofCrd[IO, Kerb](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)
-    val crd = client.customResourceDefinitions.withName("krb2s.io.github.novakov-alexey").get()
+    val crd = client.customResourceDefinitions.withName("kerbs.io.github.novakov-alexey").get()
     val krbClient = client
-      .customResources(crd, classOf[InfoClass[Krb2]], classOf[InfoList[Krb2]], classOf[InfoClassDoneable[Krb2]])
+      .customResources(crd, classOf[InfoClass[Kerb]], classOf[InfoList[Kerb]], classOf[InfoClassDoneable[Kerb]])
 
-    forAll(WatcherAction.gen, InfoClass.gen[Krb2]) { (action, ic) =>
+    forAll(WatcherAction.gen, InfoClass.gen[Kerb](cfg.getKind)) { (action, ic) =>
       val ns = new NamespaceBuilder().withNewMetadata.withName(ic.getMetadata.getNamespace).endMetadata.build
       client.namespaces().create(ns)
 
-      val value1 = krbClient
+      krbClient
         .inNamespace(ic.getMetadata.getNamespace)
         .create(ic)
 
-      logger.debug("value1: ", value1)
       val meta = Metadata(ic.getMetadata.getName, ic.getMetadata.getNamespace)
 
       eventually {
@@ -62,13 +61,13 @@ class ServerMockTest
 
   property("ConfigMap operator handles different events") {
     val client = server.getClient
-    val cfg = ConfigMapConfig(classOf[Krb2], AllNamespaces, prefix, checkK8sOnStartup = false)
+    val cfg = ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
     val controller = new ConfigMapTestController[IO]
-    val operator = Operator.ofConfigMap[IO, Krb2](cfg, IO.pure(client), controller).run
+    val operator = Operator.ofConfigMap[IO, Kerb](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)
 
     val parser = new ConfigMapParser()
-    forAll(WatcherAction.gen, CM.gen[Krb2]) { (action, cm) =>
+    forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       //when
       val ns = new NamespaceBuilder().withNewMetadata.withName(cm.getMetadata.getNamespace).endMetadata.build
       client.namespaces().create(ns)

@@ -9,7 +9,7 @@ import scala.concurrent.ExecutionContext
 
 package object k8soperator {
   implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-  implicit lazy val arbInfoClass: Arbitrary[Krb2] = Arbitrary(Krb2.gen)
+  implicit lazy val arbInfoClass: Arbitrary[Kerb] = Arbitrary(Gens.krb2)
   implicit lazy val arbBooleab: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
 
   val prefix = "io.github.novakov-alexey"
@@ -23,6 +23,6 @@ package object k8soperator {
         t.printStackTrace()
     }
 
-  def parseCM(parser: ConfigMapParser, cm: ConfigMap): Krb2 =
-    parser.parseCM(classOf[Krb2], cm).getOrElse(sys.error("Error when transforming ConfigMap to Krb2"))._1
+  def parseCM(parser: ConfigMapParser, cm: ConfigMap): Kerb =
+    parser.parseCM(classOf[Kerb], cm).getOrElse(sys.error("Error when transforming ConfigMap to Krb2"))._1
 }

@@ -56,9 +56,11 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
 
       _ <- Sync[F].delay {
         // register the new crd for json serialization
-        KubernetesDeserializer.registerCustomKind(s"$apiPrefix/${crd.getSpec.getVersion}#$kind", classOf[InfoClass[_]])
+        val apiVersion = s"$apiPrefix/${crd.getSpec.getVersion}"
+        KubernetesDeserializer.registerCustomKind(apiVersion, kind, classOf[InfoClass[_]])
         KubernetesDeserializer.registerCustomKind(
-          s"$apiPrefix/${crd.getSpec.getVersion}#${kind}List",
+          apiVersion,
+          s"${kind}List",
           classOf[CustomResourceList[_ <: HasMetadata]]
         )
       }

@@ -2,19 +2,20 @@ ThisBuild / name := "k8s-operator4s"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / organization := "io.github.novakov-alexey"
+Test / fork := true
 
 lazy val `k8s-operator` = (project in file(".")).settings(
   addCompilerPlugin(betterMonadicFor),
   libraryDependencies ++= Seq(
-    k8sClient,
-    k8sModel,
-    k8sServerMock,
-    catsEffect,
-    scalaLogging,
-    jacksonScala,
-    scalaTest,
-    scalaCheck,
-    scalaTestCheck,
-    logbackClassic % Test,
-  )
+        k8sClient,
+        k8sModel,
+        k8sServerMock,
+        catsEffect,
+        scalaLogging,
+        jacksonScala,
+        scalaTest,
+        scalaCheck,
+        scalaTestCheck,
+        logbackClassic % Test
+      )
 )

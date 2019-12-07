@@ -3,16 +3,16 @@ package io.github.novakovalexey.k8soperator
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
 import com.typesafe.scalalogging.LazyLogging
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
-import org.scalacheck.{Arbitrary, Gen}
 
+import scala.beans.BeanProperty
 import scala.concurrent.ExecutionContext
 
-class KrbController[F[_]](implicit override val F: ConcurrentEffect[F]) extends Controller[F, Krb2] with LazyLogging {
+class KrbController[F[_]](implicit override val F: ConcurrentEffect[F]) extends Controller[F, Kerb] with LazyLogging {
 
-  override def onAdd(krb: Krb2, meta: Metadata): F[Unit] =
+  override def onAdd(krb: Kerb, meta: Metadata): F[Unit] =
     F.delay(logger.info(s"new Krb added: $krb, $meta"))
 
-  override def onDelete(krb: Krb2, meta: Metadata): F[Unit] =
+  override def onDelete(krb: Kerb, meta: Metadata): F[Unit] =
     F.delay(logger.info(s"Krb deleted: $krb, $meta"))
 }
 
@@ -21,31 +21,21 @@ object TestOperator extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
-    val cfg = CrdConfig(classOf[Krb2], Namespace("yp-kss"), "io.github.novakov-alexey")
+    val cfg = CrdConfig(classOf[Kerb], Namespace("test"), "io.github.novakov-alexey")
 
     Operator
-      .ofCrd[IO, Krb2](cfg, client, new KrbController[IO])
+      .ofCrd[IO, Kerb](cfg, client, new KrbController[IO])
       .withRestart()
   }
 }
 
-final case class Principal(name: String, password: String, value: String = "")
-object Principal {
-  def gen: Gen[Principal] =
-    for {
-      name <- Gen.alphaNumStr
-      password <- Gen.alphaNumStr
-      value <- Gen.alphaNumStr
-    } yield Principal(name, password, value)
-}
-
-final case class Krb2(realm: String, principals: List[Principal], failInTest: Boolean)
-object Krb2 {
-  implicit lazy val arbBooleab: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
-  def gen: Gen[Krb2] =
-    for {
-      realm <- Gen.alphaUpperStr
-      principals <- Gen.listOf(Principal.gen)
-      failInTest <- Arbitrary.arbitrary[Boolean]
-    } yield Krb2(realm, principals, failInTest)
-}
+final case class Principal(
+  @BeanProperty val name: String,
+  @BeanProperty val password: String,
+  @BeanProperty val value: String = ""
+)
+final case class Kerb(
+  @BeanProperty val realm: String,
+  @BeanProperty val principals: List[Principal],
+  @BeanProperty val failInTest: Boolean
+)
