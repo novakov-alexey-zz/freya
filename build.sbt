@@ -9,13 +9,18 @@ lazy val `k8s-operator` = (project in file(".")).settings(
   libraryDependencies ++= Seq(
         k8sClient,
         k8sModel,
-        k8sServerMock,
+        k8sServerMock % Test,
         catsEffect,
         scalaLogging,
         jacksonScala,
-        scalaTest,
-        scalaCheck,
-        scalaTestCheck,
-        logbackClassic % Test
+        scalaTest % Test,
+        scalaCheck % Test,
+        scalaTestCheck % Test,
+        logbackClassic % Test,
+        jacksonJsonSchema % Test,
+        scalaJsonSchema % Test
       )
 )
+
+lazy val generate = taskKey[Unit]("Generate JSON Schema")
+generate := (runMain in Test).toTask(" io.github.novakovalexey.k8soperator.ScalaJsonSchema").value

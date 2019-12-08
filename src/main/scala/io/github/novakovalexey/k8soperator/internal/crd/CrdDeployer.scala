@@ -10,6 +10,7 @@ import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 import io.github.novakovalexey.k8soperator.AdditionalPrinterColumn
+import io.github.novakovalexey.k8soperator.internal.AnsiColors._
 import io.github.novakovalexey.k8soperator.watcher.InfoClass
 
 import scala.jdk.CollectionConverters._
@@ -114,10 +115,10 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
         client.customResourceDefinitions.createOrReplace(crd)
         crd
       }.recover {
-        case _: KubernetesClientException =>
-          // old version of K8s/OpenShift -> don't use schema validation
+        case e: KubernetesClientException =>
+          logger.error("Error when submitting CR definition", e)
           logger.warn(
-            "Consider upgrading the {}. Your version doesn't support schema validation for custom resources.",
+            s"Consider upgrading the $re{}$xx. Probably, your version doesn't support schema validation for custom resources.",
             if (isOpenshift.contains(true)) "OpenShift"
             else "Kubernetes"
           )
@@ -151,7 +152,7 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
     val shortNamesLower = shortNames.map(_.toLowerCase())
 
     new CustomResourceDefinitionBuilder()
-      .withApiVersion("apiextensions.k8s.io/v1beta1")
+      .withApiVersion("apiextensions.k8s.io/v1beta1") //later: replace v1beta1 with v1
       .withNewMetadata
       .withName(s"$pluralName.$prefix")
       .endMetadata
@@ -164,5 +165,6 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
       .withGroup(prefix)
       .withVersion("v1")
       .withScope("Namespaced")
+      .withPreserveUnknownFields(false)
   }
 }

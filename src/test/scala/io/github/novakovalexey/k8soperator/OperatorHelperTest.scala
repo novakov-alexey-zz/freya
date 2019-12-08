@@ -67,7 +67,7 @@ class OperatorHelperTest
     }
   }
 
-  property("Crd helper should return current CRDs") {
+  ignore("Crd helper should return current CRDs") {
     //given
     val cfg = CrdConfig(classOf[Kerb], testNs, prefix, checkK8sOnStartup = false)
     val client = new DefaultKubernetesClient() // mock server does not work properly with CRDs
@@ -77,7 +77,7 @@ class OperatorHelperTest
     val crd = CrdHelper.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
     val helper = new CrdHelper[IO, Kerb](cfg, client, None, crd, parser)
     val krbClient = client
-      .customResource(crd, classOf[InfoClass[Kerb]], classOf[InfoList[Kerb]], classOf[InfoClassDoneable[Kerb]])
+      .customResources(crd, classOf[InfoClass[Kerb]], classOf[InfoList[Kerb]], classOf[InfoClassDoneable[Kerb]])
 
     //when
     krbClient.inNamespace(testNs.value).delete()

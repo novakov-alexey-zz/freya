@@ -8,9 +8,10 @@ import org.scalatest.matchers.should.Matchers
 
 class OperatorUtilsTest extends AsyncFlatSpec with Matchers with BeforeAndAfter {
   val server = new KubernetesServer(true, false)
+  val openShiftPath = "/apis%2Froute.openshift.io%2Fv1"
 
   it should "return true on OpenShift" in {
-      server.expect().withPath("/apis%2Froute.openshift.io%2Fv1").andReturn(200, "ok").once()
+      server.expect().withPath(openShiftPath).andReturn(200, "ok").once()
       val client = server.getClient
       val (isOpenShift, _) = OperatorUtils.checkIfOnOpenshift(client.getMasterUrl)
 
@@ -18,7 +19,7 @@ class OperatorUtilsTest extends AsyncFlatSpec with Matchers with BeforeAndAfter 
     }
 
   it should "return false on K8s" in {
-      server.expect().withPath("/apis%2Froute.openshift.io%2Fv1").andReturn(404, "nok").once()
+      server.expect().withPath(openShiftPath).andReturn(404, "nok").once()
       val client = server.getClient
       val (isOpenShift, _) = OperatorUtils.checkIfOnOpenshift(client.getMasterUrl)
 
