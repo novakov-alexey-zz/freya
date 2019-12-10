@@ -6,12 +6,12 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 import io.github.novakovalexey.k8soperator._
-import io.github.novakovalexey.k8soperator.internal.crd.{CrdDeployer, InfoClassDoneable, InfoList}
+import io.github.novakovalexey.k8soperator.internal.api.{ConfigMapApi, CrdApi}
+import io.github.novakovalexey.k8soperator.internal.crd.CrdDeployer
 import io.github.novakovalexey.k8soperator.internal.resource.{ConfigMapParser, CrdParser, Labels}
 import io.github.novakovalexey.k8soperator.watcher.InfoClass
 
 import scala.annotation.unused
-import scala.jdk.CollectionConverters._
 
 sealed abstract class AbstractHelper[F[_]: Effect, T](val client: KubernetesClient, val cfg: OperatorCfg[T]) {
   val kind: String = cfg.getKind
@@ -31,20 +31,13 @@ class ConfigMapHelper[F[_]: Effect, T](
 ) extends AbstractHelper[F, T](client, cfg) {
 
   val selector: Map[String, String] = Labels.forKind(cfg.getKind, cfg.prefix)
+  private val cmApi = new ConfigMapApi(client)
 
   def currentConfigMaps: Either[List[Throwable], Map[Metadata, T]] = {
-    val cms = {
-      val _cms = client.configMaps
-      if (AllNamespaces == cfg.namespace) _cms.inAnyNamespace
-      else _cms.inNamespace(cfg.namespace.value)
-    }
+    val cms = cmApi.in(cfg.namespace)
 
-    cms
-      .withLabels(selector.asJava)
-      .list
-      .getItems
-      .asScala
-      .toList
+    cmApi
+      .list(cms, selector)
       .map(ConfigMapHelper.convertCm(cfg.forKind, parser)(_).toValidatedNec)
       .sequence
       .map(_.map { case (entity, meta) => meta -> entity }.toMap)
@@ -84,15 +77,13 @@ class CrdHelper[F[_]: Effect, T](
   val crd: CustomResourceDefinition,
   val parser: CrdParser
 ) extends AbstractHelper[F, T](client, cfg) {
+  private val crdApi = new CrdApi(client)
 
   def currentResources: Either[List[Throwable], Map[Metadata, T]] = {
-    val crds = {
-      val _crds =
-        client.customResources(crd, classOf[InfoClass[T]], classOf[InfoList[T]], classOf[InfoClassDoneable[T]])
-      if (AllNamespaces == cfg.namespace) _crds.inAnyNamespace else _crds.inNamespace(cfg.namespace.value)
-    }
+    val crds = crdApi.in[T](cfg.namespace, crd)
 
-    crds.list.getItems.asScala.toList
+    crdApi
+      .list(crds)
       .map(CrdHelper.convertCr(cfg.forKind, parser)(_).toValidatedNec)
       .sequence
       .map(_.map { case (entity, meta) => meta -> entity }.toMap)

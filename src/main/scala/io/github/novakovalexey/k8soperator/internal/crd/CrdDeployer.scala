@@ -11,6 +11,7 @@ import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, Kuber
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 import io.github.novakovalexey.k8soperator.AdditionalPrinterColumn
 import io.github.novakovalexey.k8soperator.internal.AnsiColors._
+import io.github.novakovalexey.k8soperator.internal.api.CrdApi
 import io.github.novakovalexey.k8soperator.watcher.InfoClass
 
 import scala.jdk.CollectionConverters._
@@ -31,8 +32,7 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
       _ <- Sync[F].delay(Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false))
 
       crds <- Sync[F].delay(
-        client.customResourceDefinitions.list.getItems.asScala.toList
-          .filter(p => kind == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
+        CrdApi.list(client).filter(p => kind == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
       )
 
       crd <- crds match {
@@ -85,12 +85,14 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
         val crdBuilder = jsonSchema match {
           case Some(s) =>
             val schema = removeDefaultValues(s)
-            getCRDBuilder(apiPrefix, kind, shortNames, pluralName).withNewValidation
+            CrdApi
+              .getCrdBuilder(apiPrefix, kind, shortNames, pluralName)
+              .withNewValidation
               .withNewOpenAPIV3SchemaLike(schema)
               .endOpenAPIV3Schema
               .endValidation
           case None =>
-            getCRDBuilder(apiPrefix, kind, shortNames, pluralName)
+            CrdApi.getCrdBuilder(apiPrefix, kind, shortNames, pluralName)
         }
 
         additionalPrinterColumns match {
@@ -112,7 +114,7 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
         val crd = builder.endSpec.build
         // https://github.com/fabric8io/kubernetes-client/issues/1486
         jsonSchema.foreach(_ => crd.getSpec.getValidation.getOpenAPIV3Schema.setDependencies(null))
-        client.customResourceDefinitions.createOrReplace(crd)
+        CrdApi.createOrReplace(client, crd)
         crd
       }.recover {
         case e: KubernetesClientException =>
@@ -122,8 +124,8 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
             if (isOpenshift.contains(true)) "OpenShift"
             else "Kubernetes"
           )
-          val crd = getCRDBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build
-          client.customResourceDefinitions.createOrReplace(crd)
+          val crd = CrdApi.getCrdBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build
+          CrdApi.createOrReplace(client, crd)
           crd
       }
     } yield crd
@@ -141,30 +143,4 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
         }
         newSchema
     }
-
-  private def getCRDBuilder(
-    prefix: String,
-    entityName: String,
-    shortNames: List[String],
-    pluralName: String
-  ): CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder] = {
-
-    val shortNamesLower = shortNames.map(_.toLowerCase())
-
-    new CustomResourceDefinitionBuilder()
-      .withApiVersion("apiextensions.k8s.io/v1beta1") //later: replace v1beta1 with v1
-      .withNewMetadata
-      .withName(s"$pluralName.$prefix")
-      .endMetadata
-      .withNewSpec
-      .withNewNames
-      .withKind(entityName)
-      .withPlural(pluralName)
-      .withShortNames(shortNamesLower: _*)
-      .endNames
-      .withGroup(prefix)
-      .withVersion("v1")
-      .withScope("Namespaced")
-      .withPreserveUnknownFields(false)
-  }
 }

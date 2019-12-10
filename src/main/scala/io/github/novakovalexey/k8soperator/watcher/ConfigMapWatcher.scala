@@ -7,11 +7,10 @@ import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
+import io.github.novakovalexey.k8soperator.internal.api.ConfigMapApi
 import io.github.novakovalexey.k8soperator.watcher.AbstractWatcher.Channel
 import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
-import io.github.novakovalexey.k8soperator.{AllNamespaces, Controller, K8sNamespace, Metadata}
-
-import scala.jdk.CollectionConverters._
+import io.github.novakovalexey.k8soperator.{Controller, K8sNamespace, Metadata}
 
 final case class ConfigMapWatcherContext[F[_]: ConcurrentEffect, T](
   namespace: K8sNamespace,
@@ -20,7 +19,7 @@ final case class ConfigMapWatcherContext[F[_]: ConcurrentEffect, T](
   convert: ConfigMap => Either[Throwable, (T, Metadata)],
   channel: Channel[F, T],
   client: KubernetesClient,
-  selector: Map[String, String],
+  selector: Map[String, String]
 )
 
 class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherContext[F, T])
@@ -31,19 +30,19 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
       context.channel
     ) {
 
+  private val configMapApi = new ConfigMapApi(context.client)
+
   override def watch: F[(Consumer, ConsumerSignal[F])] =
     Sync[F].delay(
       io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
     ) *> {
-      val watchable = {
-        val cms = context.client.configMaps
-        if (AllNamespaces == namespace) cms.inAnyNamespace.withLabels(context.selector.asJava)
-        else cms.inNamespace(namespace.value).withLabels(context.selector.asJava)
+        val watchable = configMapApi.one(configMapApi.in(namespace), context.selector)
+        registerWatcher(watchable)
       }
-      registerWatcher(watchable)
-    }
 
-  protected[k8soperator] def registerWatcher(watchable: Watchable[Watch, Watcher[ConfigMap]]): F[(Consumer, ConsumerSignal[F])] = {
+  protected[k8soperator] def registerWatcher(
+    watchable: Watchable[Watch, Watcher[ConfigMap]]
+  ): F[(Consumer, ConsumerSignal[F])] = {
 
     val watch = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {

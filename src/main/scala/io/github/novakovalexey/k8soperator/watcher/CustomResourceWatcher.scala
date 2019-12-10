@@ -6,10 +6,10 @@ import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.errors.{OperatorError, ParseResourceError}
-import io.github.novakovalexey.k8soperator.internal.crd.{InfoClassDoneable, InfoList}
+import io.github.novakovalexey.k8soperator.internal.api.CrdApi
 import io.github.novakovalexey.k8soperator.watcher.AbstractWatcher.Channel
 import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
-import io.github.novakovalexey.k8soperator.{AllNamespaces, Controller, K8sNamespace, Metadata}
+import io.github.novakovalexey.k8soperator.{Controller, K8sNamespace, Metadata}
 
 final case class CrdWatcherContext[F[_]: ConcurrentEffect, T](
   ns: K8sNamespace,
@@ -24,19 +24,10 @@ final case class CrdWatcherContext[F[_]: ConcurrentEffect, T](
 class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContext[F, T])
     extends AbstractWatcher[F, T, Controller[F, T]](context.ns, context.kind, context.controller, context.channel) {
 
-  override def watch: F[(Consumer, ConsumerSignal[F])] = {
-    val watchable = {
-      val crds =
-        context.client.customResources(
-          context.crd,
-          classOf[InfoClass[T]],
-          classOf[InfoList[T]],
-          classOf[InfoClassDoneable[T]]
-        )
-      if (AllNamespaces == namespace) crds.inAnyNamespace
-      else crds.inNamespace(namespace.value)
-    }
+  private val crdApi = new CrdApi(context.client)
 
+  override def watch: F[(Consumer, ConsumerSignal[F])] = {
+    val watchable = crdApi.in[T](namespace, context.crd)
     registerWatcher(watchable)
   }
 
