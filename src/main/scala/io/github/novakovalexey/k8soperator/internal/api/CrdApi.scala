@@ -21,11 +21,11 @@ object CrdApi {
     client.customResourceDefinitions.createOrReplace(crd)
 
   def getCrdBuilder(
-                     prefix: String,
-                     kind: String,
-                     shortNames: List[String],
-                     pluralName: String
-                   ): CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder] = {
+    prefix: String,
+    kind: String,
+    shortNames: List[String],
+    pluralName: String
+  ): CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder] = {
 
     val shortNamesLower = shortNames.map(_.toLowerCase())
 

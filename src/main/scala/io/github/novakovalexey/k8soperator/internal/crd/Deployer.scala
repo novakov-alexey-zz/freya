@@ -9,16 +9,32 @@ import io.fabric8.kubernetes.api.model.apiextensions._
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
-import io.github.novakovalexey.k8soperator.AdditionalPrinterColumn
 import io.github.novakovalexey.k8soperator.internal.AnsiColors._
 import io.github.novakovalexey.k8soperator.internal.api.CrdApi
 import io.github.novakovalexey.k8soperator.watcher.InfoClass
+import io.github.novakovalexey.k8soperator.{AdditionalPrinterColumn, CrdConfig}
 
 import scala.jdk.CollectionConverters._
 
-private[k8soperator] object CrdDeployer extends LazyLogging {
+private[k8soperator] object Deployer extends LazyLogging {
 
-  def initCrds[F[_]: Sync, T](
+  def deployCrd[F[_]: Sync, T](
+    client: KubernetesClient,
+    cfg: CrdConfig[T],
+    isOpenShift: Option[Boolean]
+  ): F[CustomResourceDefinition] =
+    initCrd[F, T](
+      client,
+      cfg.prefix,
+      cfg.getKind,
+      cfg.shortNames,
+      cfg.getPluralCaseInsensitive,
+      cfg.additionalPrinterColumns,
+      cfg.forKind,
+      isOpenShift
+    )
+
+  private def initCrd[F[_]: Sync, T](
     client: KubernetesClient,
     apiPrefix: String,
     kind: String,
@@ -39,7 +55,7 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
         case h :: _ =>
           Sync[F].delay(
             logger
-              .info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping the creation.")
+              .info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping its creation.")
           ) *>
               h.pure[F]
         case Nil =>
@@ -126,7 +142,6 @@ private[k8soperator] object CrdDeployer extends LazyLogging {
           )
           val crd = CrdApi.getCrdBuilder(apiPrefix, kind, shortNames, pluralName).endSpec.build
           CrdApi.createOrReplace(client, crd)
-          crd
       }
     } yield crd
 

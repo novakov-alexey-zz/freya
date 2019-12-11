@@ -6,8 +6,7 @@ import io.fabric8.kubernetes.api.model.NamespaceBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import io.fabric8.kubernetes.client.utils.Serialization
-import io.github.novakovalexey.k8soperator.common.{ConfigMapHelper, CrdHelper}
-import io.github.novakovalexey.k8soperator.internal.crd.{InfoClassDoneable, InfoList}
+import io.github.novakovalexey.k8soperator.internal.crd.{Deployer, InfoClassDoneable, InfoList}
 import io.github.novakovalexey.k8soperator.internal.resource.{ConfigMapParser, CrdParser}
 import io.github.novakovalexey.k8soperator.watcher.InfoClass
 import org.scalatest.BeforeAndAfter
@@ -74,7 +73,7 @@ class OperatorHelperTest
     Serialization.jsonMapper().registerModule(DefaultScalaModule)
 
     val parser = new CrdParser()
-    val crd = CrdHelper.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
+    val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
     val helper = new CrdHelper[IO, Kerb](cfg, client, None, crd, parser)
     val krbClient = client
       .customResources(crd, classOf[InfoClass[Kerb]], classOf[InfoList[Kerb]], classOf[InfoClassDoneable[Kerb]])

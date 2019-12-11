@@ -1,13 +1,11 @@
-package io.github.novakovalexey.k8soperator.common
+package io.github.novakovalexey.k8soperator
 
-import cats.effect.{Effect, Sync}
+import cats.effect.Effect
 import cats.implicits._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
-import io.github.novakovalexey.k8soperator._
 import io.github.novakovalexey.k8soperator.internal.api.{ConfigMapApi, CrdApi}
-import io.github.novakovalexey.k8soperator.internal.crd.CrdDeployer
 import io.github.novakovalexey.k8soperator.internal.resource.{ConfigMapParser, CrdParser, Labels}
 import io.github.novakovalexey.k8soperator.watcher.InfoClass
 
@@ -47,21 +45,6 @@ class ConfigMapHelper[F[_]: Effect, T](
 }
 
 object CrdHelper {
-
-  def deployCrd[F[_]: Sync, T](
-    client: KubernetesClient,
-    cfg: CrdConfig[T],
-    isOpenShift: Option[Boolean]
-  ): F[CustomResourceDefinition] = CrdDeployer.initCrds[F, T](
-    client,
-    cfg.prefix,
-    cfg.getKind,
-    cfg.shortNames,
-    cfg.getPluralCaseInsensitive,
-    cfg.additionalPrinterColumns,
-    cfg.forKind,
-    isOpenShift
-  )
 
   def convertCr[T](kind: Class[T], parser: CrdParser)(info: InfoClass[T]): Either[Throwable, (T, Metadata)] =
     for {

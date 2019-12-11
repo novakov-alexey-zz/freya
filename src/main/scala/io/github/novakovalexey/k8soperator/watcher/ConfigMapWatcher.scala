@@ -34,7 +34,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
 
   override def watch: F[(Consumer, ConsumerSignal[F])] =
     Sync[F].delay(
-      io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
+      io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap]) //TODO: why internal API is called?
     ) *> {
         val watchable = configMapApi.one(configMapApi.in(namespace), context.selector)
         registerWatcher(watchable)

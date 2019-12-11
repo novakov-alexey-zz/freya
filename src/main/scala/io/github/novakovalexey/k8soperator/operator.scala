@@ -9,10 +9,10 @@ import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
-import io.github.novakovalexey.k8soperator.common._
 import io.github.novakovalexey.k8soperator.errors.OperatorError
 import io.github.novakovalexey.k8soperator.internal.AnsiColors._
 import io.github.novakovalexey.k8soperator.internal.OperatorUtils._
+import io.github.novakovalexey.k8soperator.internal.crd.Deployer
 import io.github.novakovalexey.k8soperator.internal.resource.{ConfigMapParser, CrdParser, Labels}
 import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import io.github.novakovalexey.k8soperator.watcher._
@@ -45,7 +45,7 @@ trait CrdDeployer[F[_], T] {
 object CrdDeployer {
   implicit def deployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]) =>
-      CrdHelper.deployCrd(client, cfg, isOpenShift)
+      Deployer.deployCrd(client, cfg, isOpenShift)
 }
 
 object Operator extends LazyLogging {

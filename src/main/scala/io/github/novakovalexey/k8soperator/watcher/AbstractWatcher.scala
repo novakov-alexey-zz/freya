@@ -38,13 +38,13 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
     unsafeRun(channel.put(action))
   }
 
-  protected def consumer(channel: MVar[F, Either[OperatorError[T], OperatorAction[T]]]): ConsumerSignal[F] =
+  protected def consumer(channel: Channel[F, T]): ConsumerSignal[F] =
     for {
-      errorOrAction <- channel.take
-      _ <- F.delay(logger.debug(s"consuming action $errorOrAction"))
-      r <- errorOrAction match {
-        case Right(oa) =>
-          handleAction(oa) *> consumer(channel)
+      action <- channel.take
+      _ <- F.delay(logger.debug(s"consuming action $action"))
+      s <- action match {
+        case Right(a) =>
+          handleAction(a) *> consumer(channel)
         case Left(e) =>
           e match {
             case WatcherClosedError(e) =>
@@ -54,7 +54,7 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
               handleAction(FailedAction(pre.action, pre.t, pre.resource)) *> consumer(channel)
           }
       }
-    } yield r
+    } yield s
 
   protected def handleAction(action: OperatorAction[T]): F[Unit] =
     (action match {
