@@ -48,7 +48,7 @@ class OperatorsTest
   }
 
   def client[F[_]: Sync]: F[KubernetesClient] =
-    Sync[F].pure(server.getClient)
+    Sync[F].pure(new JavaK8sClientMock)
 
   def makeWatchable[T, U]: (Watchable[Watch, Watcher[U]], mutable.Set[Watcher[U]]) = {
     val singleWatcher =
