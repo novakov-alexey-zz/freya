@@ -218,7 +218,7 @@ class OperatorsTest
 
     forAll(WatcherAction.gen, CM.gen[Kerb], minSuccessful(maxRestarts)) { (action, cm) =>
       //when
-      singleWatcher.foreach(_.onClose(null))
+      //singleWatcher.foreach(_.onClose(null))
       closeCurrentWatcher(singleWatcher, currentWatcher)
       currentWatcher = singleWatcher.head
       singleWatcher.foreach(_.eventReceived(action, cm))
