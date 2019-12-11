@@ -4,6 +4,7 @@ import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
+import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.github.novakovalexey.k8soperator.Controller.ConfigMapController
 import io.github.novakovalexey.k8soperator.generators.arbitrary
@@ -12,6 +13,7 @@ import io.github.novakovalexey.k8soperator.watcher.WatcherMaker.{Consumer, Consu
 import io.github.novakovalexey.k8soperator.watcher._
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
+import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
@@ -22,13 +24,28 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
 
-class OperatorsTest extends AnyPropSpec with Matchers with Eventually with Checkers with ScalaCheckPropertyChecks {
+class OperatorsTest
+    extends AnyPropSpec
+    with Matchers
+    with Eventually
+    with Checkers
+    with ScalaCheckPropertyChecks
+    with BeforeAndAfter {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
   val cfg: CrdConfig[Kerb] = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
+  val server = new KubernetesServer(false, false)
+
+  before {
+    server.before()
+  }
+
+  after {
+    server.after()
+  }
 
   def client[F[_]: Sync]: F[KubernetesClient] =
-    Sync[F].delay(new JavaK8sClientMock())
+    Sync[F].pure(server.getClient)
 
   def makeWatchable[T, U]: (Watchable[Watch, Watcher[U]], mutable.Set[Watcher[U]]) = {
     val singleWatcher: mutable.Set[Watcher[U]] = mutable.Set.empty
