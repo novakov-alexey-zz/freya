@@ -1,5 +1,7 @@
 package io.github.novakovalexey.k8soperator
 
+import java.util.concurrent.ConcurrentHashMap
+
 import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
@@ -23,6 +25,7 @@ import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
+import scala.jdk.CollectionConverters._
 
 class OperatorsTest
     extends AnyPropSpec
@@ -48,7 +51,8 @@ class OperatorsTest
     Sync[F].pure(server.getClient)
 
   def makeWatchable[T, U]: (Watchable[Watch, Watcher[U]], mutable.Set[Watcher[U]]) = {
-    val singleWatcher: mutable.Set[Watcher[U]] = mutable.Set.empty
+    val singleWatcher =
+      java.util.Collections.newSetFromMap(new ConcurrentHashMap[Watcher[U], java.lang.Boolean]).asScala
 
     val watchable = new Watchable[Watch, Watcher[U]] {
       override def watch(watcher: Watcher[U]): Watch = {
