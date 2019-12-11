@@ -32,7 +32,7 @@ class OperatorsTest
     with ScalaCheckPropertyChecks
     with BeforeAndAfter {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
-  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
+  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
   val cfg: CrdConfig[Kerb] = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
   val server = new KubernetesServer(false, false)
 
