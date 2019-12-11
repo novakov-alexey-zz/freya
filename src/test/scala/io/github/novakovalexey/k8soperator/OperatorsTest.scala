@@ -48,7 +48,7 @@ class OperatorsTest
   }
 
   def client[F[_]: Sync]: F[KubernetesClient] =
-    Sync[F].pure(new JavaK8sClientMock)
+    Sync[F].pure(server.getClient)
 
   def makeWatchable[T, U]: (Watchable[Watch, Watcher[U]], mutable.Set[Watcher[U]]) = {
     val singleWatcher =
@@ -218,7 +218,6 @@ class OperatorsTest
 
     forAll(WatcherAction.gen, CM.gen[Kerb], minSuccessful(maxRestarts)) { (action, cm) =>
       //when
-      //singleWatcher.foreach(_.onClose(null))
       closeCurrentWatcher(singleWatcher, currentWatcher)
       currentWatcher = singleWatcher.head
       singleWatcher.foreach(_.eventReceived(action, cm))
