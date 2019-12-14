@@ -2,15 +2,16 @@ package freya.watcher
 
 import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
-import io.fabric8.kubernetes.api.model.ConfigMap
-import io.fabric8.kubernetes.client.dsl.Watchable
-import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import freya.Controller.ConfigMapController
 import freya.errors.{OperatorError, ParseResourceError}
 import freya.internal.api.ConfigMapApi
 import freya.watcher.AbstractWatcher.Channel
 import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import freya.{Controller, K8sNamespace, Metadata}
+import io.fabric8.kubernetes.api.model.ConfigMap
+import io.fabric8.kubernetes.client.dsl.Watchable
+import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.fabric8.kubernetes.internal.KubernetesDeserializer
 
 final case class ConfigMapWatcherContext[F[_]: ConcurrentEffect, T](
   namespace: K8sNamespace,
@@ -34,7 +35,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
 
   override def watch: F[(Consumer, ConsumerSignal[F])] =
     Sync[F].delay(
-      io.fabric8.kubernetes.internal.KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap]) //TODO: why internal API is called?
+      KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap]) //TODO: why internal API is called?
     ) *> {
         val watchable = configMapApi.one(configMapApi.in(namespace), context.selector)
         registerWatcher(watchable)

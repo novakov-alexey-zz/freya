@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-krb1
+  namespace: test
+  labels:
+    io.myorg.kerboperator/kind: Kerb
+data:
+  config: |
+    realm: EXAMPLE.COM
+    principals:
+      - name: client1
+        password: static
+        value: mypass
+      - name: user2
+        password: static
+        value: mypass2

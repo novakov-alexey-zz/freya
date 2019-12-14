@@ -3,10 +3,11 @@ package freya
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
+import freya.generators.arbitrary
+import freya.internal.resource.ConfigMapParser
+import freya.watcher._
 import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, ObjectMeta, ObjectMetaBuilder}
 import io.fabric8.kubernetes.client.Watcher.Action
-import freya.generators.arbitrary
-import freya.watcher._
 import org.scalacheck.{Arbitrary, Gen}
 
 import scala.jdk.CollectionConverters._
@@ -66,7 +67,7 @@ object CM {
 
       new ConfigMapBuilder()
         .withMetadata(meta)
-        .withData(Map("config" -> mapper.writeValueAsString(spec)).asJava)
+        .withData(Map(ConfigMapParser.SpecificationKey -> mapper.writeValueAsString(spec)).asJava)
         .build()
     }
 }

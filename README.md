@@ -1,12 +1,12 @@
 # Freya
 
-Freya is a small Scala library to implement custom controllers for Kubernetes easily. 
+Freya is a Scala library to implement custom controllers for Kubernetes easily. 
 Implementation of custom controller is also known as **Operator Pattern**. 
 Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client).
 
 Main features:
-1. Two ways to implement your Kubernetes Operator with Freya:
-    - Custom Resource Definition based (CRD)
+1. Two options to implement your Kubernetes Operator with Freya:
+    - Custom Resource Definition (CRD) based
     - ConfigMap based
 1. Case Classes as Kubernetes resource specification. 
     Serialization and deserialization of cases classes is done automatically by Freya and it is powered by
@@ -24,10 +24,9 @@ Main features:
 
 ## How to use
 
-### CRD Operator
-
 Let's take an example of Kerberos principal list, which needs to be propagated to KDC database. 
-Our target Custom Resource will look like this:  
+
+Using Custom Resource option, our target Custom Resource will look like this:  
 
 ```yaml
 apiVersion: io.myorg.kerboperator/v1
@@ -46,16 +45,41 @@ spec:
       value: mypass2
 ``` 
 
-Freya does not require to write YAML files for your custom resources definitions at all. CRD in K8s will be
-created automatically based on case classes your define.
+Using ConfigMap option:
 
-We are not going to create any container Kerberos server, but just showing how Freya can help to watch 
-our custom resource. Particular controller actions to be implemented by controller author. Freya is only
-facilitator between K8s api-server and your custom controller actions.
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-krb1
+  namespace: test
+  labels:
+    io.myorg.kerboperator/kind: Kerb
+data:
+  config: |
+    realm: EXAMPLE.COM
+    principals:
+      - name: client1
+        password: static
+        value: mypass
+      - name: user2
+        password: static
+        value: mypass2
+```
 
-####Implementation Steps with Freya:
+Freya does not require to write YAML files for your custom resources definitions, nor for customer resource
+ instances and ConfigMaps at all. CRD in K8s will be created automatically based on case classes you define.
+ ConfigMap is a native resource, so no definition needs to be created in Kubernetes at all.
 
-1 . Define custom specification as a hierarchy of case classes. Let's map above Kerberos CR spec as two 
+We are not going to create any container with Kerberos server running in it, but just showing how Freya can help to watch 
+our custom resource or ConfigMaps. Particular controller actions to be implemented by controller author. Freya is only
+a facilitator between K8s api-server and your custom controller actions.
+
+#### Implementation Steps with Freya
+
+There are 3 steps to implement CRD/ConfigMap Operator:
+
+1 . Define resource specification as a hierarchy of case classes. Let's design above Kerberos spec as two 
 case classes `Kerb` and `Principal`
 
 ```scala
@@ -63,13 +87,17 @@ final case class Principal(name: String, password: String, value: String = "")
 final case class Kerb(realm: String, principals: List[Principal])
 ```
 
-2 . Implement your actions for Add, Modify, Delete events by implementing
-`io.github.novakovalexey.k8soperator.Controller` trait:
+2 . Implement your actions for Add, Modify, Delete events by extending
+`io.github.novakovalexey.k8soperator.Controller` abstract class:
+
+Crd Controller option:
 
 ```scala
+import com.typesafe.scalalogging.LazyLogging
+import cats.effect.ConcurrentEffect
 import freya.Controller
 
-class KerbController[F[_]](implicit override val F: ConcurrentEffect[F]) 
+class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
   extends Controller[F, Kerb] with LazyLogging {
 
   override def onAdd(krb: Kerb, meta: Metadata): F[Unit] =
@@ -80,12 +108,40 @@ class KerbController[F[_]](implicit override val F: ConcurrentEffect[F])
 
   override def onModify(krb: Kerb, meta: Metadata): F[Unit] =
     F.delay(logger.info(s"Kerb modified: $krb, $meta"))
+  
+  override def onInit(): F[Unit] =
+    F.delay(logger.info(s"init completed"))
 }
 ```
 
-All trait methods are stubbed with `F.unit`. Override only necessary methods for your custom controller.
+ConfigMap Controller option:
+
+```scala
+import io.fabric8.kubernetes.api.model.ConfigMap
+
+class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) 
+  extends Controller[F, Kerb] with CmController {
+
+  // override onAdd, onDelete, onModify  
+
+  override def isSupported(cm: ConfigMap): Boolean =
+    cm.getMetadata.getName.startsWith("krb")
+}
+```
+
+CmController adss `isSupported` method which allows to skip particular ConfigMaps if they do not 
+satisfy to logical condition.
+
+All methods have default implementation as  `F.unit`, so override only necessary methods for your custom controller.
+
+`onInit` - is called before controller is started. In terms *fabric8* client, `onInit` is called before watcher 
+is started to watch for custom resources or config map resources.
+
+`onAdd`, `onDelete`, `onModify` - are called whenever corresponding event is triggered by Kubernetes api-server.
 
 3 . Start your operator
+
+Crd Operator option: 
 
 ```scala
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
@@ -93,12 +149,12 @@ import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
 import scala.concurrent.ExecutionContext
 
-object KerbOperator extends IOApp {
+object KerbCrdOperator extends IOApp {
   implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
-    val cfg = CrdConfig(classOf[Kerb], Namespace("test"), "io.myorg.kerboperator")
+    val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
 
     Operator
       .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
@@ -107,9 +163,26 @@ object KerbOperator extends IOApp {
 }
 ```
 
-`run` method on Operator.ofCrd(....) will return an `IO[ExitCode]`,
- which is running web-socket client for Kubernetes API-Server. Operator is watching for events with `Kerb` kind
- and group `io.myorg.kerboperator`
+ConfigMap Operator option:
 
-### ConfigMap Operator
+```scala
+object KerbCmOperator extends IOApp {
+  implicit val cs: ContextShift[IO] = contextShift
 
+  override def run(args: List[String]): IO[ExitCode] = {
+    val client = IO(new DefaultKubernetesClient)
+    
+    // ... the same API as for Crd Operator, but with own configuration and constructor
+    val cfg = ConfigMapConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+
+    Operator
+      .ofConfigMap[IO, Kerb](cfg, client, new KrbCmController[IO])
+      .run
+  }
+}
+```
+
+`run` method on Operator type returns an `IO[ExitCode]`,
+ which is running a web-socket client for Kubernetes api-server. Operator is watching for events with `Kerb` kind
+ and apiGroup `io.myorg.kerboperator/v1` in case of CRD option or ConfigMap with label `io.myorg.kerboperator/kind=Kerb`
+ in case of ConfigMap Operator option.

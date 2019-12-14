@@ -6,12 +6,15 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
 import com.typesafe.scalalogging.LazyLogging
 import freya.Metadata
+import freya.internal.resource.ConfigMapParser.SpecificationKey
 import io.fabric8.kubernetes.api.model.ConfigMap
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 private[freya] object ConfigMapParser {
+  val SpecificationKey = "config"
+
   def apply[F[_]: Sync](): F[ConfigMapParser] =
     Sync[F].delay(new ConfigMapParser)
 }
@@ -52,7 +55,9 @@ private[freya] class ConfigMapParser extends LazyLogging {
 
   def parseCM[T](clazz: Class[T], cm: ConfigMap): Either[Throwable, (T, Metadata)] =
     for {
-      yaml <- cm.getData.asScala.get("config").toRight(new RuntimeException("ConfigMap is missing 'config' key"))
+      yaml <- cm.getData.asScala
+        .get(SpecificationKey)
+        .toRight(new RuntimeException(s"ConfigMap is missing '$SpecificationKey' key"))
       meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
       parsed <- parseYaml(clazz, yaml).map(_ -> meta)
     } yield parsed

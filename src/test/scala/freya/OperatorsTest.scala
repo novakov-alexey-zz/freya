@@ -3,16 +3,16 @@ package freya
 import java.util.concurrent.ConcurrentHashMap
 
 import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
-import io.fabric8.kubernetes.api.model.ConfigMap
-import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
-import io.fabric8.kubernetes.client.dsl.Watchable
-import io.fabric8.kubernetes.client.server.mock.KubernetesServer
-import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import freya.Controller.ConfigMapController
 import freya.generators.arbitrary
 import freya.internal.resource.ConfigMapParser
 import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import freya.watcher._
+import io.fabric8.kubernetes.api.model.ConfigMap
+import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
+import io.fabric8.kubernetes.client.dsl.Watchable
+import io.fabric8.kubernetes.client.server.mock.KubernetesServer
+import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
 import org.scalatest.BeforeAndAfter
@@ -324,7 +324,7 @@ class OperatorsTest
       val spec = parseCM(parser, cm)
 
       if (spec.failInTest)
-        cm.getData.put("config", "error")
+        cm.getData.put(ConfigMapParser.SpecificationKey, "error")
 
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
