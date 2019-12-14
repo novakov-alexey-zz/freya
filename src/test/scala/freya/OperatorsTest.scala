@@ -140,7 +140,7 @@ class OperatorsTest
     val maxRestarts = PosInt(20)
 
     //when
-    val cancelable = startOperator(operator.withRestart(Retry(maxRestarts, 0.seconds)))
+    val cancelable = startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
     var oldWatcher = singleWatcher.head
 
     //then
@@ -175,7 +175,7 @@ class OperatorsTest
     val maxRestarts = PosInt(20)
 
     //when
-    val cancelable = startOperator(operator.withRestart(Retry(maxRestarts, 0.seconds)))
+    val cancelable = startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
     var currentWatcher = singleWatcher.head
 
     //then
@@ -211,7 +211,7 @@ class OperatorsTest
     val maxRestarts = PosInt(3)
 
     //when
-    val exitCode = operator.withRestart(Retry(maxRestarts, 0.seconds)).unsafeToFuture()
+    val exitCode = operator.withRestart(Times(maxRestarts, 0.seconds)).unsafeToFuture()
 
     var currentWatcher = singleWatcher.head
     val parser = ConfigMapParser[IO]().unsafeRunSync()

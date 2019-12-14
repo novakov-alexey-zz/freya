@@ -2,7 +2,14 @@ package freya
 
 import scala.concurrent.duration.{FiniteDuration, _}
 
-final case class Retry(times: Int = 1, delay: FiniteDuration = 1.second, multiplier: Int = 1)
+object Retry {
+  def nextDelay(delay: FiniteDuration, multiplier: Int): FiniteDuration =
+    delay * multiplier.toLong
+}
+
+sealed trait Retry
+final case class Times(maxRetries: Int = 1, delay: FiniteDuration = 1.second, multiplier: Int = 1) extends Retry
+final case class Infinite(delay: FiniteDuration = 1.second, multiplier: Int = 2) extends Retry
 
 final case class Metadata(name: String, namespace: String)
 

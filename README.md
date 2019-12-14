@@ -4,8 +4,8 @@ Freya is a Scala library to implement custom controllers for Kubernetes easily.
 Implementation of custom controller is also known as **Operator Pattern**. 
 Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client).
 
-Main features:
-1. Two options to implement your Kubernetes Operator with Freya:
+Freya Main features:
+1. Two options to implement your Kubernetes Operator:
     - Custom Resource Definition (CRD) based
     - ConfigMap based
 1. Case Classes as Kubernetes resource specification. 

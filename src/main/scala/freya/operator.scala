@@ -5,9 +5,6 @@ import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync, Timer}
 import cats.implicits._
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.typesafe.scalalogging.LazyLogging
-import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
-import io.fabric8.kubernetes.client._
-import io.fabric8.kubernetes.client.utils.Serialization
 import freya.Controller.ConfigMapController
 import freya.errors.OperatorError
 import freya.internal.AnsiColors._
@@ -17,6 +14,9 @@ import freya.internal.resource.{ConfigMapParser, CrdParser, Labels}
 import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import freya.watcher._
 import freya.watcher.actions.OperatorAction
+import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
+import io.fabric8.kubernetes.client._
+import io.fabric8.kubernetes.client.utils.Serialization
 
 import scala.annotation.unused
 
@@ -162,29 +162,42 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           ExitCode.Error.pure[F]
       }
 
-  def withRestart(retry: Retry = Retry())(implicit T: Timer[F]): F[ExitCode] =
+  def withRestart(retry: Retry = Infinite())(implicit T: Timer[F]): F[ExitCode] =
     run.flatMap(loop(_, retry))
 
-  private def loop(ec: ExitCode, retry: Retry)(implicit T: Timer[F]) =
-    if (retry.times > 0)
+  private def loop(ec: ExitCode, retry: Retry)(implicit T: Timer[F]) = {
+    val (canRestart, delay, nextRetry, remaining) = retry match {
+      case Times(maxRetries, delay, multiplier) =>
+        (
+          maxRetries > 0,
+          delay,
+          F.delay[Retry](Times(maxRetries - 1, Retry.nextDelay(delay, multiplier), multiplier)),
+          maxRetries.toString
+        )
+      case Infinite(delay, multiplier) =>
+        (true, delay, F.delay[Retry](Infinite(Retry.nextDelay(delay, multiplier), multiplier)), "infinite")
+    }
+    if (canRestart)
       for {
-        _ <- F.delay(logger.info(s"Sleeping for ${retry.delay}"))
-        _ <- T.sleep(retry.delay)
-        _ <- F.delay(logger.info(s"${re}Going to restart$xx. Restarts left: ${retry.times}"))
-        d <- F.delay(retry.delay * retry.multiplier.toLong)
-        ec <- withRestart(retry.copy(retry.times - 1, delay = d))
-      } yield ec
+        _ <- F.delay(logger.info(s"Sleeping for $delay"))
+        _ <- T.sleep(delay)
+        _ <- F.delay(logger.info(s"${re}Going to restart$xx. Restarts left: $remaining"))
+        r <- nextRetry
+        code <- withRestart(r)
+      } yield code
     else ec.pure[F]
+  }
 
   def start: F[(ConsumerSignal[F], Consumer)] =
     (for {
       pipe <- pipeline
       _ <- F.delay(Serialization.jsonMapper().registerModule(DefaultScalaModule))
+
       name = pipe.operator.cfg.getKind
       namespace = if (pipe.operator.cfg.namespace == CurrentNamespace) pipe.operator.clientNamespace
       else pipe.operator.cfg.namespace
 
-      _ <- F.delay(logger.info(s"Starting operator $name for namespace $namespace"))
+      _ <- F.delay(logger.info(s"Starting operator $ye$name$xx for namespace $namespace"))
       _ <- pipe.onInit
       (consumer, signal) <- pipe.consumer
       _ <- F
