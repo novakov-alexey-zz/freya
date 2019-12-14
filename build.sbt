@@ -1,4 +1,4 @@
-ThisBuild / name := "k8s-operator4s"
+ThisBuild / name := "freya"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / organization := "io.github.novakov-alexey"
@@ -23,4 +23,4 @@ lazy val `k8s-operator` = (project in file(".")).settings(
 )
 
 lazy val generate = taskKey[Unit]("Generate JSON Schema")
-generate := (runMain in Test).toTask(" io.github.novakovalexey.k8soperator.ScalaJsonSchema").value
+generate := (runMain in Test).toTask("freya.ScalaJsonSchema").value
