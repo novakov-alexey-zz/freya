@@ -3,6 +3,7 @@ package freya.internal
 import java.net.URL
 
 import com.typesafe.scalalogging.LazyLogging
+import freya.{CurrentNamespace, K8sNamespace, Namespace}
 import io.fabric8.kubernetes.client.ConfigBuilder
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
 import okhttp3.{HttpUrl, Request}
@@ -10,6 +11,9 @@ import okhttp3.{HttpUrl, Request}
 import scala.util.Try
 
 private[freya] object OperatorUtils extends LazyLogging {
+
+  def targetNamespace(clientNamespace: String, namespace: K8sNamespace): K8sNamespace =
+    if (namespace == CurrentNamespace) Namespace(clientNamespace) else namespace
 
   def checkIfOnOpenshift(masterURL: URL): (Boolean, Int) =
     Try {

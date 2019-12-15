@@ -28,7 +28,8 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
       context.namespace,
       context.kind,
       context.controller,
-      context.channel
+      context.channel,
+      context.client.getNamespace
     ) {
 
   private val configMapApi = new ConfigMapApi(context.client)
@@ -37,7 +38,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
     Sync[F].delay(
       KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap]) //TODO: why internal API is called?
     ) *> {
-        val watchable = configMapApi.one(configMapApi.in(namespace), context.selector)
+        val watchable = configMapApi.one(configMapApi.in(targetNamespace), context.selector)
         registerWatcher(watchable)
       }
 
@@ -48,7 +49,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
     val watch = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
         if (context.controller.isSupported(cm)) {
-          logger.debug(s"ConfigMap in namespace $namespace was $action\nConfigMap:\n$cm\n")
+          logger.debug(s"ConfigMap in namespace $targetNamespace was $action\nConfigMap:\n$cm\n")
           val converted = context.convert(cm).leftMap[OperatorError[T]](t => ParseResourceError(action, t, cm))
           enqueueAction(action, converted, cm)
         } else logger.error(s"Unknown ConfigMap kind: ${cm.toString}")

@@ -144,7 +144,7 @@ object Operator extends LazyLogging {
 }
 
 private case class OperatorPipeline[F[_], T](
-  operator: AbstractHelper[F, T],
+  helper: AbstractHelper[F, T],
   consumer: F[(Consumer, ConsumerSignal[F])],
   onInit: F[Unit]
 )
@@ -193,9 +193,8 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
       pipe <- pipeline
       _ <- F.delay(Serialization.jsonMapper().registerModule(DefaultScalaModule))
 
-      name = pipe.operator.cfg.getKind
-      namespace = if (pipe.operator.cfg.namespace == CurrentNamespace) pipe.operator.clientNamespace
-      else pipe.operator.cfg.namespace
+      name = pipe.helper.cfg.getKind
+      namespace = pipe.helper.targetNamespace
 
       _ <- F.delay(logger.info(s"Starting operator $ye$name$xx for namespace $namespace"))
       _ <- pipe.onInit

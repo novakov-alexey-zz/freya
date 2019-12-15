@@ -4,7 +4,7 @@ ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / organization := "io.github.novakov-alexey"
 Test / fork := true
 
-lazy val `k8s-operator` = (project in file(".")).settings(
+lazy val `freya` = (project in file(".")).settings(
   addCompilerPlugin(betterMonadicFor),
   libraryDependencies ++= Seq(
         k8sClient,

@@ -2,18 +2,19 @@ package freya
 
 import cats.effect.Effect
 import cats.implicits._
-import io.fabric8.kubernetes.api.model.ConfigMap
-import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
-import io.fabric8.kubernetes.client.KubernetesClient
+import freya.internal.OperatorUtils
 import freya.internal.api.{ConfigMapApi, CrdApi}
 import freya.internal.resource.{ConfigMapParser, CrdParser, Labels}
 import freya.watcher.InfoClass
+import io.fabric8.kubernetes.api.model.ConfigMap
+import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
+import io.fabric8.kubernetes.client.KubernetesClient
 
 import scala.annotation.unused
 
 sealed abstract class AbstractHelper[F[_]: Effect, T](val client: KubernetesClient, val cfg: OperatorCfg[T]) {
   val kind: String = cfg.getKind
-  val clientNamespace: K8sNamespace = Namespace(client.getNamespace)
+  val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(client.getNamespace, cfg.namespace)
 }
 
 object ConfigMapHelper {
@@ -32,7 +33,7 @@ class ConfigMapHelper[F[_]: Effect, T](
   private val cmApi = new ConfigMapApi(client)
 
   def currentConfigMaps: Either[List[Throwable], Map[Metadata, T]] = {
-    val cms = cmApi.in(cfg.namespace)
+    val cms = cmApi.in(targetNamespace)
 
     cmApi
       .list(cms, selector)
@@ -63,7 +64,7 @@ class CrdHelper[F[_]: Effect, T](
   private val crdApi = new CrdApi(client)
 
   def currentResources: Either[List[Throwable], Map[Metadata, T]] = {
-    val crds = crdApi.in[T](cfg.namespace, crd)
+    val crds = crdApi.in[T](targetNamespace, crd)
 
     crdApi
       .list(crds)
