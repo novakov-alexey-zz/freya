@@ -30,7 +30,7 @@ class ConfigMapHelper[F[_]: Effect, T](
   parser: ConfigMapParser
 ) extends AbstractHelper[F, T](client, cfg) {
 
-  val selector: (String, String) = Labels.forKind(cfg.getKind, cfg.prefix)
+  val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
   private val cmApi = new ConfigMapApi(client)
 
   def currentConfigMaps: Either[List[Throwable], Map[Metadata, T]] = {

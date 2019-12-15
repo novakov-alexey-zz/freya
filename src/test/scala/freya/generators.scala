@@ -39,12 +39,12 @@ object InfoClass {
       spec <- arbitrary[T]
       meta <- ObjectMetaTest.gen
     } yield {
-      val ic = new SpecClass[T]
-      ic.setApiVersion("io.github.novakov-alexey/v1")
-      ic.setKind(kind)
-      ic.setSpec(spec)
-      ic.setMetadata(meta)
-      ic
+      val sc = new SpecClass[T]
+      sc.setApiVersion("io.github.novakov-alexey/v1")
+      sc.setKind(kind)
+      sc.setSpec(spec)
+      sc.setMetadata(meta)
+      sc
     }
 }
 
@@ -74,7 +74,7 @@ object CM {
 
 object Gens {
   val nonEmptyString: Gen[String] = Gen.nonEmptyListOf[Char](Gen.alphaChar).map(_.mkString)
-  implicit lazy val arbBooleab: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
+  implicit lazy val arbBoolean: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
 
   def krb2: Gen[Kerb] =
     for {

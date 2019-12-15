@@ -25,7 +25,7 @@ Freya main features:
 
 ## How to use
 
-N.B. : further in the documentation, _Controller_ and _Operator_ definitions are used like synonymous.
+N.B. : further in the documentation, _Controller_ and _Operator_ definitions are used as synonymous.
 
 Let's take an example of some controller like Kerberos principal list, which needs to be propagated to KDC database. 
 
@@ -83,7 +83,7 @@ your custom controller actions.
 
 There are 3 steps to implement CRD or ConfigMap Operator:
 
-1 . Define resource specification as a hierarchy of case classes. Let's design above Kerberos spec as two 
+1 . Define resource specification as a hierarchy of case classes. Above Kerberos spec can be designed as two 
 case classes `Kerb` and `Principal`
 
 ```scala
@@ -196,7 +196,7 @@ object KerbCmOperator extends IOApp {
 ```
 
 Operator's `run` method returns an `IO[ExitCode]`, which is running a web-socket connection to Kubernetes api-server.
-Returned `IO` value is a long-running task, which terminates only if K8s api-server closes client connection.   
+Returned `IO` value is a long-running and server-like task, which terminates only if K8s api-server closes client connection.   
 Running Operator is watching for events with `Kerb` kind and apiGroup `io.myorg.kerboperator/v1` in case of CRD Operator or 
 native ConfigMap kind with label `io.myorg.kerboperator/kind=Kerb` in case of ConfigMap Operator.
 
@@ -212,15 +212,15 @@ import freya.AdditionalPrinterColumn
 Crd(
   // CRD kind to register and watch
   forKind = classOf[Kerb], 
-  // namespace to watch for events 
+  // namespace to watch for events in
   namespace = Namespace("test"), 
   // CRD api prefix 
   prefix = "io.myorg.kerboperator",
-  // Check whether HTTP API available on startup. See details in Scala docs  
+  // Check on startup whether current K8s is an OpenShift   
   checkK8sOnStartup = true, 
   // if None, then kind name is taken from case class name, i.e. Kerb
   customKind = Some("Kerberos"),
-  // deploy CRD on startup, if no CRD is found in K8s
+  // deploy CRD on startup, if no CRD already exists in K8s
   deployCrd = true,
   // short names for CRD when using kubectl, like kubectl get kr (instead of kerb) 
   shortNames = List("kr"),
@@ -242,11 +242,11 @@ import freya.K8sNamespace.AllNamespaces
 ConfigMap(
   // ConfigMap label value to watch for event
   forKind = classOf[Kerb], 
-  // namespace to watch for events
+  // namespace to watch for events in
   namespace = AllNamespaces, 
   // CRD api prefix 
   prefix = "io.myorg.kerboperator",
-  // Check whether HTTP API available on startup. See details in Scala docs  
+  // Check on startup whether current K8s is an OpenShift    
   checkK8sOnStartup = true, 
   // if None, then `kind` name is a case class name, i.e. Kerb
   customKind = Some("Kerberos")
@@ -344,12 +344,12 @@ At resources/schema/kerb.json:
 
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
 set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find CRD in K8s during the startup and 
-won't try to deploy them, if CRD is not found. In this case, when CRD is not found nad deployCrd is to false,
+won't try to deploy them, if CRD is not found. In this case CRD is not found and `deployCrd` is to `false`,
 operator will fail and return failed `IO` value immediately.   
 
 ## Controller Helpers
 
-Both types of controllers can be constructed using helper as input parameter. Helper several useful properties and
+Both types of controllers can be constructed using helper as input parameter. Helper has several useful properties and
 method to retrieve current resources for CRD or ConfigMap kinds. Although, the same functionality can be written
 within Operator code manually.
 
@@ -373,11 +373,12 @@ Operator
   .withRestart()
 ```
 
-`CrdHelper` provides several properties as well: 
-- `freya.Operator.Crd` - configuration that was passed on operator construction, 
+`CrdHelper` provides several properties such as: 
+- `freya.Operator.Crd` - configuration which is passed on operator construction
 - `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
+- `Option[Boolean]` - isOpenShift property
 - `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
-- `freya.resource.CrdParser` - CRD parser to parse SpecClass#spec to target `T` kind.
+- `freya.resource.CrdParser` - CRD parser to parse `SpecClass#spec` to target `T` kind.
 
 ### ConfigMap Helper
 
@@ -385,7 +386,9 @@ Operator
 
 `currentConfigMaps` - a method to return current current ConfigMap resources based on passed earlier Operator 
 configuration
-- `freya.Operator.ConfigMap` - configuration that was passed on operator construction 
+
+Properties:
+- `freya.Operator.ConfigMap` - configuration that which is passed on operator construction 
 - `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
 - `Option[Boolean]` - isOpenShift property
 - `freya.resource.ConfigMapParser` - ConfigMap parser to parse `config` key of data map to target `T` kind
@@ -398,7 +401,7 @@ Client should be managed separately, when it comes to shutdown of the operator b
 
 fabric8 kubernets-client
 has its own pool of HTTP connections and it is powered by OkHttp library internally. This HTTP connection pool has nothing in common 
-with Cats `ContextShift` (or Scala Global ExecutionContext), which is used by Freya to dispatch events from K8s to custom controlller.
+with Cats `ContextShift` (or Scala Global ExecutionContext). Cats `ContextShift` is used by Freya to dispatch events from K8s to custom controlller.
 
 ### Logging
 

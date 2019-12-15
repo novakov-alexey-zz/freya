@@ -20,9 +20,9 @@ class ConfigMapApi(client: KubernetesClient) {
     else _cms.inNamespace(ns.value)
   }
 
-  def list(cms: FilteredN, selector: (String, String)): List[ConfigMap] =
-    cms.withLabels(Map(selector).asJava).list.getItems.asScala.toList
+  def list(cms: FilteredN, selector: Map[String, String]): List[ConfigMap] =
+    cms.withLabels(selector.asJava).list.getItems.asScala.toList
 
-  def one(cms: FilteredN, selector: Map[String, String]): Filtered =
-    cms.withLabels(selector.asJava)
+  def one(cms: FilteredN, selector: (String, String)): Filtered =
+    cms.withLabels(Map(selector).asJava)
 }

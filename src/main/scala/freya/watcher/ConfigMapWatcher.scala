@@ -20,7 +20,7 @@ final case class ConfigMapWatcherContext[F[_]: ConcurrentEffect, T](
   convert: ConfigMap => Either[Throwable, (T, Metadata)],
   channel: Channel[F, T],
   client: KubernetesClient,
-  selector: Map[String, String]
+  selector: (String, String)
 )
 
 class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherContext[F, T])
