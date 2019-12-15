@@ -8,7 +8,7 @@ import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.OperatorCfg.Crd
 import freya.Retry.Times
 import freya.generators.arbitrary
-import freya.internal.resource.ConfigMapParser
+import freya.resource.ConfigMapParser
 import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import freya.watcher._
 import io.fabric8.kubernetes.api.model.ConfigMap

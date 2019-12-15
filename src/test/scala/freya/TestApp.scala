@@ -17,9 +17,6 @@ class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F,
 
   override def onModify(krb: Kerb, meta: Metadata): F[Unit] =
     F.delay(logger.info(s"Kerb modified: $krb, $meta"))
-
-  override def onInit(): F[Unit] =
-    F.delay(logger.info(s"init completed"))
 }
 
 class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb] with CmController {
@@ -28,28 +25,50 @@ class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[
     cm.getMetadata.getName.startsWith("krb")
 }
 
-object TestCmOperator extends IOApp {
+object TestCmOperator extends IOApp with TestParams {
   implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] = {
-    val client = IO(new DefaultKubernetesClient)
-    val cfg = OperatorCfg.ConfigMap(classOf[Kerb], Namespace("test"), prefix)
-
     Operator
-      .ofConfigMap[IO, Kerb](cfg, client, new KrbCmController[IO])
+      .ofConfigMap[IO, Kerb](cmCfg, client, new KrbCmController[IO])
       .run
   }
 }
 
-object TestCrdOperator extends IOApp {
+object TestCrdOperator extends IOApp with TestParams {
   implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] = {
-    val client = IO(new DefaultKubernetesClient)
-    val cfg = Crd(classOf[Kerb], Namespace("test"), prefix)
+    Operator
+      .ofCrd[IO, Kerb](crdCfg, client, new KrbController[IO])
+      .withRestart()
+  }
+}
+
+trait TestParams {
+  val client = IO(new DefaultKubernetesClient)
+  val crdCfg = Crd(classOf[Kerb], Namespace("test"), prefix)
+  val cmCfg = OperatorCfg.ConfigMap(classOf[Kerb], Namespace("test"), prefix)
+}
+
+object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
+  implicit val cs: ContextShift[IO] = contextShift
+
+  override def run(args: List[String]): IO[ExitCode] = {
+    val controller = (helper: CrdHelper[IO, Kerb]) =>
+      new Controller[IO, Kerb] {
+
+        override def onInit(): IO[Unit] =
+          IO(
+            helper.currentResources.fold(
+              errors => logger.error("Failed to get current CRD instances", errors.map(_.getMessage).mkString("\n")),
+              crds => logger.info(s"current ${crdCfg.getKind} CRDs: $crds")
+            )
+          )
+      }
 
     Operator
-      .ofCrd[IO, Kerb](cfg, client, new KrbController[IO])
+      .ofCrd[IO, Kerb](crdCfg, client)(controller)
       .withRestart()
   }
 }

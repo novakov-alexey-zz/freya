@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
 import freya.generators.arbitrary
-import freya.internal.resource.ConfigMapParser
+import freya.resource.ConfigMapParser
 import freya.watcher._
 import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapBuilder, ObjectMeta, ObjectMetaBuilder}
 import io.fabric8.kubernetes.client.Watcher.Action

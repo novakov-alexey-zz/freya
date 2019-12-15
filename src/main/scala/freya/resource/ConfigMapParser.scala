@@ -1,4 +1,4 @@
-package freya.internal.resource
+package freya.resource
 
 import cats.effect.Sync
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -6,7 +6,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
 import com.typesafe.scalalogging.LazyLogging
 import freya.Metadata
-import freya.internal.resource.ConfigMapParser.SpecificationKey
+import freya.resource.ConfigMapParser.SpecificationKey
 import io.fabric8.kubernetes.api.model.ConfigMap
 
 import scala.jdk.CollectionConverters._

@@ -12,7 +12,7 @@ import freya.errors.OperatorError
 import freya.internal.AnsiColors._
 import freya.internal.OperatorUtils._
 import freya.internal.crd.Deployer
-import freya.internal.resource.{ConfigMapParser, CrdParser, Labels}
+import freya.resource.{ConfigMapParser, CrdParser, Labels}
 import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
 import freya.watcher._
 import freya.watcher.actions.OperatorAction

@@ -52,7 +52,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
           logger.debug(s"ConfigMap in namespace $targetNamespace was $action\nConfigMap:\n$cm\n")
           val converted = context.convert(cm).leftMap[OperatorError[T]](t => ParseResourceError(action, t, cm))
           enqueueAction(action, converted, cm)
-        } else logger.error(s"Unknown ConfigMap kind: ${cm.toString}")
+        } else logger.debug(s"Unsupported ConfigMap skipped: ${cm.toString}")
       }
 
       override def onClose(e: KubernetesClientException): Unit =

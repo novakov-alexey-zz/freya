@@ -1,4 +1,4 @@
-package freya.internal.resource
+package freya.resource
 
 import cats.effect.Sync
 import com.fasterxml.jackson.databind.ObjectMapper

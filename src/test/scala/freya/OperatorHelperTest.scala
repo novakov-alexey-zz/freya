@@ -5,7 +5,7 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.OperatorCfg.Crd
 import freya.internal.crd.{Deployer, SpecDoneable, SpecList}
-import freya.internal.resource.{ConfigMapParser, CrdParser}
+import freya.resource.{ConfigMapParser, CrdParser}
 import freya.watcher.SpecClass
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient

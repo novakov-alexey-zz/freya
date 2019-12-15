@@ -1,5 +1,5 @@
 import cats.effect.{CancelToken, ContextShift, ExitCode, IO}
-import freya.internal.resource.ConfigMapParser
+import freya.resource.ConfigMapParser
 import io.fabric8.kubernetes.api.model.ConfigMap
 import org.scalacheck.{Arbitrary, Gen}
 
@@ -8,7 +8,7 @@ import scala.concurrent.ExecutionContext
 package object freya {
   implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
   implicit lazy val arbInfoClass: Arbitrary[Kerb] = Arbitrary(Gens.krb2)
-  implicit lazy val arbBooleab: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
+  implicit lazy val arbBoolean: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
 
   val prefix = "io.github.novakov-alexey"
 

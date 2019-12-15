@@ -5,7 +5,7 @@ import cats.implicits._
 import freya.OperatorCfg.Crd
 import freya.internal.OperatorUtils
 import freya.internal.api.{ConfigMapApi, CrdApi}
-import freya.internal.resource.{ConfigMapParser, CrdParser, Labels}
+import freya.resource.{ConfigMapParser, CrdParser, Labels}
 import freya.watcher.SpecClass
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
@@ -30,7 +30,7 @@ class ConfigMapHelper[F[_]: Effect, T](
   parser: ConfigMapParser
 ) extends AbstractHelper[F, T](client, cfg) {
 
-  val selector: Map[String, String] = Labels.forKind(cfg.getKind, cfg.prefix)
+  val selector: (String, String) = Labels.forKind(cfg.getKind, cfg.prefix)
   private val cmApi = new ConfigMapApi(client)
 
   def currentConfigMaps: Either[List[Throwable], Map[Metadata, T]] = {

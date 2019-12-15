@@ -4,7 +4,7 @@ import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
 import freya.internal.crd.{SpecDoneable, SpecList}
-import freya.internal.resource.ConfigMapParser
+import freya.resource.ConfigMapParser
 import freya.watcher.SpecClass
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
