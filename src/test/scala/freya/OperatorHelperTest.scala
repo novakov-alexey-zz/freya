@@ -2,13 +2,15 @@ package freya
 
 import cats.effect.IO
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import freya.K8sNamespace.{AllNamespaces, Namespace}
+import freya.OperatorCfg.Crd
+import freya.internal.crd.{Deployer, SpecDoneable, SpecList}
+import freya.internal.resource.{ConfigMapParser, CrdParser}
+import freya.watcher.SpecClass
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import io.fabric8.kubernetes.client.utils.Serialization
-import freya.internal.crd.{Deployer, InfoClassDoneable, InfoList}
-import freya.internal.resource.{ConfigMapParser, CrdParser}
-import freya.watcher.InfoClass
 import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
@@ -40,7 +42,7 @@ class OperatorHelperTest
 
   private def testCmHelper(ns: K8sNamespace) = {
     //given
-    val cfg = ConfigMapConfig(classOf[Kerb], ns, prefix)
+    val cfg = OperatorCfg.ConfigMap(classOf[Kerb], ns, prefix)
     val client = server.getClient
     val parser = new ConfigMapParser()
     val helper = new ConfigMapHelper[IO, Kerb](cfg, client, None, parser)
@@ -68,7 +70,7 @@ class OperatorHelperTest
 
   ignore("Crd helper should return current CRDs") {
     //given
-    val cfg = CrdConfig(classOf[Kerb], testNs, prefix, checkK8sOnStartup = false)
+    val cfg = Crd(classOf[Kerb], testNs, prefix, checkK8sOnStartup = false)
     val client = new DefaultKubernetesClient() // mock server does not work properly with CRDs
     Serialization.jsonMapper().registerModule(DefaultScalaModule)
 
@@ -76,7 +78,7 @@ class OperatorHelperTest
     val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
     val helper = new CrdHelper[IO, Kerb](cfg, client, None, crd, parser)
     val krbClient = client
-      .customResources(crd, classOf[InfoClass[Kerb]], classOf[InfoList[Kerb]], classOf[InfoClassDoneable[Kerb]])
+      .customResources(crd, classOf[SpecClass[Kerb]], classOf[SpecList[Kerb]], classOf[SpecDoneable[Kerb]])
 
     //when
     krbClient.inNamespace(testNs.value).delete()

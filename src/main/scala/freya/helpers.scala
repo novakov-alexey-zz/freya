@@ -2,10 +2,11 @@ package freya
 
 import cats.effect.Effect
 import cats.implicits._
+import freya.OperatorCfg.Crd
 import freya.internal.OperatorUtils
 import freya.internal.api.{ConfigMapApi, CrdApi}
 import freya.internal.resource.{ConfigMapParser, CrdParser, Labels}
-import freya.watcher.InfoClass
+import freya.watcher.SpecClass
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
@@ -23,7 +24,7 @@ object ConfigMapHelper {
 }
 
 class ConfigMapHelper[F[_]: Effect, T](
-  cfg: ConfigMapConfig[T],
+  cfg: OperatorCfg.ConfigMap[T],
   client: KubernetesClient,
   @unused isOpenShift: Option[Boolean],
   parser: ConfigMapParser
@@ -47,7 +48,7 @@ class ConfigMapHelper[F[_]: Effect, T](
 
 object CrdHelper {
 
-  def convertCr[T](kind: Class[T], parser: CrdParser)(info: InfoClass[T]): Either[Throwable, (T, Metadata)] =
+  def convertCr[T](kind: Class[T], parser: CrdParser)(info: SpecClass[T]): Either[Throwable, (T, Metadata)] =
     for {
       spec <- parser.parse(kind, info)
       meta <- Right(Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
@@ -55,7 +56,7 @@ object CrdHelper {
 }
 
 class CrdHelper[F[_]: Effect, T](
-  cfg: CrdConfig[T],
+  cfg: Crd[T],
   client: KubernetesClient,
   @unused val isOpenShift: Option[Boolean],
   val crd: CustomResourceDefinition,

@@ -2,6 +2,8 @@ package freya
 
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
 import com.typesafe.scalalogging.LazyLogging
+import freya.K8sNamespace.Namespace
+import freya.OperatorCfg.Crd
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
@@ -31,7 +33,7 @@ object TestCmOperator extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
-    val cfg = ConfigMapConfig(classOf[Kerb], Namespace("test"), prefix = "io.github.novakov-alexey")
+    val cfg = OperatorCfg.ConfigMap(classOf[Kerb], Namespace("test"), prefix)
 
     Operator
       .ofConfigMap[IO, Kerb](cfg, client, new KrbCmController[IO])
@@ -44,10 +46,10 @@ object TestCrdOperator extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
-    val cfg = CrdConfig(classOf[Kerb], Namespace("test"), "io.github.novakov-alexey")
+    val cfg = Crd(classOf[Kerb], Namespace("test"), prefix)
 
     Operator
       .ofCrd[IO, Kerb](cfg, client, new KrbController[IO])
-      .run
+      .withRestart()
   }
 }

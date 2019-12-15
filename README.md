@@ -1,17 +1,18 @@
 # Freya
 
-Freya is a Scala library to implement custom controllers for Kubernetes easily. 
+Freya is a Scala library to implement custom controllers for Kubernetes (K8s) easily. 
 Implementation of custom controller is also known as **Operator Pattern**. 
-Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client).
+Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client) and 
+inspired by `abstract-operator` Java library.
 
 Freya Main features:
 1. Two options to implement your Kubernetes Operator:
     - Custom Resource Definition (CRD) based
     - ConfigMap based
-1. Case Classes as Kubernetes resource specification. 
-    Serialization and deserialization of cases classes is done automatically by Freya and it is powered by
+1. Scala Case Classes as Kubernetes resource specification. 
+    Serialization and deserialization of case classes is done automatically by Freya and it is powered by
     Jackson Scala Module library.
-1. Auto-restart of custom-controller upon k8s api-server disconnect.
+1. Auto-restart of custom controller upon k8s api-server disconnect.
 1. Auto-deployment of CRDs, no YAML files to be written.
 1. Auto-deployment of Json Schema for CRD validation.
 1. Effect management and Functional Programming is powered by Cats-Effect.    
@@ -24,7 +25,9 @@ Freya Main features:
 
 ## How to use
 
-Let's take an example of Kerberos principal list, which needs to be propagated to KDC database. 
+Further in the document, Controller and Operator definitions are used like synonymous.
+
+Let's take an example of some controller like Kerberos principal list, which needs to be propagated to KDC database. 
 
 Using Custom Resource option, our target Custom Resource will look like this:  
 
@@ -71,13 +74,14 @@ Freya does not require to write YAML files for your custom resources definitions
  instances and ConfigMaps at all. CRD in K8s will be created automatically based on case classes you define.
  ConfigMap is a native resource, so no definition needs to be created in Kubernetes at all.
 
-We are not going to create any container with Kerberos server running in it, but just showing how Freya can help to watch 
-our custom resource or ConfigMaps. Particular controller actions to be implemented by controller author. Freya is only
-a facilitator between K8s api-server and your custom controller actions.
+For the sake of example, we are not going to create any container with Kerberos server running in it, but just showing 
+how Freya can help to watch our custom resources or ConfigMaps. Particular controller actions to be implemented by 
+controller author using **fabric8** kubernetes-client. Freya is only a facilitator between K8s api-server and 
+your custom controller actions.
 
 #### Implementation Steps with Freya
 
-There are 3 steps to implement CRD/ConfigMap Operator:
+There are 3 steps to implement CRD or ConfigMap Operator:
 
 1 . Define resource specification as a hierarchy of case classes. Let's design above Kerberos spec as two 
 case classes `Kerb` and `Principal`
@@ -88,14 +92,14 @@ final case class Kerb(realm: String, principals: List[Principal])
 ```
 
 2 . Implement your actions for Add, Modify, Delete events by extending
-`io.github.novakovalexey.k8soperator.Controller` abstract class:
+`freya.Controller` abstract class:
 
 Crd Controller option:
 
 ```scala
 import com.typesafe.scalalogging.LazyLogging
 import cats.effect.ConcurrentEffect
-import freya.Controller
+import freya.{Controller, Metadata}
 
 class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
   extends Controller[F, Kerb] with LazyLogging {
@@ -117,19 +121,21 @@ class KerbController[F[_]](implicit F: ConcurrentEffect[F])
 ConfigMap Controller option:
 
 ```scala
+import cats.effect.ConcurrentEffect
 import io.fabric8.kubernetes.api.model.ConfigMap
+import freya.{Controller, CmController}
 
 class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) 
   extends Controller[F, Kerb] with CmController {
 
-  // override onAdd, onDelete, onModify  
+  // override onAdd, onDelete, onModify like in Crd Controller 
 
   override def isSupported(cm: ConfigMap): Boolean =
     cm.getMetadata.getName.startsWith("krb")
 }
 ```
 
-CmController adss `isSupported` method which allows to skip particular ConfigMaps if they do not 
+`CmController` trait adds `isSupported` method, which allows to skip particular ConfigMaps if they do not 
 satisfy to logical condition.
 
 All methods have default implementation as  `F.unit`, so override only necessary methods for your custom controller.
@@ -146,8 +152,8 @@ Crd Operator option:
 ```scala
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
-
-import scala.concurrent.ExecutionContext
+import freya.K8sNamespace.Namespace
+import freya.{Operator, CrdConfig}
 
 object KerbCrdOperator extends IOApp {
   implicit val cs: ContextShift[IO] = contextShift
@@ -166,6 +172,11 @@ object KerbCrdOperator extends IOApp {
 ConfigMap Operator option:
 
 ```scala
+import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
+import io.fabric8.kubernetes.client.DefaultKubernetesClient
+import freya.K8sNamespace.Namespace
+import freya.{ConfigMapConfig, Operator}
+
 object KerbCmOperator extends IOApp {
   implicit val cs: ContextShift[IO] = contextShift
 
@@ -182,7 +193,97 @@ object KerbCmOperator extends IOApp {
 }
 ```
 
-`run` method on Operator type returns an `IO[ExitCode]`,
- which is running a web-socket client for Kubernetes api-server. Operator is watching for events with `Kerb` kind
- and apiGroup `io.myorg.kerboperator/v1` in case of CRD option or ConfigMap with label `io.myorg.kerboperator/kind=Kerb`
- in case of ConfigMap Operator option.
+Operator's `run` method returns an `IO[ExitCode]`, which is running a web-socket connection to Kubernetes api-server.
+Returned `IO` is a long-running task, which terminates only if K8s api-server closes client connection.   
+Running Operator is watching for events with `Kerb` kind and apiGroup `io.myorg.kerboperator/v1` in case of CRD Operator or 
+ConfigMap with label `io.myorg.kerboperator/kind=Kerb` in case of ConfigMap Operator.
+
+## Configuration
+
+Crd Operator:
+
+```scala
+import freya.CrdConfig
+import freya.K8sNamespace.Namespace
+import freya.AdditionalPrinterColumn
+
+CrdConfig(
+  // CRD kind to register and watch
+  forKind = classOf[Kerb], 
+  // namespace to watch for events 
+  namespace = Namespace("test"), 
+  // CRD api prefix 
+  prefix = "io.myorg.kerboperator",
+  // Check whether HTTP API available on startup. See details in Scala docs  
+  checkK8sOnStartup = true, 
+  // if None, then kind name is taken from case class name, i.e. Kerb
+  customKind = Some("Kerberos"),
+  // deploy CRD on startup, if no CRD is found in K8s
+  deployCrd = true,
+  // short names for CRD when using kubectl, like kubectl get kr (instead of kerb) 
+  shortNames = List("kr"),
+  // plural name for CRD when using kubectl
+  pluralName = "kerbs",
+  // columns to be printed when using kubectl
+  additionalPrinterColumns = List(
+    AdditionalPrinterColumn(name = "realm", `type` = "string", jsonPath = "realm")
+  )
+)
+```
+
+ConfigMap Operator:
+
+```scala
+import freya.ConfigMapConfig
+import freya.K8sNamespace.AllNamespaces
+
+ConfigMapConfig(
+  // ConfigMap label value to watch for event
+  forKind = classOf[Kerb], 
+  // namespace to watch for events
+  namespace = AllNamespaces, 
+  // CRD api prefix 
+  prefix = "io.myorg.kerboperator",
+  // Check whether HTTP API available on startup. See details in Scala docs  
+  checkK8sOnStartup = true, 
+  // if None, then `kind` name is a case class name, i.e. Kerb
+  customKind = Some("Kerberos")
+)
+```
+
+## Restart configuration
+
+Operator can be launched with restart configuration. In case Operator web-socket connection
+is closed, then it will be restarted according to `Retry` configuration.
+
+### Retry with progressive delay
+
+```scala
+import freya.Retry.Infinite
+import freya.Operator
+import scala.concurrent.duration._
+
+Operator
+  .ofCrd[IO, Kerb](cfg, client, new KrbController[IO])
+   .withRestart(retry = Infinite(1.second, multiplier = 2))
+```
+
+`Infinity` type will restart operator infinitely making first delay of 2 seconds,
+then next delay will be calculated as `previous delay * multiplier`. Above configuration will lead to
+the following delay numbers: 1 sec, 2 sec, 4 sec, 8 sec ans so on.
+
+### Retry with fixed number restarts
+
+```scala
+import freya.Retry.Times
+import freya.Operator
+import scala.concurrent.duration._
+
+Operator
+  .ofCrd[IO, Kerb](cfg, client, new KrbController[IO])
+   .withRestart(retry = Times(maxRetries = 3, 2.seconds, multiplier = 2))
+```
+
+Above configuration will lead to the following delay numbers: 2 sec, 4 sec and 8 sec.
+
+## Deploy JSON Schema

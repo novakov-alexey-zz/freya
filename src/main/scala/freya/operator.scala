@@ -6,6 +6,8 @@ import cats.implicits._
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.typesafe.scalalogging.LazyLogging
 import freya.Controller.ConfigMapController
+import freya.OperatorCfg.Crd
+import freya.Retry.{Infinite, Times}
 import freya.errors.OperatorError
 import freya.internal.AnsiColors._
 import freya.internal.OperatorUtils._
@@ -39,25 +41,25 @@ object ConfigMapWatchMaker {
 }
 
 trait CrdDeployer[F[_], T] {
-  def deployCrd(client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]): F[CustomResourceDefinition]
+  def deployCrd(client: KubernetesClient, cfg: Crd[T], isOpenShift: Option[Boolean]): F[CustomResourceDefinition]
 }
 
 object CrdDeployer {
   implicit def deployer[F[_]: Sync, T]: CrdDeployer[F, T] =
-    (client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]) =>
+    (client: KubernetesClient, cfg: Crd[T], isOpenShift: Option[Boolean]) =>
       Deployer.deployCrd(client, cfg, isOpenShift)
 }
 
 object Operator extends LazyLogging {
 
   def ofCrd[F[_], T](
-    cfg: CrdConfig[T],
+    cfg: Crd[T],
     client: F[KubernetesClient],
     controller: Controller[F, T]
   )(implicit @unused F: ConcurrentEffect[F], W: CrdWatchMaker[F, T], D: CrdDeployer[F, T]): Operator[F, T] =
     ofCrd[F, T](cfg, client)((_: CrdHelper[F, T]) => controller)
 
-  def ofCrd[F[_], T](cfg: CrdConfig[T], client: F[KubernetesClient])(
+  def ofCrd[F[_], T](cfg: Crd[T], client: F[KubernetesClient])(
     controller: CrdHelper[F, T] => Controller[F, T]
   )(implicit F: ConcurrentEffect[F], W: CrdWatchMaker[F, T], D: CrdDeployer[F, T]): Operator[F, T] = {
 
@@ -87,13 +89,13 @@ object Operator extends LazyLogging {
   }
 
   def ofConfigMap[F[_]: ConcurrentEffect, T](
-    cfg: ConfigMapConfig[T],
+    cfg: OperatorCfg.ConfigMap[T],
     client: F[KubernetesClient],
     controller: ConfigMapController[F, T]
   )(implicit W: ConfigMapWatchMaker[F, T]): Operator[F, T] =
     ofConfigMap[F, T](cfg, client)((_: ConfigMapHelper[F, T]) => controller)
 
-  def ofConfigMap[F[_], T](cfg: ConfigMapConfig[T], client: F[KubernetesClient])(
+  def ofConfigMap[F[_], T](cfg: OperatorCfg.ConfigMap[T], client: F[KubernetesClient])(
     controller: ConfigMapHelper[F, T] => ConfigMapController[F, T]
   )(implicit F: ConcurrentEffect[F], W: ConfigMapWatchMaker[F, T]): Operator[F, T] = {
 

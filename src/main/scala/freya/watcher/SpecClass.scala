@@ -2,7 +2,7 @@ package freya.watcher
 
 import io.fabric8.kubernetes.client.CustomResource
 
-class InfoClass[T] extends CustomResource {
+class SpecClass[T] extends CustomResource {
   private var spec: T = _
 
   def getSpec: T = spec

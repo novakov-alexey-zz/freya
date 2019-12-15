@@ -6,8 +6,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.typesafe.scalalogging.LazyLogging
 import freya.internal.AnsiColors._
 import freya.internal.api.CrdApi
-import freya.watcher.InfoClass
-import freya.{AdditionalPrinterColumn, CrdConfig}
+import freya.watcher.SpecClass
+import freya.{AdditionalPrinterColumn, OperatorCfg}
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.api.model.apiextensions._
 import io.fabric8.kubernetes.client.utils.Serialization
@@ -20,35 +20,15 @@ private[freya] object Deployer extends LazyLogging {
 
   def deployCrd[F[_]: Sync, T](
     client: KubernetesClient,
-    cfg: CrdConfig[T],
+    cfg: OperatorCfg.Crd[T],
     isOpenShift: Option[Boolean]
-  ): F[CustomResourceDefinition] =
-    initCrd[F, T](
-      client,
-      cfg.prefix,
-      cfg.getKind,
-      cfg.shortNames,
-      cfg.getPluralCaseInsensitive,
-      cfg.additionalPrinterColumns,
-      cfg.forKind,
-      isOpenShift
-    )
-
-  private def initCrd[F[_]: Sync, T](
-    client: KubernetesClient,
-    apiPrefix: String,
-    kind: String,
-    shortNames: List[String],
-    pluralName: String,
-    additionalPrinterColumns: List[AdditionalPrinterColumn],
-    infoClass: Class[T],
-    isOpenshift: Option[Boolean]
   ): F[CustomResourceDefinition] =
     for {
       _ <- Sync[F].delay(Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false))
 
+      kind = cfg.getKind
       crds <- Sync[F].delay(
-        CrdApi.list(client).filter(p => kind == p.getSpec.getNames.getKind && apiPrefix == p.getSpec.getGroup)
+        CrdApi.list(client).filter(p => kind == p.getSpec.getNames.getKind && cfg.prefix == p.getSpec.getGroup)
       )
 
       crd <- crds match {
@@ -58,23 +38,27 @@ private[freya] object Deployer extends LazyLogging {
               .info(s"CustomResourceDefinition for $kind has been found in the K8s, so we are skipping its creation.")
           ) *>
               h.pure[F]
-        case Nil =>
+        case Nil if cfg.deployCrd =>
           createCrd[F, T](
             client,
-            apiPrefix,
+            cfg.prefix,
             kind,
-            shortNames,
-            pluralName,
-            additionalPrinterColumns,
-            infoClass,
-            isOpenshift
+            cfg.shortNames,
+            cfg.getPluralCaseInsensitive,
+            cfg.additionalPrinterColumns,
+            cfg.forKind,
+            isOpenShift
+          )
+        case _ =>
+          Sync[F].raiseError[CustomResourceDefinition](
+            new RuntimeException(s"CustomResourceDefinition for $kind no found. Auto-deploy is disabled.")
           )
       }
 
       _ <- Sync[F].delay {
         // register the new crd for json serialization
-        val apiVersion = s"$apiPrefix/${crd.getSpec.getVersion}"
-        KubernetesDeserializer.registerCustomKind(apiVersion, kind, classOf[InfoClass[_]])
+        val apiVersion = s"${cfg.prefix}/${crd.getSpec.getVersion}"
+        KubernetesDeserializer.registerCustomKind(apiVersion, kind, classOf[SpecClass[_]])
         KubernetesDeserializer.registerCustomKind(
           apiVersion,
           s"${kind}List",

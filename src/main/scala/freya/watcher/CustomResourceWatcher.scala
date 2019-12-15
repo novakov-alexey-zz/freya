@@ -12,13 +12,13 @@ import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 
 final case class CrdWatcherContext[F[_]: ConcurrentEffect, T](
-  ns: K8sNamespace,
-  kind: String,
-  controller: Controller[F, T],
-  convertCr: InfoClass[T] => Either[Throwable, (T, Metadata)],
-  channel: Channel[F, T],
-  client: KubernetesClient,
-  crd: CustomResourceDefinition
+                                                               ns: K8sNamespace,
+                                                               kind: String,
+                                                               controller: Controller[F, T],
+                                                               convertCr: SpecClass[T] => Either[Throwable, (T, Metadata)],
+                                                               channel: Channel[F, T],
+                                                               client: KubernetesClient,
+                                                               crd: CustomResourceDefinition
 )
 
 class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContext[F, T])
@@ -38,11 +38,11 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContex
   }
 
   protected[freya] def registerWatcher(
-    watchable: Watchable[Watch, Watcher[InfoClass[T]]]
+    watchable: Watchable[Watch, Watcher[SpecClass[T]]]
   ): F[(Consumer, ConsumerSignal[F])] = {
-    val watch = Sync[F].delay(watchable.watch(new Watcher[InfoClass[T]]() {
+    val watch = Sync[F].delay(watchable.watch(new Watcher[SpecClass[T]]() {
 
-      override def eventReceived(action: Watcher.Action, info: InfoClass[T]): Unit = {
+      override def eventReceived(action: Watcher.Action, info: SpecClass[T]): Unit = {
         logger.debug(s"Custom resource in namespace $targetNamespace was $action\nCR:\n$info")
 
         val converted = context.convertCr(info).leftMap[OperatorError[T]](t => ParseResourceError[T](action, t, info))

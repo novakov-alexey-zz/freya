@@ -4,6 +4,9 @@ import java.util.concurrent.ConcurrentHashMap
 
 import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
 import freya.Controller.ConfigMapController
+import freya.K8sNamespace.{AllNamespaces, Namespace}
+import freya.OperatorCfg.Crd
+import freya.Retry.Times
 import freya.generators.arbitrary
 import freya.internal.resource.ConfigMapParser
 import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
@@ -36,7 +39,8 @@ class OperatorsTest
     with BeforeAndAfter {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
-  val cfg: CrdConfig[Kerb] = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
+
+  val cfg = Crd(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
   val server = new KubernetesServer(false, false)
 
   before {
@@ -78,7 +82,7 @@ class OperatorsTest
       }
 
   implicit def crdWatch[F[_]: ConcurrentEffect, T](
-    implicit watchable: Watchable[Watch, Watcher[InfoClass[T]]]
+    implicit watchable: Watchable[Watch, Watcher[SpecClass[T]]]
   ): CrdWatchMaker[F, T] =
     (context: CrdWatcherContext[F, T]) =>
       new CustomResourceWatcher(context) {
@@ -87,23 +91,23 @@ class OperatorsTest
       }
 
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
-    (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
+    (_, _: Crd[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
   def configMapOperator[F[_]: ConcurrentEffect](
     controller: ConfigMapController[F, Kerb]
   ): (Operator[F, Kerb], mutable.Set[Watcher[ConfigMap]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
-    val cfg = ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
+    val cfg = OperatorCfg.ConfigMap(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
 
     Operator.ofConfigMap[F, Kerb](cfg, client[F], controller) -> singleWatcher
   }
 
   def crdOperator[F[_]: ConcurrentEffect](
     controller: Controller[F, Kerb]
-  ): (Operator[F, Kerb], mutable.Set[Watcher[InfoClass[Kerb]]]) = {
-    val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, InfoClass[Kerb]]
-    implicit val watchable: Watchable[Watch, Watcher[InfoClass[Kerb]]] = fakeWatchable
+  ): (Operator[F, Kerb], mutable.Set[Watcher[SpecClass[Kerb]]]) = {
+    val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, SpecClass[Kerb]]
+    implicit val watchable: Watchable[Watch, Watcher[SpecClass[Kerb]]] = fakeWatchable
 
     Operator.ofCrd[F, Kerb](cfg, client[F], controller) -> singleWatcher
   }
@@ -150,7 +154,7 @@ class OperatorsTest
       (action, crd, close) =>
         //when
         if (close)
-          closeCurrentWatcher[InfoClass[Kerb]](singleWatcher, oldWatcher)
+          closeCurrentWatcher[SpecClass[Kerb]](singleWatcher, oldWatcher)
 
         oldWatcher = singleWatcher.head
 

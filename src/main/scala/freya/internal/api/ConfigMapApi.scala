@@ -2,10 +2,11 @@ package freya.internal.api
 
 import java.lang
 
+import freya.K8sNamespace
+import freya.K8sNamespace.AllNamespaces
 import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapList}
 import io.fabric8.kubernetes.client.dsl.{FilterWatchListDeletable, FilterWatchListMultiDeletable}
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch, Watcher}
-import freya.{AllNamespaces, K8sNamespace}
 
 import scala.jdk.CollectionConverters._
 

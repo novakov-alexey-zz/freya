@@ -34,12 +34,12 @@ object ObjectMetaTest {
 
 object InfoClass {
 
-  def gen[T: Arbitrary](kind: String): Gen[InfoClass[T]] =
+  def gen[T: Arbitrary](kind: String): Gen[SpecClass[T]] =
     for {
       spec <- arbitrary[T]
       meta <- ObjectMetaTest.gen
     } yield {
-      val ic = new InfoClass[T]
+      val ic = new SpecClass[T]
       ic.setApiVersion("io.github.novakov-alexey/v1")
       ic.setKind(kind)
       ic.setSpec(spec)

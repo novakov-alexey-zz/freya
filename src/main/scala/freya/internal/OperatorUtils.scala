@@ -3,7 +3,8 @@ package freya.internal
 import java.net.URL
 
 import com.typesafe.scalalogging.LazyLogging
-import freya.{CurrentNamespace, K8sNamespace, Namespace}
+import freya.K8sNamespace
+import freya.K8sNamespace.{CurrentNamespace, Namespace}
 import io.fabric8.kubernetes.client.ConfigBuilder
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
 import okhttp3.{HttpUrl, Request}

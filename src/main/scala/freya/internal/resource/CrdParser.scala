@@ -3,7 +3,7 @@ package freya.internal.resource
 import cats.effect.Sync
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import freya.watcher.InfoClass
+import freya.watcher.SpecClass
 
 import scala.util.Try
 
@@ -16,7 +16,7 @@ private[freya] class CrdParser {
   private val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
 
-  def parse[T](clazz: Class[T], info: InfoClass[T]): Either[Throwable, T] = {
+  def parse[T](clazz: Class[T], info: SpecClass[T]): Either[Throwable, T] = {
     val spec = Try(mapper.convertValue(info.getSpec, clazz)).toEither
 
     spec match {
