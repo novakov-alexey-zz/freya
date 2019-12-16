@@ -1,5 +1,7 @@
 # Freya
 
+[![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fhttps%3A%2F%2Fgithub.com%2Fnovakov-alexey%2Ffreya%2Fbadge&style=popout)](https://actions-badge.atrox.dev/https://github.com/novakov-alexey/freya/goto)
+
 Freya is a Scala library to implement custom controllers for Kubernetes (K8s) easily. 
 Implementation of custom controller is also known as **Operator Pattern**. 
 Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client) and 
