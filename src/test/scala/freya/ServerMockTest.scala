@@ -15,6 +15,7 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatest.{BeforeAndAfter, DoNotDiscover, Ignore}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
+// Ignoring, because mock library has bug related to watchers.
 @DoNotDiscover
 @Ignore
 class ServerMockTest
@@ -30,6 +31,14 @@ class ServerMockTest
 
   val server = new KubernetesServer(false, true)
 
+  before {
+    server.before()
+  }
+
+  after {
+    server.after()
+  }
+
   property("Crd operator handles different events") {
     val client = server.getClient
     val cfg = OperatorCfg.Crd(classOf[Kerb], AllNamespaces, prefix)
@@ -39,7 +48,7 @@ class ServerMockTest
     val cancelable = startOperator(operator)
     val crd = client.customResourceDefinitions.withName("kerbs.io.github.novakov-alexey").get()
     val krbClient = client
-      .customResources(crd, classOf[SpecClass[Kerb]], classOf[SpecList[Kerb]], classOf[SpecDoneable[Kerb]])
+      .customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
 
     forAll(WatcherAction.gen, InfoClass.gen[Kerb](cfg.getKind)) { (action, ic) =>
       val ns = new NamespaceBuilder().withNewMetadata.withName(ic.getMetadata.getNamespace).endMetadata.build
@@ -82,13 +91,5 @@ class ServerMockTest
     }
 
     cancelable.unsafeRunSync()
-  }
-
-  before {
-    server.before()
-  }
-
-  after {
-    server.after()
   }
 }

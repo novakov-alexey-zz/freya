@@ -5,5 +5,5 @@ import freya.watcher.SpecClass
 import io.fabric8.kubernetes.client.CustomResourceList
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 
-@JsonDeserialize(using = classOf[KubernetesDeserializer]) private[freya] class SpecList[V]
-    extends CustomResourceList[SpecClass[V]] {}
+@JsonDeserialize(using = classOf[KubernetesDeserializer]) private[freya] class SpecList
+    extends CustomResourceList[SpecClass] {}

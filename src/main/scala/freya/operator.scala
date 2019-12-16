@@ -21,6 +21,8 @@ import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.utils.Serialization
 
 import scala.annotation.unused
+import scala.concurrent.duration.DurationLong
+import scala.util.Random
 
 trait CrdWatchMaker[F[_], T] {
   def make(context: CrdWatcherContext[F, T]): WatcherMaker[F]
@@ -176,8 +178,9 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           F.delay[Retry](Times(maxRetries - 1, Retry.nextDelay(delay, multiplier), multiplier)),
           maxRetries.toString
         )
-      case Infinite(delay, multiplier) =>
-        (true, delay, F.delay[Retry](Infinite(Retry.nextDelay(delay, multiplier), multiplier)), "infinite")
+      case i @ Infinite(minDelay, maxDelay) =>
+        val minSeconds = minDelay.toSeconds
+        (true, (Random.nextLong(maxDelay.toSeconds - minSeconds) + minSeconds).seconds, F.delay[Retry](i), "infinite")
     }
     if (canRestart)
       for {

@@ -48,7 +48,7 @@ class ConfigMapHelper[F[_]: Effect, T](
 
 object CrdHelper {
 
-  def convertCr[T](kind: Class[T], parser: CrdParser)(info: SpecClass[T]): Either[Throwable, (T, Metadata)] =
+  def convertCr[T](kind: Class[T], parser: CrdParser)(info: SpecClass): Either[Throwable, (T, Metadata)] =
     for {
       spec <- parser.parse(kind, info)
       meta <- Right(Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))

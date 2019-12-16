@@ -15,7 +15,7 @@ final case class CrdWatcherContext[F[_]: ConcurrentEffect, T](
   ns: K8sNamespace,
   kind: String,
   controller: Controller[F, T],
-  convertCr: SpecClass[T] => Either[Throwable, (T, Metadata)],
+  convertCr: SpecClass => Either[Throwable, (T, Metadata)],
   channel: Channel[F, T],
   client: KubernetesClient,
   crd: CustomResourceDefinition
@@ -38,11 +38,11 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContex
   }
 
   protected[freya] def registerWatcher(
-    watchable: Watchable[Watch, Watcher[SpecClass[T]]]
+    watchable: Watchable[Watch, Watcher[SpecClass]]
   ): F[(Consumer, ConsumerSignal[F])] = {
-    val watch = Sync[F].delay(watchable.watch(new Watcher[SpecClass[T]]() {
+    val watch = Sync[F].delay(watchable.watch(new Watcher[SpecClass]() {
 
-      override def eventReceived(action: Watcher.Action, spec: SpecClass[T]): Unit = {
+      override def eventReceived(action: Watcher.Action, spec: SpecClass): Unit = {
         logger.debug(s"Custom resource in namespace $targetNamespace was $action\nCR spec:\n$spec")
 
         val converted = context.convertCr(spec).leftMap[OperatorError[T]](t => ParseResourceError[T](action, t, spec))

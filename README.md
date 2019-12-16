@@ -3,7 +3,7 @@
 Freya is a Scala library to implement custom controllers for Kubernetes (K8s) easily. 
 Implementation of custom controller is also known as **Operator Pattern**. 
 Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client) and 
-inspired by `abstract-operator` Java library.
+inspired by [abstract-operator](https://github.com/jvm-operators/abstract-operator) Java library.
 
 Freya main features:
 1. Two options to implement your Kubernetes Operator:
@@ -258,7 +258,7 @@ ConfigMap(
 Operator can be launched with restart configuration. In case Operator web-socket connection
 is closed, then it will be restarted according to `Retry` configuration.
 
-### Retry with progressive delay
+### Retry with infinitely with random delay
 
 ```scala
 import cats.effect.IO
@@ -268,12 +268,10 @@ import scala.concurrent.duration._
 
 Operator
   .ofCrd[IO, Kerb](cfg, client, new KrbController[IO])
-   .withRestart(Infinite(delay = 1.second, multiplier = 2))
+   .withRestart(Infinite(minDelay = 1.second, maxDelay = 10.seconds))
 ```
 
-`Infinity` type will restart operator infinitely making first delay of 2 seconds,
-then next delay will be calculated as `previous delay * multiplier`. Above configuration will lead to
-the following delays in seconds: 1, 2, 4, 8 and so on.
+`Infinity` type will restart operator infinitely making random delay between retries within `[minDelay, maxDelay)` time range.
 
 ### Retry with fixed number of restarts
 
@@ -288,7 +286,8 @@ Operator
    .withRestart(Times(maxRetries = 3, delay = 2.seconds, multiplier = 2))
 ```
 
-Above configuration will lead to the following delay in seconds: 2, 4 and 8.
+Above configuration will lead to the following delay in seconds: 2, 4 and 8. `multiplier` is used to 
+calculate next delay by `previous delay * multiplier`.
 
 ## Deploy JSON Schema
 

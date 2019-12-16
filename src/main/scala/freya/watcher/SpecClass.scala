@@ -2,12 +2,12 @@ package freya.watcher
 
 import io.fabric8.kubernetes.client.CustomResource
 
-class SpecClass[T] extends CustomResource {
-  private var spec: T = _ //TODO: should be AnyRef type ?
+class SpecClass extends CustomResource {
+  private var spec: AnyRef = _
 
-  def getSpec: T = spec
+  def getSpec: AnyRef = spec
 
-  def setSpec(spec: T): Unit =
+  def setSpec(spec: AnyRef): Unit =
     this.spec = spec
 
   override def toString: String =

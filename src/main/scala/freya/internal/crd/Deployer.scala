@@ -58,7 +58,7 @@ private[freya] object Deployer extends LazyLogging {
       _ <- Sync[F].delay {
         // register the new crd for json serialization
         val apiVersion = s"${cfg.prefix}/${crd.getSpec.getVersion}"
-        KubernetesDeserializer.registerCustomKind(apiVersion, kind, classOf[SpecClass[_]])
+        KubernetesDeserializer.registerCustomKind(apiVersion, kind, classOf[SpecClass])
         KubernetesDeserializer.registerCustomKind(
           apiVersion,
           s"${kind}List",

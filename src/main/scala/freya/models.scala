@@ -11,7 +11,7 @@ object Retry {
     delay * multiplier.toLong
 
   final case class Times(maxRetries: Int = 1, delay: FiniteDuration = 1.second, multiplier: Int = 1) extends Retry
-  final case class Infinite(delay: FiniteDuration = 1.second, multiplier: Int = 2) extends Retry
+  final case class Infinite(minDelay: FiniteDuration = 1.second, maxDelay: FiniteDuration = 60.seconds) extends Retry
 }
 
 final case class Metadata(name: String, namespace: String)

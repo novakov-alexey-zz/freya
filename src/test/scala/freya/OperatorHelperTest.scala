@@ -32,6 +32,14 @@ class OperatorHelperTest
   val server = new KubernetesServer(false, true)
   val testNs: Namespace = Namespace("test")
 
+  before {
+    server.before()
+  }
+
+  after {
+    server.after()
+  }
+
   property("ConfigMap helper should return current ConfigMaps in all namespaces") {
     testCmHelper(AllNamespaces)
   }
@@ -78,7 +86,7 @@ class OperatorHelperTest
     val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
     val helper = new CrdHelper[IO, Kerb](cfg, client, None, crd, parser)
     val krbClient = client
-      .customResources(crd, classOf[SpecClass[Kerb]], classOf[SpecList[Kerb]], classOf[SpecDoneable[Kerb]])
+      .customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
 
     //when
     krbClient.inNamespace(testNs.value).delete()
@@ -99,7 +107,7 @@ class OperatorHelperTest
         .createOrReplace(ic)
 
       val meta = Metadata(ic.getMetadata.getName, ic.getMetadata.getNamespace)
-      currentCrds += (meta -> ic.getSpec)
+      currentCrds += (meta -> ic.getSpec.asInstanceOf[Kerb])
       //then
       eventually {
         helper.currentResources should be(Right(currentCrds))
@@ -107,13 +115,5 @@ class OperatorHelperTest
     }
 
     krbClient.inNamespace(testNs.value).delete()
-  }
-
-  before {
-    server.before()
-  }
-
-  after {
-    server.after()
   }
 }

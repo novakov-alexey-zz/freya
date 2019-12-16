@@ -16,7 +16,7 @@ private[freya] class CrdParser {
   private val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
 
-  def parse[T](clazz: Class[T], info: SpecClass[T]): Either[Throwable, T] = {
+  def parse[T](clazz: Class[T], info: SpecClass): Either[Throwable, T] = {
     val spec = Try(mapper.convertValue(info.getSpec, clazz)).toEither
 
     spec match {

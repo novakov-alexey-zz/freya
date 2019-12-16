@@ -82,7 +82,7 @@ class OperatorsTest
       }
 
   implicit def crdWatch[F[_]: ConcurrentEffect, T](
-    implicit watchable: Watchable[Watch, Watcher[SpecClass[T]]]
+    implicit watchable: Watchable[Watch, Watcher[SpecClass]]
   ): CrdWatchMaker[F, T] =
     (context: CrdWatcherContext[F, T]) =>
       new CustomResourceWatcher(context) {
@@ -105,9 +105,9 @@ class OperatorsTest
 
   def crdOperator[F[_]: ConcurrentEffect](
     controller: Controller[F, Kerb]
-  ): (Operator[F, Kerb], mutable.Set[Watcher[SpecClass[Kerb]]]) = {
-    val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, SpecClass[Kerb]]
-    implicit val watchable: Watchable[Watch, Watcher[SpecClass[Kerb]]] = fakeWatchable
+  ): (Operator[F, Kerb], mutable.Set[Watcher[SpecClass]]) = {
+    val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, SpecClass]
+    implicit val watchable: Watchable[Watch, Watcher[SpecClass]] = fakeWatchable
 
     Operator.ofCrd[F, Kerb](cfg, client[F], controller) -> singleWatcher
   }
@@ -154,7 +154,7 @@ class OperatorsTest
       (action, crd, close) =>
         //when
         if (close)
-          closeCurrentWatcher[SpecClass[Kerb]](singleWatcher, oldWatcher)
+          closeCurrentWatcher[SpecClass](singleWatcher, oldWatcher)
 
         oldWatcher = singleWatcher.head
 

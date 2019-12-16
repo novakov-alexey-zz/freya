@@ -34,15 +34,15 @@ object ObjectMetaTest {
 
 object InfoClass {
 
-  def gen[T: Arbitrary](kind: String): Gen[SpecClass[T]] =
+  def gen[T: Arbitrary](kind: String): Gen[SpecClass] =
     for {
       spec <- arbitrary[T]
       meta <- ObjectMetaTest.gen
     } yield {
-      val sc = new SpecClass[T]
+      val sc = new SpecClass
       sc.setApiVersion("io.github.novakov-alexey/v1")
       sc.setKind(kind)
-      sc.setSpec(spec)
+      sc.setSpec(spec.asInstanceOf[AnyRef])
       sc.setMetadata(meta)
       sc
     }

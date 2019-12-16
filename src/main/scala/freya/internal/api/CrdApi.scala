@@ -50,14 +50,14 @@ object CrdApi {
 
 class CrdApi(client: KubernetesClient) {
   type Filtered[T] =
-    FilterWatchListMultiDeletable[SpecClass[T], SpecList[T], lang.Boolean, Watch, Watcher[SpecClass[T]]]
+    FilterWatchListMultiDeletable[SpecClass, SpecList, lang.Boolean, Watch, Watcher[SpecClass]]
 
   def in[T](ns: K8sNamespace, crd: CustomResourceDefinition): Filtered[T] = {
-    val _crds = client.customResources(crd, classOf[SpecClass[T]], classOf[SpecList[T]], classOf[SpecDoneable[T]])
+    val _crds = client.customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
     if (AllNamespaces == ns) _crds.inAnyNamespace else _crds.inNamespace(ns.value)
   }
 
-  def list[T](crds: Filtered[T]): List[SpecClass[T]] =
+  def list[T](crds: Filtered[T]): List[SpecClass] =
     crds.list().getItems.asScala.toList
 
 }
