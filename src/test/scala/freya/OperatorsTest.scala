@@ -238,7 +238,7 @@ class OperatorsTest
       }
     }
 
-    singleWatcher.foreach(_.onClose(null))
+    singleWatcher.foreach(_.onClose(new KubernetesClientException("test")))
 
     eventually {
       exitCode.isCompleted should ===(true)

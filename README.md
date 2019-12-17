@@ -81,7 +81,7 @@ how Freya can help to watch our custom resources or ConfigMaps. Particular contr
 controller author using **fabric8** kubernetes-client. Freya is only a facilitator between K8s api-server and 
 your custom controller actions.
 
-#### Implementation Steps with Freya
+### Implementation Steps with Freya
 
 There are 3 steps to implement CRD or ConfigMap Operator:
 
@@ -142,7 +142,7 @@ satisfy to logical condition.
 
 All methods have default implementation as  `F.unit`, so override only necessary methods for your custom controller.
 
-`onInit` - is called before controller is started. In terms *fabric8* client, `onInit` is called before watcher 
+`onInit` - is called before controller is started. In terms **fabric8** client, **onInit** is called before watcher 
 is started to watch for custom resources or config map resources.
 
 `onAdd`, `onDelete`, `onModify` - are called whenever corresponding event is triggered by Kubernetes api-server.
@@ -374,11 +374,11 @@ Operator
 ```
 
 `CrdHelper` provides several properties such as: 
-- `freya.Operator.Crd` - configuration which is passed on operator construction
-- `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
-- `Option[Boolean]` - isOpenShift property
-- `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
-- `freya.resource.CrdParser` - CRD parser to parse `SpecClass#spec` to target `T` kind.
+  - `freya.Operator.Crd` - configuration which is passed on operator construction
+  - `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
+  - `Option[Boolean]` - isOpenShift property
+  - `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
+  - `freya.resource.CrdParser` - CRD parser to parse `SpecClass#spec` to target `T` kind.
 
 ### ConfigMap Helper
 
@@ -388,10 +388,10 @@ Operator
 configuration
 
 Properties:
-- `freya.Operator.ConfigMap` - configuration that which is passed on operator construction 
-- `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
-- `Option[Boolean]` - isOpenShift property
-- `freya.resource.ConfigMapParser` - ConfigMap parser to parse `config` key of data map to target `T` kind
+  - `freya.Operator.ConfigMap` - configuration that which is passed on operator construction 
+  - `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
+  - `Option[Boolean]` - isOpenShift property
+  - `freya.resource.ConfigMapParser` - ConfigMap parser to parse `config` key of data map to target `T` kind
  
 ### fabric8 Kubernetes dependencies
 

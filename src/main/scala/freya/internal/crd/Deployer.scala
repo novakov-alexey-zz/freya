@@ -95,19 +95,7 @@ private[freya] object Deployer extends LazyLogging {
             CrdApi.getCrdBuilder(apiPrefix, kind, shortNames, pluralName)
         }
 
-        additionalPrinterColumns match {
-          case Nil => crdBuilder
-          case _ :: _ =>
-            additionalPrinterColumns.foldLeft(crdBuilder) {
-              case (acc, c) =>
-                acc
-                  .addNewAdditionalPrinterColumn()
-                  .withName(c.name)
-                  .withType(c.columnType)
-                  .withJSONPath(c.jsonPath)
-                  .endAdditionalPrinterColumn
-            }
-        }
+        addColumns(additionalPrinterColumns, crdBuilder)
       }
 
       crd <- Sync[F].delay {
@@ -128,6 +116,25 @@ private[freya] object Deployer extends LazyLogging {
           CrdApi.createOrReplace(client, crd)
       }
     } yield crd
+
+  private def addColumns[T, F[_]: Sync](
+    additionalPrinterColumns: List[AdditionalPrinterColumn],
+    crdBuilder: CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder]
+  ) = {
+    additionalPrinterColumns match {
+      case Nil => crdBuilder
+      case _ :: _ =>
+        additionalPrinterColumns.foldLeft(crdBuilder) {
+          case (acc, c) =>
+            acc
+              .addNewAdditionalPrinterColumn()
+              .withName(c.name)
+              .withType(c.columnType)
+              .withJSONPath(c.jsonPath)
+              .endAdditionalPrinterColumn
+        }
+    }
+  }
 
   private def removeDefaultValues(schema: JSONSchemaProps): JSONSchemaProps =
     Option(schema) match {
