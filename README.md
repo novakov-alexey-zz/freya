@@ -374,11 +374,11 @@ Operator
 ```
 
 `CrdHelper` provides several properties such as: 
-  - `freya.Operator.Crd` - configuration which is passed on operator construction
-  - `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
-  - `Option[Boolean]` - isOpenShift property
-  - `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
-  - `freya.resource.CrdParser` - CRD parser to parse `SpecClass#spec` to target `T` kind.
+-  `freya.Operator.Crd` - configuration which is passed on operator construction
+-  `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
+-  `Option[Boolean]` - isOpenShift property
+-  `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
+-  `freya.resource.CrdParser` - CRD parser to parse `SpecClass#spec` to target `T` kind.
 
 ### ConfigMap Helper
 
@@ -388,10 +388,10 @@ Operator
 configuration
 
 Properties:
-  - `freya.Operator.ConfigMap` - configuration that which is passed on operator construction 
-  - `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
-  - `Option[Boolean]` - isOpenShift property
-  - `freya.resource.ConfigMapParser` - ConfigMap parser to parse `config` key of data map to target `T` kind
+-  `freya.Operator.ConfigMap` - configuration that which is passed on operator construction 
+-  `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
+-  `Option[Boolean]` - isOpenShift property
+-  `freya.resource.ConfigMapParser` - ConfigMap parser to parse `config` key of data map to target `T` kind
  
 ### fabric8 Kubernetes dependencies
 
@@ -410,4 +410,4 @@ should be provided by custom controller runtime, for example `logback-classic`.
 ### Future work
 
 1. Add cross-build for Scala 2.12
-1. Decouple CRD and ConfigMap Operators and make separate Scala modules for them.
+2. Decouple CRD and ConfigMap Operators and make separate Scala modules for them.
