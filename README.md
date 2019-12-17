@@ -22,7 +22,7 @@ Freya main features:
 ## SBT dependency
 
 ```scala
-"io.github.novakov-alexey" %% "freya" % "0.1.0"
+"io.github.novakov-alexey" %% "freya" % "0.1.0" // for Scala 2.13 only at the moment
 ``` 
 
 ## How to use
@@ -410,4 +410,4 @@ should be provided by custom controller runtime, for example `logback-classic`.
 ### Future work
 
 1. Add cross-build for Scala 2.12
-2.Decouple CRD Operator and ConfigMap Operator into separate Scala modules.
+1. Decouple CRD and ConfigMap Operators and make separate Scala modules for them.
