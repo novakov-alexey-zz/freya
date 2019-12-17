@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.watcher.SpecClass
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 private[freya] object CrdParser {
   def apply[F[_]: Sync](): F[CrdParser] =
@@ -22,16 +22,19 @@ private[freya] class CrdParser {
     spec match {
       case Right(s) =>
         if (s == null) { // empty spec
-          try {
+          Try {
             val emptySpec = clazz.getDeclaredConstructor().newInstance()
             Right(emptySpec)
-          } catch {
-            case e: InstantiationException =>
-              val msg = "Failed to parse CRD spec"
-              Left(new RuntimeException(msg, e))
-            case e: IllegalAccessException =>
+          } match {
+            case Success(s) => s
+            case Failure(e: InstantiationException) =>
               val msg = "Failed to instantiate CRD spec"
               Left(new RuntimeException(msg, e))
+            case Failure(e: IllegalAccessException) =>
+              val msg = "Failed to instantiate CRD spec"
+              Left(new RuntimeException(msg, e))
+            case Failure(e) =>
+              Left(new RuntimeException("Failed to parse CRD sec", e))
           }
         } else
           Right(s)

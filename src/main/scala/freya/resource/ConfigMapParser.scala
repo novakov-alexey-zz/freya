@@ -10,7 +10,7 @@ import freya.resource.ConfigMapParser.SpecificationKey
 import io.fabric8.kubernetes.api.model.ConfigMap
 
 import scala.jdk.CollectionConverters._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 private[freya] object ConfigMapParser {
   val SpecificationKey = "config"
@@ -29,16 +29,19 @@ private[freya] class ConfigMapParser extends LazyLogging {
     spec match {
       case Right(s) =>
         if (s == null) { // empty spec
-          try {
+          Try {
             val emptySpec = clazz.getDeclaredConstructor().newInstance()
             Right(emptySpec)
-          } catch {
-            case e: InstantiationException =>
+          } match {
+            case Success(s) => s
+            case Failure(e: InstantiationException) =>
               val msg = "Failed to parse ConfigMap data"
               Left(new RuntimeException(msg, e))
-            case e: IllegalAccessException =>
+            case Failure(e: IllegalAccessException) =>
               val msg = s"Failed to instantiate ConfigMap data as $clazz"
               Left(new RuntimeException(msg, e))
+            case Failure(e) =>
+              Left(new RuntimeException("Failed to parse ConfigMap yaml", e))
           }
         } else
           Right(s)

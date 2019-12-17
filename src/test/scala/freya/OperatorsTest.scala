@@ -62,7 +62,8 @@ class OperatorsTest
       override def watch(watcher: Watcher[U]): Watch = {
         singleWatcher += watcher
 
-        () => singleWatcher -= watcher
+        () =>
+          singleWatcher -= watcher
       }
 
       override def watch(resourceVersion: String, watcher: Watcher[U]): Watch =
@@ -79,7 +80,7 @@ class OperatorsTest
       new ConfigMapWatcher(context) {
         override def watch: F[(Consumer, ConsumerSignal[F])] =
           registerWatcher(watchable)
-      }
+    }
 
   implicit def crdWatch[F[_]: ConcurrentEffect, T](
     implicit watchable: Watchable[Watch, Watcher[SpecClass]]
@@ -88,7 +89,7 @@ class OperatorsTest
       new CustomResourceWatcher(context) {
         override def watch: F[(Consumer, ConsumerSignal[F])] =
           registerWatcher(watchable)
-      }
+    }
 
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (_, _: Crd[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
@@ -145,7 +146,7 @@ class OperatorsTest
 
     //when
     val cancelable = startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
-    var oldWatcher = singleWatcher.head
+    var oldWatcher = getWatcherOrFail(singleWatcher)
 
     //then
     controller.initialized should ===(true)
@@ -156,7 +157,7 @@ class OperatorsTest
         if (close)
           closeCurrentWatcher[SpecClass](singleWatcher, oldWatcher)
 
-        oldWatcher = singleWatcher.head
+        oldWatcher = getWatcherOrFail(singleWatcher)
 
         //when
         singleWatcher.foreach(_.eventReceived(action, crd))
@@ -180,7 +181,7 @@ class OperatorsTest
 
     //when
     val cancelable = startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
-    var currentWatcher = singleWatcher.head
+    var currentWatcher = getWatcherOrFail(singleWatcher)
 
     //then
     controller.initialized should ===(true)
@@ -191,7 +192,7 @@ class OperatorsTest
       if (close)
         closeCurrentWatcher[ConfigMap](singleWatcher, currentWatcher)
 
-      currentWatcher = singleWatcher.head
+      currentWatcher = getWatcherOrFail(singleWatcher)
 
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
@@ -208,6 +209,9 @@ class OperatorsTest
     cancelable.unsafeRunSync()
   }
 
+  private def getWatcherOrFail[T](set: mutable.Set[Watcher[T]]): Watcher[T] =
+    set.headOption.getOrElse(fail("there must be at least one watcher"))
+
   property("Operators restarts n times in case of failure") {
     //given
     val controller = new ConfigMapTestController[IO]
@@ -217,13 +221,13 @@ class OperatorsTest
     //when
     val exitCode = operator.withRestart(Times(maxRestarts, 0.seconds)).unsafeToFuture()
 
-    var currentWatcher = singleWatcher.head
+    var currentWatcher = getWatcherOrFail(singleWatcher)
     val parser = ConfigMapParser[IO]().unsafeRunSync()
 
     forAll(WatcherAction.gen, CM.gen[Kerb], minSuccessful(maxRestarts)) { (action, cm) =>
       //when
       closeCurrentWatcher(singleWatcher, currentWatcher)
-      currentWatcher = singleWatcher.head
+      currentWatcher = getWatcherOrFail(singleWatcher)
       singleWatcher.foreach(_.eventReceived(action, cm))
 
       //then
@@ -255,13 +259,14 @@ class OperatorsTest
 
   private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T]) = {
     singleWatcher.foreach { w =>
-      val ex = if (arbitrary[Boolean].sample.get) new KubernetesClientException("test exception") else null
+      val raiseException = arbitrary[Boolean].sample.getOrElse(fail("failed to generate boolean"))
+      val ex = if (raiseException) new KubernetesClientException("test exception") else null
       w.onClose(ex)
     }
     eventually {
       //then
       singleWatcher.size should ===(1)
-      currentWatcher should !==(singleWatcher.head) // waiting until the Set with single watcher is updated with new watcher after Operator restart
+      currentWatcher should !==(getWatcherOrFail(singleWatcher)) // waiting until the Set with single watcher is updated with new watcher after Operator restart
     }
   }
 

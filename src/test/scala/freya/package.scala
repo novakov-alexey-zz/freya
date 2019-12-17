@@ -21,6 +21,8 @@ package object freya {
         t.printStackTrace()
     }
 
-  def parseCM(parser: ConfigMapParser, cm: ConfigMap): Kerb =
-    parser.parseCM(classOf[Kerb], cm).getOrElse(sys.error("Error when transforming ConfigMap to Krb2"))._1
+  def parseCM(parser: ConfigMapParser, cm: ConfigMap): Kerb = {
+    val (kerb, _) = parser.parseCM(classOf[Kerb], cm).getOrElse(sys.error("Error when transforming ConfigMap to Krb2"))
+    kerb
+  }
 }

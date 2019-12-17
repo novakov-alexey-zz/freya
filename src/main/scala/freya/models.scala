@@ -15,7 +15,7 @@ object Retry {
 }
 
 final case class Metadata(name: String, namespace: String)
-final case class AdditionalPrinterColumn(name: String, `type`: String, jsonPath: String)
+final case class AdditionalPrinterColumn(name: String, columnType: String, jsonPath: String)
 
 sealed abstract class OperatorCfg[T](
   val forKind: Class[T],

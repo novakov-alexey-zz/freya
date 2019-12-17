@@ -54,21 +54,21 @@ object CrdDeployer {
 
 object Operator extends LazyLogging {
 
-  def ofCrd[F[_], T](
-    cfg: Crd[T],
-    client: F[KubernetesClient],
-    controller: Controller[F, T]
-  )(implicit @unused F: ConcurrentEffect[F], W: CrdWatchMaker[F, T], D: CrdDeployer[F, T]): Operator[F, T] =
+  def ofCrd[F[_], T](cfg: Crd[T], client: F[KubernetesClient], controller: Controller[F, T])(
+    implicit @unused F: ConcurrentEffect[F],
+    watchMaker: CrdWatchMaker[F, T],
+    deployer: CrdDeployer[F, T]
+  ): Operator[F, T] =
     ofCrd[F, T](cfg, client)((_: CrdHelper[F, T]) => controller)
 
   def ofCrd[F[_], T](cfg: Crd[T], client: F[KubernetesClient])(
     controller: CrdHelper[F, T] => Controller[F, T]
-  )(implicit F: ConcurrentEffect[F], W: CrdWatchMaker[F, T], D: CrdDeployer[F, T]): Operator[F, T] = {
+  )(implicit F: ConcurrentEffect[F], watchMaker: CrdWatchMaker[F, T], deployer: CrdDeployer[F, T]): Operator[F, T] = {
 
     val pipeline = for {
       c <- client
       isOpenShift <- checkEnvAndConfig(c, cfg)
-      crd <- D.deployCrd(c, cfg, isOpenShift)
+      crd <- deployer.deployCrd(c, cfg, isOpenShift)
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       parser <- CrdParser()
 
@@ -84,7 +84,7 @@ object Operator extends LazyLogging {
         crd
       )
 
-      w <- F.delay(W.make(context).watch)
+      w <- F.delay(watchMaker.make(context).watch)
     } yield createPipeline(helper, ctl, w)
 
     new Operator[F, T](pipeline)
@@ -94,20 +94,20 @@ object Operator extends LazyLogging {
     cfg: OperatorCfg.ConfigMap[T],
     client: F[KubernetesClient],
     controller: ConfigMapController[F, T]
-  )(implicit W: ConfigMapWatchMaker[F, T]): Operator[F, T] =
+  )(implicit watchMaker: ConfigMapWatchMaker[F, T]): Operator[F, T] =
     ofConfigMap[F, T](cfg, client)((_: ConfigMapHelper[F, T]) => controller)
 
   def ofConfigMap[F[_], T](cfg: OperatorCfg.ConfigMap[T], client: F[KubernetesClient])(
     controller: ConfigMapHelper[F, T] => ConfigMapController[F, T]
-  )(implicit F: ConcurrentEffect[F], W: ConfigMapWatchMaker[F, T]): Operator[F, T] = {
+  )(implicit F: ConcurrentEffect[F], watchMaker: ConfigMapWatchMaker[F, T]): Operator[F, T] = {
 
     val pipeline = for {
-      c <- client
-      isOpenShift <- checkEnvAndConfig(c, cfg)
+      k8sClient <- client
+      isOpenShift <- checkEnvAndConfig(k8sClient, cfg)
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       parser <- ConfigMapParser()
 
-      helper = new ConfigMapHelper[F, T](cfg, c, isOpenShift, parser)
+      helper = new ConfigMapHelper[F, T](cfg, k8sClient, isOpenShift, parser)
       ctl = controller(helper)
       context = ConfigMapWatcherContext(
         cfg.namespace,
@@ -115,22 +115,22 @@ object Operator extends LazyLogging {
         ctl,
         ConfigMapHelper.convertCm(cfg.forKind, parser),
         channel,
-        c,
+        k8sClient,
         Labels.forKind(cfg.getKind, cfg.prefix)
       )
 
-      w <- F.delay(W.make(context).watch)
+      w <- F.delay(watchMaker.make(context).watch)
     } yield createPipeline(helper, ctl, w)
 
     new Operator[F, T](pipeline)
   }
 
   private def createPipeline[T, F[_]: ConcurrentEffect](
-    op: AbstractHelper[F, T],
-    ctl: Controller[F, T],
-    w: F[(Consumer, ConsumerSignal[F])]
+    helper: AbstractHelper[F, T],
+    controller: Controller[F, T],
+    watcher: F[(Consumer, ConsumerSignal[F])]
   ) =
-    OperatorPipeline[F, T](op, w, ctl.onInit())
+    OperatorPipeline[F, T](helper, watcher, controller.onInit())
 
   private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: OperatorCfg[T]): F[Option[Boolean]] =
     for {
@@ -158,8 +158,11 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
 
   def run: F[ExitCode] =
     Resource
-      .make(start)(c => F.delay(c._2.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx")))
-      .use(_._1)
+      .make(start) {
+        case (_, consumer) =>
+          F.delay(consumer.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx"))
+      }
+      .use { case (signal, _) => signal }
       .recoverWith {
         case e =>
           logger.error("Got error while running an operator", e)

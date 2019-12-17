@@ -230,7 +230,7 @@ Crd(
   pluralName = "kerbs",
   // columns to be printed when using kubectl
   additionalPrinterColumns = List(
-    AdditionalPrinterColumn(name = "realm", `type` = "string", jsonPath = "realm")
+    AdditionalPrinterColumn(name = "realm", columnType = "string", jsonPath = "realm")
   )
 )
 ```

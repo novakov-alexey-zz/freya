@@ -2,8 +2,8 @@ package freya.resource
 
 object Labels {
 
-  val OPERATOR_KIND_LABEL = "kind"
+  val OperatorKindLabel = "kind"
 
   def forKind(kind: String, prefix: String): (String, String) =
-    prefix + "/" + OPERATOR_KIND_LABEL -> kind
+    prefix + "/" + OperatorKindLabel -> kind
 }

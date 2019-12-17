@@ -103,7 +103,7 @@ private[freya] object Deployer extends LazyLogging {
                 acc
                   .addNewAdditionalPrinterColumn()
                   .withName(c.name)
-                  .withType(c.`type`)
+                  .withType(c.columnType)
                   .withJSONPath(c.jsonPath)
                   .endAdditionalPrinterColumn
             }
@@ -130,13 +130,13 @@ private[freya] object Deployer extends LazyLogging {
     } yield crd
 
   private def removeDefaultValues(schema: JSONSchemaProps): JSONSchemaProps =
-    schema match {
-      case null => schema
-      case _ =>
+    Option(schema) match {
+      case None => schema
+      case Some(_) =>
         val newSchema = new JSONSchemaPropsBuilder(schema).build()
         newSchema.setDefault(null)
-        if (null != newSchema.getProperties) {
-          for (prop <- newSchema.getProperties.values.asScala) {
+        Option(newSchema.getProperties).foreach { map =>
+          for (prop <- map.values.asScala) {
             removeDefaultValues(prop)
           }
         }
