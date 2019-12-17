@@ -1,6 +1,7 @@
 # Freya
 
 ![](https://github.com/novakov-alexey/freya/workflows/Scala%20CI/badge.svg?branch=master)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/b91f0a22195e499c9d6bafd097c69dd6)](https://www.codacy.com/manual/novakov.alex/freya?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=novakov-alexey/freya&amp;utm_campaign=Badge_Grade)
 
 Freya is a Scala library to implement custom controllers for Kubernetes (K8s) easily. 
 Implementation of custom controller is also known as **Operator Pattern**. 
