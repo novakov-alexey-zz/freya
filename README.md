@@ -344,9 +344,8 @@ At resources/schema/kerb.json:
 ## Deploy CRD manually
 
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
-set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find CRD in K8s during the startup and 
-won't try to deploy them, if CRD is not found. In this case CRD is not found and `deployCrd` is to `false`,
-operator will fail and return failed `IO` value immediately.   
+set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
+won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd` is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work properly without CRD being retrivied from K8s api-server.   
 
 ## Controller Helpers
 
@@ -401,10 +400,14 @@ be passed as parameter to Freya operator is not going to be closed upon controll
 Client should be managed separately, when it comes to shutdown of the operator by some event. 
 
 fabric8 kubernets-client
-has its own pool of HTTP connections and it is powered by OkHttp library internally. This HTTP connection pool has nothing in common 
-with Cats `ContextShift` (or Scala Global ExecutionContext). Cats `ContextShift` is used by Freya to dispatch events from K8s to custom controlller.
+has its own pool of HTTP connections and it is powered by OkHttp library internally. This HTTP connection pool does not use Cats `ContextShift` (or Scala Global ExecutionContext) at all. Cats `ContextShift` is used by Freya to dispatch events from K8s to custom controlller.
 
 ### Logging
 
 Freya is using TypeSafe scala-logging as frontend library. Backend or implementation logging library 
 should be provided by custom controller runtime, for example `logback-classic`.
+
+### Future work
+
+1. Add cross-build for Scala 2.12
+2.Decouple CRD Operator and ConfigMap Operator into separate Scala modules.
