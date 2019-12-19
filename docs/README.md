@@ -26,7 +26,7 @@ Freya main features:
 ## SBT dependency
 
 ```scala
-"io.github.novakov-alexey" %% "freya" % "0.1.0" // for Scala 2.13 only at the moment
+"io.github.novakov-alexey" %% "freya" % "@VERSION@" // for Scala 2.13 only at the moment
 ```
 
 ## How to use
@@ -92,7 +92,7 @@ There are 3 steps to implement CRD or ConfigMap Operator:
 1 . Define resource specification as a hierarchy of case classes. Above Kerberos spec can be designed as two 
 case classes `Kerb` and `Principal`
 
-```scala
+```scala mdoc:reset-object
 final case class Principal(name: String, password: String, value: String = "")
 final case class Kerb(realm: String, principals: List[Principal])
 ```
@@ -102,7 +102,7 @@ final case class Kerb(realm: String, principals: List[Principal])
 
 Crd Controller option:
 
-```scala
+```scala mdoc
 import com.typesafe.scalalogging.LazyLogging
 import cats.effect.ConcurrentEffect
 import freya.{Controller, Metadata}
@@ -126,7 +126,7 @@ class KerbController[F[_]](implicit F: ConcurrentEffect[F])
 
 ConfigMap Controller option:
 
-```scala
+```scala mdoc
 import cats.effect.ConcurrentEffect
 import io.fabric8.kubernetes.api.model.ConfigMap
 import freya.{Controller, CmController}
@@ -155,7 +155,7 @@ is started to watch for custom resources or config map resources.
 
 Crd Operator option: 
 
-```scala
+```scala mdoc
 import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
@@ -178,7 +178,7 @@ object KerbCrdOperator extends IOApp {
 
 ConfigMap Operator option:
 
-```scala
+```scala mdoc
 import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
@@ -210,7 +210,7 @@ native ConfigMap kind with label `io.myorg.kerboperator/kind=Kerb` in case of Co
 
 Crd Operator:
 
-```scala
+```scala mdoc
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.AdditionalPrinterColumn
@@ -237,22 +237,11 @@ CrdConfig(
     AdditionalPrinterColumn(name = "realm", columnType = "string", jsonPath = "realm")
   )
 )
-// res1: CrdConfig[Kerb] = CrdConfig(
-//   class repl.Session$App0$Kerb,
-//   Namespace("test"),
-//   "io.myorg.kerboperator",
-//   true,
-//   Some("Kerberos"),
-//   true,
-//   List("kr"),
-//   "kerbs",
-//   List(AdditionalPrinterColumn("realm", "string", "realm"))
-// )
 ```
 
 ConfigMap Operator:
 
-```scala
+```scala mdoc
 import freya.Configuration.ConfigMapConfig
 import freya.K8sNamespace.AllNamespaces
 
@@ -268,13 +257,6 @@ ConfigMapConfig(
   // if None, then `kind` name is a case class name, i.e. Kerb
   customKind = Some("Kerberos")
 )
-// res2: ConfigMapConfig[Kerb] = ConfigMapConfig(
-//   class repl.Session$App0$Kerb,
-//   all,
-//   "io.myorg.kerboperator",
-//   true,
-//   Some("Kerberos")
-// )
 ```
 
 ## Restart configuration
@@ -286,26 +268,14 @@ is closed, then it will be restarted according to `Retry` configuration.
 
 Having operator values:
 
-```scala
+```scala mdoc
 val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
-// cfg: CrdConfig[Kerb] = CrdConfig(
-//   class repl.Session$App0$Kerb,
-//   Namespace("test"),
-//   "io.myorg.kerboperator",
-//   true,
-//   None,
-//   true,
-//   List(),
-//   "",
-//   List()
-// )
 val client = IO(new DefaultKubernetesClient)
-// client: IO[DefaultKubernetesClient] = Delay(<function0>)
 ```
 
 One can start operator with:
 
-```scala
+```scala mdoc
 import cats.effect.{IO, Timer}
 import freya.Retry.Infinite
 import freya.Operator
@@ -314,63 +284,29 @@ import scala.concurrent.ExecutionContext
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-// timer: Timer[IO] = cats.effect.internals.IOTimer@773cdd7a 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@72111891
 
 Operator
   .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
    .withRestart(Infinite(minDelay = 1.second, maxDelay = 10.seconds))
-// res3: IO[ExitCode] = Bind(
-//   Bind(
-//     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$17324/0x00000008028a1040@39c90ba2,
-//       false
-//     ),
-//     <function1>
-//   ),
-//   freya.Operator$$Lambda$17326/0x00000008028af840@280fc6ec
-// )
 ```
 
 `Infinity` type will restart operator infinitely making random delay between retries within `[minDelay, maxDelay)` time range.
 
 ### Retry with fixed number of restarts
 
-```scala
+```scala mdoc
 import cats.effect.IO
 import freya.Retry.Times
 import freya.Operator
 import scala.concurrent.duration._
 
 val cfg2 = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
-// cfg2: CrdConfig[Kerb] = CrdConfig(
-//   class repl.Session$App0$Kerb,
-//   Namespace("test"),
-//   "io.myorg.kerboperator",
-//   true,
-//   None,
-//   true,
-//   List(),
-//   "",
-//   List()
-// )
 val client2 = IO(new DefaultKubernetesClient)
-// client2: IO[DefaultKubernetesClient] = Delay(<function0>)
 
 Operator
   .ofCrd[IO, Kerb](cfg2, client2, new KerbController[IO])
    .withRestart(Times(maxRetries = 3, delay = 2.seconds, multiplier = 2))
-// res4: IO[ExitCode] = Bind(
-//   Bind(
-//     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$17324/0x00000008028a1040@60db5912,
-//       false
-//     ),
-//     <function1>
-//   ),
-//   freya.Operator$$Lambda$17326/0x00000008028af840@361a2413
-// )
 ```
 
 Above configuration will lead to the following delay in seconds: 2, 4 and 8. `multiplier` is used to 
@@ -440,8 +376,8 @@ within Operator code manually.
 
 ### CRD Helper
 
-```scala
-import freya.CrdHelper  
+```scala mdoc
+import freya.CrdHelper 
 
 val controller = (helper: CrdHelper[IO, Kerb]) =>
   new Controller[IO, Kerb] {
@@ -454,21 +390,10 @@ val controller = (helper: CrdHelper[IO, Kerb]) =>
         )
       }
   }
-// controller: CrdHelper[IO, Kerb] => Controller[IO, Kerb] = <function1>
 
 Operator
   .ofCrd[IO, Kerb](cfg, client)(controller)
   .withRestart()
-// res5: IO[ExitCode] = Bind(
-//   Bind(
-//     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$17324/0x00000008028a1040@366ca7ca,
-//       false
-//     ),
-//     <function1>
-//   ),
-//   freya.Operator$$Lambda$17326/0x00000008028af840@ab8bbd6
-// )
 ```
 
 `CrdHelper` provides several properties such as: 

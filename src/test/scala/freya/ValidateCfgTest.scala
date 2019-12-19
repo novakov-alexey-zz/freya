@@ -1,7 +1,7 @@
 package freya
 
 import freya.K8sNamespace.AllNamespaces
-import freya.OperatorCfg.Crd
+import freya.Configuration.CrdConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -9,7 +9,7 @@ class ValidateCfgTest extends AnyFlatSpec with Matchers {
 
   it should "validate Config" in {
       //given
-      val cfg = Crd(classOf[Kerb], AllNamespaces, prefix)
+      val cfg = CrdConfig(classOf[Kerb], AllNamespaces, prefix)
       //when
       val v = cfg.validate
       //then
@@ -18,7 +18,7 @@ class ValidateCfgTest extends AnyFlatSpec with Matchers {
 
   it should "validate kind" in {
       //given
-      val cfg = Crd(null, AllNamespaces, "")
+      val cfg = CrdConfig(null, AllNamespaces, "")
       //when
       val v = cfg.validate
       //then
@@ -27,14 +27,14 @@ class ValidateCfgTest extends AnyFlatSpec with Matchers {
 
   it should "validate prefix" in {
       //given
-      val cfg = Crd(classOf[Kerb], AllNamespaces, "")
+      val cfg = CrdConfig(classOf[Kerb], AllNamespaces, "")
       //when
       val v = cfg.validate
       //then
       v.isLeft should ===(true)
 
       //given
-      val cfg2 = Crd(classOf[Kerb], AllNamespaces, null)
+      val cfg2 = CrdConfig(classOf[Kerb], AllNamespaces, null)
       //when
       val v2 = cfg2.validate
       //then

@@ -17,7 +17,7 @@ object Retry {
 final case class Metadata(name: String, namespace: String)
 final case class AdditionalPrinterColumn(name: String, columnType: String, jsonPath: String)
 
-sealed abstract class OperatorCfg[T](
+sealed abstract class Configuration[T](
   val forKind: Class[T],
   val prefix: String,
   val namespace: K8sNamespace = AllNamespaces,
@@ -36,9 +36,9 @@ sealed abstract class OperatorCfg[T](
     customKind.getOrElse(forKind.getSimpleName)
 }
 
-object OperatorCfg {
+object Configuration {
 
-  final case class Crd[T](
+  final case class CrdConfig[T](
     override val forKind: Class[T],
     override val namespace: K8sNamespace,
     override val prefix: String,
@@ -48,20 +48,20 @@ object OperatorCfg {
     shortNames: List[String] = List.empty[String],
     pluralName: String = "",
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
-  ) extends OperatorCfg(forKind, prefix, namespace, customKind) {
+  ) extends Configuration(forKind, prefix, namespace, customKind) {
 
     def getPluralCaseInsensitive: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
     }.toLowerCase
   }
 
-  final case class ConfigMap[T](
+  final case class ConfigMapConfig[T](
     override val forKind: Class[T],
     override val namespace: K8sNamespace,
     override val prefix: String,
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None
-  ) extends OperatorCfg(forKind, prefix, namespace, customKind)
+  ) extends Configuration(forKind, prefix, namespace, customKind)
 
 }
 sealed trait K8sNamespace {

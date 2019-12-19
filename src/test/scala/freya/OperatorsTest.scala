@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
 import freya.Controller.ConfigMapController
 import freya.K8sNamespace.{AllNamespaces, Namespace}
-import freya.OperatorCfg.Crd
+import freya.Configuration.CrdConfig
 import freya.Retry.Times
 import freya.generators.arbitrary
 import freya.resource.ConfigMapParser
@@ -40,7 +40,7 @@ class OperatorsTest
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
 
-  val cfg = Crd(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
+  val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
   val server = new KubernetesServer(false, false)
 
   before {
@@ -92,14 +92,14 @@ class OperatorsTest
     }
 
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
-    (_, _: Crd[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
+    (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
   def configMapOperator[F[_]: ConcurrentEffect](
     controller: ConfigMapController[F, Kerb]
   ): (Operator[F, Kerb], mutable.Set[Watcher[ConfigMap]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
-    val cfg = OperatorCfg.ConfigMap(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
+    val cfg = Configuration.ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
 
     Operator.ofConfigMap[F, Kerb](cfg, client[F], controller) -> singleWatcher
   }

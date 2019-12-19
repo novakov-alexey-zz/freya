@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.LazyLogging
 import freya.internal.AnsiColors._
 import freya.internal.api.CrdApi
 import freya.watcher.SpecClass
-import freya.{AdditionalPrinterColumn, OperatorCfg}
+import freya.{AdditionalPrinterColumn, Configuration}
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.api.model.apiextensions._
 import io.fabric8.kubernetes.client.utils.Serialization
@@ -19,9 +19,9 @@ import scala.jdk.CollectionConverters._
 private[freya] object Deployer extends LazyLogging {
 
   def deployCrd[F[_]: Sync, T](
-    client: KubernetesClient,
-    cfg: OperatorCfg.Crd[T],
-    isOpenShift: Option[Boolean]
+                                client: KubernetesClient,
+                                cfg: Configuration.CrdConfig[T],
+                                isOpenShift: Option[Boolean]
   ): F[CustomResourceDefinition] =
     for {
       _ <- Sync[F].delay(Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false))

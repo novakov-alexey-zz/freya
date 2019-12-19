@@ -41,7 +41,7 @@ class ServerMockTest
 
   property("Crd operator handles different events") {
     val client = server.getClient
-    val cfg = OperatorCfg.Crd(classOf[Kerb], AllNamespaces, prefix)
+    val cfg = Configuration.CrdConfig(classOf[Kerb], AllNamespaces, prefix)
 
     val controller = new CrdTestController[IO]
     val operator = Operator.ofCrd[IO, Kerb](cfg, IO.pure(client), controller).run
@@ -70,7 +70,7 @@ class ServerMockTest
 
   property("ConfigMap operator handles different events") {
     val client = server.getClient
-    val cfg = OperatorCfg.ConfigMap(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
+    val cfg = Configuration.ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
     val controller = new ConfigMapTestController[IO]
     val operator = Operator.ofConfigMap[IO, Kerb](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)

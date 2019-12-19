@@ -2,7 +2,7 @@ package freya
 
 import cats.effect.IO
 import freya.K8sNamespace.Namespace
-import freya.OperatorCfg.Crd
+import freya.Configuration.CrdConfig
 import freya.internal.crd.Deployer
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import org.scalatest.BeforeAndAfterAll
@@ -14,7 +14,7 @@ class CrdDeployerTest extends AsyncFlatSpec with Matchers with BeforeAndAfterAll
 
   it should "deploy CRD" in {
       val client = server.getClient
-      val cfg = Crd(classOf[Kerb], Namespace("test"), prefix)
+      val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix)
       val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None)
       crd.map(_.getMetadata.getName should ===(s"${cfg.getPluralCaseInsensitive}.$prefix")).unsafeToFuture()
     }

@@ -2,7 +2,7 @@ package freya
 
 import cats.effect.Effect
 import cats.implicits._
-import freya.OperatorCfg.Crd
+import freya.Configuration.CrdConfig
 import freya.internal.OperatorUtils
 import freya.internal.api.{ConfigMapApi, CrdApi}
 import freya.resource.{ConfigMapParser, CrdParser, Labels}
@@ -13,7 +13,7 @@ import io.fabric8.kubernetes.client.KubernetesClient
 
 import scala.annotation.unused
 
-sealed abstract class AbstractHelper[F[_]: Effect, T](val client: KubernetesClient, val cfg: OperatorCfg[T]) {
+sealed abstract class AbstractHelper[F[_]: Effect, T](val client: KubernetesClient, val cfg: Configuration[T]) {
   val kind: String = cfg.getKind
   val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(client.getNamespace, cfg.namespace)
 }
@@ -24,10 +24,10 @@ object ConfigMapHelper {
 }
 
 class ConfigMapHelper[F[_]: Effect, T](
-  cfg: OperatorCfg.ConfigMap[T],
-  client: KubernetesClient,
-  @unused isOpenShift: Option[Boolean],
-  parser: ConfigMapParser
+                                        cfg: Configuration.ConfigMapConfig[T],
+                                        client: KubernetesClient,
+                                        @unused isOpenShift: Option[Boolean],
+                                        parser: ConfigMapParser
 ) extends AbstractHelper[F, T](client, cfg) {
 
   val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
@@ -56,11 +56,11 @@ object CrdHelper {
 }
 
 class CrdHelper[F[_]: Effect, T](
-  cfg: Crd[T],
-  client: KubernetesClient,
-  @unused val isOpenShift: Option[Boolean],
-  val crd: CustomResourceDefinition,
-  val parser: CrdParser
+                                  cfg: CrdConfig[T],
+                                  client: KubernetesClient,
+                                  @unused val isOpenShift: Option[Boolean],
+                                  val crd: CustomResourceDefinition,
+                                  val parser: CrdParser
 ) extends AbstractHelper[F, T](client, cfg) {
   private val crdApi = new CrdApi(client)
 

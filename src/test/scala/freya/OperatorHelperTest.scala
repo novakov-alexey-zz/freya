@@ -3,7 +3,7 @@ package freya
 import cats.effect.IO
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.K8sNamespace.{AllNamespaces, Namespace}
-import freya.OperatorCfg.Crd
+import freya.Configuration.CrdConfig
 import freya.internal.crd.{Deployer, SpecDoneable, SpecList}
 import freya.resource.{ConfigMapParser, CrdParser}
 import freya.watcher.SpecClass
@@ -50,7 +50,7 @@ class OperatorHelperTest
 
   private def testCmHelper(ns: K8sNamespace) = {
     //given
-    val cfg = OperatorCfg.ConfigMap(classOf[Kerb], ns, prefix)
+    val cfg = Configuration.ConfigMapConfig(classOf[Kerb], ns, prefix)
     val client = server.getClient
     val parser = new ConfigMapParser()
     val helper = new ConfigMapHelper[IO, Kerb](cfg, client, None, parser)
@@ -78,7 +78,7 @@ class OperatorHelperTest
 
   ignore("Crd helper should return current CRDs") {
     //given
-    val cfg = Crd(classOf[Kerb], testNs, prefix, checkK8sOnStartup = false)
+    val cfg = CrdConfig(classOf[Kerb], testNs, prefix, checkK8sOnStartup = false)
     val client = new DefaultKubernetesClient() // mock server does not work properly with CRDs
     Serialization.jsonMapper().registerModule(DefaultScalaModule)
 
