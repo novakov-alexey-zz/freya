@@ -1,13 +1,13 @@
 # Freya
 
 ![](https://github.com/novakov-alexey/freya/workflows/Scala%20CI/badge.svg?branch=master)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/b91f0a22195e499c9d6bafd097c69dd6)](https://www.codacy.com/manual/novakov.alex/freya?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=novakov-alexey/freya&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/b91f0a22195e499c9d6bafd097c69dd6)](https://www.codacy.com/manual/novakov.alex/freya?utm_source=github.com&utm_medium=referral&utm_content=novakov-alexey/freya&utm_campaign=Badge_Grade)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.github.novakov-alexey/freya_2.13/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.github.novakov-alexey/freya_2.13)
 
 <a href="https://typelevel.org/cats/"><img src="https://typelevel.org/cats/img/cats-badge-tiny.png" alt="Cats friendly" /></a> 
 
 Freya is a Scala library to implement custom controllers for Kubernetes (K8s) easily. 
-Implementation of custom controller is also known as **Operator Pattern**. 
+An implementation of custom controller is also known as [Operator Pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/). 
 Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client) and 
 inspired by [abstract-operator](https://github.com/jvm-operators/abstract-operator) Java library.
 
@@ -27,7 +27,7 @@ Freya main features:
 
 ```scala
 "io.github.novakov-alexey" %% "freya" % "0.1.0" // for Scala 2.13 only at the moment
-``` 
+```
 
 ## How to use
 
@@ -52,7 +52,7 @@ spec:
     - name: user2
       password: static
       value: mypass2
-``` 
+```
 
 Using ConfigMap option:
 
@@ -202,7 +202,7 @@ object KerbCmOperator extends IOApp {
 ```
 
 Operator's `run` method returns an `IO[ExitCode]`, which is running a web-socket connection to Kubernetes api-server.
-Returned `IO` value is a long-running and server-like task, which terminates only if K8s api-server closes client connection.   
+Returned `IO` value is a long-running and server-like task, which terminates only if K8s api-server closes client connection.  
 Running Operator is watching for events with `Kerb` kind and apiGroup `io.myorg.kerboperator/v1` in case of CRD Operator or 
 native ConfigMap kind with label `io.myorg.kerboperator/kind=Kerb` in case of ConfigMap Operator.
 
@@ -343,7 +343,7 @@ At resources/schema/kerb.json:
     }
   }
 }
-``` 
+```
 
 ## Deploy CRD manually
 
@@ -378,11 +378,12 @@ Operator
 ```
 
 `CrdHelper` provides several properties such as: 
--  `freya.Operator.Crd` - configuration which is passed on operator construction
--  `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
--  `Option[Boolean]` - isOpenShift property
--  `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
--  `freya.resource.CrdParser` - CRD parser to parse `SpecClass#spec` to target `T` kind.
+
+-   `freya.Operator.Crd` - configuration which is passed on operator construction
+-   `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
+-   `Option[Boolean]` - isOpenShift property
+-   `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
+-   `freya.resource.CrdParser` - CRD parser to parse `SpecClass#spec` to target `T` kind.
 
 ### ConfigMap Helper
 
@@ -392,11 +393,12 @@ Operator
 configuration
 
 Properties:
--  `freya.Operator.ConfigMap` - configuration that which is passed on operator construction 
--  `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
--  `Option[Boolean]` - isOpenShift property
--  `freya.resource.ConfigMapParser` - ConfigMap parser to parse `config` key of data map to target `T` kind
- 
+
+-   `freya.Operator.ConfigMap` - configuration that which is passed on operator construction 
+-   `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
+-   `Option[Boolean]` - isOpenShift property
+-   `freya.resource.ConfigMapParser` - ConfigMap parser to parse `config` key of data map to target `T` kind
+
 ### fabric8 Kubernetes dependencies
 
 Freya depends on two fabric8 modules such as kubernetes-client and kubernetes-model. Client, which needs to
@@ -413,5 +415,5 @@ should be provided by custom controller runtime, for example `logback-classic`.
 
 ### Future work
 
-1. Add cross-build for Scala 2.12
-2. Decouple CRD and ConfigMap Operators and make separate Scala modules for them.
+1.  Add cross-build for Scala 2.12
+2.  Decouple CRD and ConfigMap Operators and make separate Scala modules for them.
