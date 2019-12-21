@@ -43,7 +43,7 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContex
     val watch = Sync[F].delay(watchable.watch(new Watcher[SpecClass]() {
 
       override def eventReceived(action: Watcher.Action, spec: SpecClass): Unit = {
-        logger.debug(s"Custom resource in namespace $targetNamespace was $action\nCR spec:\n$spec")
+        logger.debug(s"Custom resource in namespace ${spec.getMetadata.getNamespace} was $action\nCR spec:\n$spec")
 
         val converted = context.convertCr(spec).leftMap[OperatorError[T]](t => ParseResourceError[T](action, t, spec))
         enqueueAction(action, converted, spec)
