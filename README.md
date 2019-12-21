@@ -25,7 +25,7 @@ Freya main features:
 
 ## Examples
 
-- Kerberos Operator: https://github.com/novakov-alexey/krb-operator 
+-   Kerberos Operator: https://github.com/novakov-alexey/krb-operator 
 
 ## SBT dependency
 
