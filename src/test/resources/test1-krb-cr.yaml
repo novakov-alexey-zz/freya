@@ -12,3 +12,4 @@ spec:
     - name: user2
       password: static
       value: mypass2
+  failInTest: false
