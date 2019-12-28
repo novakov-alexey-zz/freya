@@ -8,4 +8,5 @@ object errors {
   sealed trait OperatorError[T]
   final case class WatcherClosedError[T](e: Option[KubernetesClientException]) extends OperatorError[T]
   final case class ParseResourceError[T](action: Action, t: Throwable, resource: HasMetadata) extends OperatorError[T]
+  final case class ParseReconcileError[T](t: Throwable, resource: HasMetadata) extends OperatorError[T]
 }

@@ -2,7 +2,7 @@ package freya
 
 import java.util.concurrent.ConcurrentHashMap
 
-import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
 import freya.Controller.ConfigMapController
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Configuration.CrdConfig
@@ -94,7 +94,7 @@ class OperatorsTest
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
-  def configMapOperator[F[_]: ConcurrentEffect](
+  def configMapOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
     controller: ConfigMapController[F, Kerb]
   ): (Operator[F, Kerb], mutable.Set[Watcher[ConfigMap]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, ConfigMap]
@@ -104,7 +104,7 @@ class OperatorsTest
     Operator.ofConfigMap[F, Kerb](cfg, client[F], controller) -> singleWatcher
   }
 
-  def crdOperator[F[_]: ConcurrentEffect](
+  def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
     controller: Controller[F, Kerb]
   ): (Operator[F, Kerb], mutable.Set[Watcher[SpecClass]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, SpecClass]

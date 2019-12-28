@@ -12,6 +12,8 @@ abstract class Controller[F[_], T](implicit val F: Sync[F]) {
 
   def onModify(@unused entity: T, @unused metadata: Metadata): F[Unit] = F.unit
 
+  def reconcile(@unused entity: T, @unused metadata: Metadata): F[Unit] = F.unit
+
   def onInit(): F[Unit] = F.unit
 }
 

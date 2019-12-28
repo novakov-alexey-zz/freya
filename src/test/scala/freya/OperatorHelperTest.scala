@@ -2,6 +2,7 @@ package freya
 
 import cats.effect.IO
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import freya.AbstractHelper.Resource
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Configuration.CrdConfig
 import freya.internal.crd.{Deployer, SpecDoneable, SpecList}
@@ -56,9 +57,9 @@ class OperatorHelperTest
     val helper = new ConfigMapHelper[IO, Kerb](cfg, client, None, parser)
 
     val maps = helper.currentConfigMaps
-    maps should be(Right(Map.empty))
+    maps should be(List.empty)
 
-    val currentCms = mutable.Map.empty[Metadata, Kerb]
+    val currentCms = mutable.ArrayBuffer.empty[Resource[Kerb]]
     val namespace = new NamespaceBuilder().withNewMetadata.withName(ns.value).endMetadata.build
     client.namespaces().create(namespace)
 
@@ -70,9 +71,9 @@ class OperatorHelperTest
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
       val spec = parseCM(parser, cm)
 
-      currentCms += (meta -> spec)
+      currentCms += Right((spec, meta))
       //then
-      helper.currentConfigMaps should be(Right(currentCms))
+      helper.currentConfigMaps.toSet should ===(currentCms.toSet)
     }
   }
 

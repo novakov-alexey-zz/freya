@@ -2,8 +2,8 @@ package freya
 
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
 import com.typesafe.scalalogging.LazyLogging
-import freya.K8sNamespace.Namespace
 import freya.Configuration.CrdConfig
+import freya.K8sNamespace.Namespace
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
@@ -36,12 +36,12 @@ object TestCmOperator extends IOApp with TestParams {
 }
 
 object TestCrdOperator extends IOApp with TestParams {
-  implicit val cs: ContextShift[IO] = contextShift
+  implicit val cs: ContextShift[IO] = freya.cs
 
   override def run(args: List[String]): IO[ExitCode] = {
     Operator
       .ofCrd[IO, Kerb](crdCfg, client, new KrbController[IO])
-      .withRestart()
+      .run
   }
 }
 
@@ -59,12 +59,14 @@ object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
       new Controller[IO, Kerb] {
 
         override def onInit(): IO[Unit] =
-          IO(
-            helper.currentResources.fold(
-              errors => logger.error("Failed to get current CRD instances", errors.map(_.getMessage).mkString("\n")),
-              crds => logger.info(s"current ${crdCfg.getKind} CRDs: $crds")
-            )
-          )
+          IO {
+            helper.currentResources.foreach { resource =>
+              resource.fold(
+                error => logger.error("Failed to get current CRD instances", error._1),
+                resource => logger.info(s"current ${crdCfg.getKind} CRDs: ${resource._2}")
+              )
+            }
+          }
       }
 
     Operator
