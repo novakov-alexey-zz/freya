@@ -2,45 +2,39 @@ package freya.watcher
 
 import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
-import freya.AbstractHelper.Resource
 import freya.errors.{OperatorError, ParseResourceError}
 import freya.internal.api.CrdApi
-import freya.watcher.AbstractWatcher.Channel
-import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
+import freya.models.Resource
+import freya.signals.ConsumerSignal
+import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
 import freya.{Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 
 final case class CrdWatcherContext[F[_]: ConcurrentEffect, T](
-  ns: K8sNamespace,
-  kind: String,
-  controller: Controller[F, T],
-  convertCr: SpecClass => Resource[T],
-  channel: Channel[F, T],
-  client: KubernetesClient,
-  crd: CustomResourceDefinition
+                                                               ns: K8sNamespace,
+                                                               kind: String,
+                                                               consumer: Consumer[F, T],
+                                                               convertCr: SpecClass => Resource[T],
+                                                               channel: Channel[F, T],
+                                                               client: KubernetesClient,
+                                                               crd: CustomResourceDefinition
 )
 
 class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContext[F, T])
-    extends AbstractWatcher[F, T, Controller[F, T]](
-      context.ns,
-      context.kind,
-      context.controller,
-      context.channel,
-      context.client.getNamespace
-    ) {
+    extends AbstractWatcher[F, T, Controller[F, T]](context.ns, context.channel, context.client.getNamespace) {
 
   private val crdApi = new CrdApi(context.client)
 
-  override def watch: F[(Consumer, ConsumerSignal[F])] = {
+  override def watch: F[(CloseableWatcher, F[ConsumerSignal])] = {
     val watchable = crdApi.in[T](targetNamespace, context.crd)
     registerWatcher(watchable)
   }
 
   protected[freya] def registerWatcher(
     watchable: Watchable[Watch, Watcher[SpecClass]]
-  ): F[(Consumer, ConsumerSignal[F])] = {
+  ): F[(CloseableWatcher, F[ConsumerSignal])] = {
     val watch = Sync[F].delay(watchable.watch(new Watcher[SpecClass]() {
 
       override def eventReceived(action: Watcher.Action, spec: SpecClass): Unit = {
@@ -59,8 +53,8 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContex
         CustomResourceWatcher.super.onClose(e)
     }))
 
-    Sync[F].delay(logger.info(s"CustomResource watcher running for kinds '$kind'")) *> watch.map(
-      _ -> consumer(context.channel)
+    Sync[F].delay(logger.info(s"CustomResource watcher running for kinds '${context.kind}'")) *> watch.map(
+      _ -> context.consumer.consume(context.channel)
     )
   }
 }

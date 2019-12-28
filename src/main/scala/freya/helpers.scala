@@ -2,23 +2,17 @@ package freya
 
 import cats.effect.Effect
 import cats.syntax.either._
-import freya.AbstractHelper.{Resource, ResourcesList}
 import freya.Configuration.CrdConfig
 import freya.internal.OperatorUtils
 import freya.internal.api.{ConfigMapApi, CrdApi}
+import freya.models.{Resource, ResourcesList}
 import freya.resource.{ConfigMapParser, CrdParser, Labels}
 import freya.watcher.SpecClass
+import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
-import io.fabric8.kubernetes.api.model.{ConfigMap, HasMetadata}
 import io.fabric8.kubernetes.client.KubernetesClient
 
 import scala.annotation.unused
-
-object AbstractHelper {
-  //TODO: move type aliases to common place
-  type Resource[T] = Either[(Throwable, HasMetadata), (T, Metadata)]
-  type ResourcesList[T] = List[Resource[T]]
-}
 
 sealed abstract class AbstractHelper[F[_]: Effect, T](val client: KubernetesClient, val cfg: Configuration[T]) {
   val kind: String = cfg.getKind

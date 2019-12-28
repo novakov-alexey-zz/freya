@@ -7,14 +7,14 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.CrdConfig
 import freya.Controller.ConfigMapController
-import freya.Reconciler.ReconcilerSignal
 import freya.Retry.{Infinite, Times}
 import freya.errors.OperatorError
 import freya.internal.AnsiColors._
 import freya.internal.OperatorUtils._
 import freya.internal.crd.Deployer
 import freya.resource.{ConfigMapParser, CrdParser, Labels}
-import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
+import freya.signals.{ConsumerSignal, OperatorSignal}
+import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.watcher._
 import freya.watcher.actions.OperatorAction
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
@@ -80,7 +80,7 @@ object Operator extends LazyLogging {
       context = CrdWatcherContext(
         cfg.namespace,
         cfg.getKind,
-        ctl,
+        new Consumer[F, T](ctl, cfg.getKind),
         CrdHelper.convertCr(cfg.forKind, parser),
         channel,
         c,
@@ -117,6 +117,7 @@ object Operator extends LazyLogging {
         cfg.namespace,
         cfg.getKind,
         ctl,
+        new Consumer[F, T](ctl, cfg.getKind),
         ConfigMapHelper.convertCm(cfg.forKind, parser),
         channel,
         k8sClient,
@@ -133,7 +134,7 @@ object Operator extends LazyLogging {
   private def createPipeline[T, F[_]: ConcurrentEffect](
     helper: AbstractHelper[F, T],
     controller: Controller[F, T],
-    watcher: F[(Consumer, ConsumerSignal[F])],
+    watcher: F[(CloseableWatcher, F[ConsumerSignal])],
     reconciler: Reconciler[F, T]
   ) =
     OperatorPipeline[F, T](helper, watcher, reconciler, controller.onInit())
@@ -155,15 +156,13 @@ object Operator extends LazyLogging {
 
 private case class OperatorPipeline[F[_], T](
   helper: AbstractHelper[F, T],
-  consumer: F[(Consumer, ConsumerSignal[F])],
+  consumer: F[(CloseableWatcher, F[ConsumerSignal])],
   reconciler: Reconciler[F, T],
   onInit: F[Unit]
 )
 
 class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
-
-  type OperatorSignal = F[Either[ExitCode, ReconcilerSignal]]
 
   def run: F[ExitCode] =
     Resource
@@ -172,7 +171,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           F.delay(consumer.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx"))
       }
       .use {
-        case (signal, _) => signal.map(_.fold(identity, identity))
+        case (signal, _) => signal.fold(identity, identity).pure[F]
       }
       .recoverWith {
         case e =>
@@ -206,7 +205,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
     else ec.pure[F]
   }
 
-  def start: F[(OperatorSignal, Consumer)] =
+  def start: F[(OperatorSignal, CloseableWatcher)] =
     (for {
       pipe <- pipeline
       _ <- F.delay(Serialization.jsonMapper().registerModule(DefaultScalaModule))
@@ -227,7 +226,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
               logger
                 .info(s"${gr}Reconciler $name was started$xx in namespace '$namespace'")
             )
-      operatorSignal <- F.delay(F.race(consumerSignal, reconcilerSignal))
+      operatorSignal <- F.race(consumerSignal, reconcilerSignal)
     } yield (operatorSignal, consumer)).onError {
       case ex: Throwable =>
         F.delay(logger.error(s"Unable to start operator", ex))

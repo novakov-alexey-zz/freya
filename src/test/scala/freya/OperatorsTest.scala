@@ -3,13 +3,14 @@ package freya
 import java.util.concurrent.ConcurrentHashMap
 
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
+import freya.Configuration.CrdConfig
 import freya.Controller.ConfigMapController
 import freya.K8sNamespace.{AllNamespaces, Namespace}
-import freya.Configuration.CrdConfig
 import freya.Retry.Times
 import freya.generators.arbitrary
 import freya.resource.ConfigMapParser
-import freya.watcher.WatcherMaker.{Consumer, ConsumerSignal}
+import freya.signals.ConsumerSignal
+import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.watcher._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
@@ -62,8 +63,7 @@ class OperatorsTest
       override def watch(watcher: Watcher[U]): Watch = {
         singleWatcher += watcher
 
-        () =>
-          singleWatcher -= watcher
+        () => singleWatcher -= watcher
       }
 
       override def watch(resourceVersion: String, watcher: Watcher[U]): Watch =
@@ -78,18 +78,18 @@ class OperatorsTest
   ): ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) =>
       new ConfigMapWatcher(context) {
-        override def watch: F[(Consumer, ConsumerSignal[F])] =
+        override def watch: F[(CloseableWatcher, F[ConsumerSignal])] =
           registerWatcher(watchable)
-    }
+      }
 
   implicit def crdWatch[F[_]: ConcurrentEffect, T](
     implicit watchable: Watchable[Watch, Watcher[SpecClass]]
   ): CrdWatchMaker[F, T] =
     (context: CrdWatcherContext[F, T]) =>
       new CustomResourceWatcher(context) {
-        override def watch: F[(Consumer, ConsumerSignal[F])] =
+        override def watch: F[(CloseableWatcher, F[ConsumerSignal])] =
           registerWatcher(watchable)
-    }
+      }
 
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
@@ -243,7 +243,7 @@ class OperatorsTest
     eventually {
       exitCode.isCompleted should ===(true)
       val ec = Await.result(exitCode, 0.second)
-      ec should ===(ExitCode(AbstractWatcher.WatcherClosedSignal))
+      ec should ===(signals.WatcherClosedSignal)
     }
   }
 

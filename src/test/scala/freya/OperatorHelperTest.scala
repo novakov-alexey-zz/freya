@@ -2,10 +2,10 @@ package freya
 
 import cats.effect.IO
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import freya.AbstractHelper.Resource
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Configuration.CrdConfig
 import freya.internal.crd.{Deployer, SpecDoneable, SpecList}
+import freya.models.Resource
 import freya.resource.{ConfigMapParser, CrdParser}
 import freya.watcher.SpecClass
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
