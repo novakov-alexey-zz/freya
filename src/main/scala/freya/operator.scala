@@ -1,6 +1,8 @@
 package freya
 
+import cats.effect.ExitCase.Canceled
 import cats.effect.concurrent.MVar
+import cats.effect.syntax.all._
 import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync, Timer}
 import cats.implicits._
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -162,7 +164,8 @@ private case class OperatorPipeline[F[_], T](
 )
 
 class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F: ConcurrentEffect[F])
-    extends LazyLogging {
+    extends LazyLogging
+    with IOUtils {
 
   def run: F[ExitCode] =
     Resource
@@ -171,7 +174,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           F.delay(consumer.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx"))
       }
       .use {
-        case (signal, _) => signal.fold(identity, identity).pure[F]
+        case (signal, _) => signal.map(_.fold(identity, identity))
       }
       .recoverWith {
         case e =>
@@ -181,7 +184,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
   def withRestart(retry: Retry = Infinite())(implicit T: Timer[F]): F[ExitCode] =
     run.flatMap(loop(_, retry))
 
-  private def loop(ec: ExitCode, retry: Retry)(implicit T: Timer[F]) = {
+  private def loop(ec: ExitCode, retry: Retry)(implicit T: Timer[F]): F[ExitCode] = {
     val (canRestart, delay, nextRetry, remaining) = retry match {
       case Times(maxRetries, delay, multiplier) =>
         (
@@ -205,7 +208,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
     else ec.pure[F]
   }
 
-  def start: F[(OperatorSignal, CloseableWatcher)] =
+  def start: F[(F[OperatorSignal], CloseableWatcher)] =
     (for {
       pipe <- pipeline
       _ <- F.delay(Serialization.jsonMapper().registerModule(DefaultScalaModule))
@@ -215,19 +218,18 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
 
       _ <- F.delay(logger.info(s"Starting operator $ye$name$xx for namespace $namespace"))
       _ <- pipe.onInit
-      (consumer, consumerSignal) <- pipe.consumer
+      (closableWatcher, consumer) <- pipe.consumer
       _ <- F
         .delay(
           logger
             .info(s"${gr}Operator $name was started$xx in namespace '$namespace'")
         )
-      reconcilerSignal = pipe.reconciler.run() <* F
-            .delay(
-              logger
-                .info(s"${gr}Reconciler $name was started$xx in namespace '$namespace'")
-            )
-      operatorSignal <- F.race(consumerSignal, reconcilerSignal)
-    } yield (operatorSignal, consumer)).onError {
+      _ <- F.delay(logger.info(s"${gr}Starting reconciler $name$xx in namespace '$namespace'"))
+      reconciler = pipe.reconciler.run().guaranteeCase {
+        case Canceled => F.delay(logger.debug("Reconciler was canceled!"))
+        case _ => F.unit
+      }
+    } yield (par2(consumer, reconciler), closableWatcher)).onError {
       case ex: Throwable =>
         F.delay(logger.error(s"Unable to start operator", ex))
     }

@@ -63,8 +63,7 @@ class Consumer[F[_], T](val controller: Controller[F, T], val kind: String)(impl
             )
         }
       case ReconcileAction(resource, meta) =>
-        F.delay(logger.info(s"Event received ${gr}RECONCILE$xx")) *>
-            controller.reconcile(resource, meta) *> F.delay(logger.info(s"Event ${gr}RECONCILE$xx has been handled"))
+        controller.reconcile(resource, meta)
 
       case FailedAction(action, t, resource) =>
         F.delay(logger.error(s"Failed action $action for resource $resource", t))

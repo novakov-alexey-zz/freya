@@ -1,6 +1,6 @@
 package freya
 
-import cats.effect.{ConcurrentEffect, ExitCode, Timer}
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.errors.ParseReconcileError
@@ -17,14 +17,18 @@ class Reconciler[F[_], T](channel: Channel[F, T], currentResources: F[ResourcesL
 ) extends LazyLogging {
 
   def run(delay: FiniteDuration = 60.seconds): F[ReconcilerSignal] =
-    (F.suspend {
-      T.sleep(delay) *> currentResources.flatMap { l =>
-        l.map {
+    F.suspend {
+      for {
+        _ <- T.sleep(delay)
+        _ <- F.delay(logger.debug("Reconciler is running >>>>"))
+        l <- currentResources
+        _ <- l.map {
           case Left((t, resource)) => channel.put(Left(ParseReconcileError[T](t, resource)))
           case Right((e, m)) => channel.put(Right(ReconcileAction[T](e, m)))
         }.sequence
-      } *> run(delay)
-    } *> ExitCode.Success.pure[F]).recoverWith {
+        ec <- run(delay)
+      } yield ec
+    }.recoverWith {
       case e =>
         F.delay(logger.error("Failed in reconciling loop", e)) *>
             signals.ReconcileExitCode.pure[F]

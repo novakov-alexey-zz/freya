@@ -264,7 +264,7 @@ ConfigMapConfig(
 Operator can be launched with restart configuration. In case Operator web-socket connection
 is closed, then it will be restarted according to `Retry` configuration.
 
-### Retry with infinitely with random delay
+### Retry infinitely with random delay
 
 Having operator values:
 
@@ -314,8 +314,8 @@ calculate next delay by `previous delay * multiplier`.
 
 ## Deploy JSON Schema
 
-Put JSON file in CLASSPATH at `schema/<kind>.{json|js}` path, in order to deploy JSON schema as `OpenApi v.3` together with 
-CRD definition automatically during the Operator startup.
+In order to deploy JSON Schema, put JSON file in CLASSPATH at `schema/<kind>.{json|js}` path. 
+Freya deploys JSON schema together with CRD definition automatically during the Operator startup.
 
 For Kerberos Operator example, JSON Schema looks the following.
 
@@ -366,7 +366,11 @@ At resources/schema/kerb.json:
 
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
 set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
-won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd` is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work properly without CRD being retrivied from K8s api-server.   
+won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd`
+is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work without CRD being
+retrieved from K8s api-server. 
+
+Manual deployment of CRD is usually done with YAML files using tools like `kubectl`.   
 
 ## Controller Helpers
 
