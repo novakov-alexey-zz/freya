@@ -90,7 +90,7 @@ object Operator extends LazyLogging {
       )
 
       w <- F.delay(watchMaker.make(context).watch)
-      reconciler = new Reconciler(channel, F.delay(helper.currentResources))
+      reconciler = new Reconciler(cfg.reconcile, channel, F.delay(helper.currentResources))
     } yield createPipeline(helper, ctl, w, reconciler)
 
     new Operator[F, T](pipeline)
@@ -127,7 +127,7 @@ object Operator extends LazyLogging {
       )
 
       w <- F.delay(watchMaker.make(context).watch)
-      reconciler = new Reconciler[F, T](channel, F.delay(helper.currentConfigMaps))
+      reconciler = new Reconciler[F, T](cfg.reconcile, channel, F.delay(helper.currentConfigMaps))
     } yield createPipeline(helper, ctl, w, reconciler)
 
     new Operator[F, T](pipeline)
@@ -164,8 +164,7 @@ private case class OperatorPipeline[F[_], T](
 )
 
 class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F: ConcurrentEffect[F])
-    extends LazyLogging
-    with IOUtils {
+    extends LazyLogging {
 
   def run: F[ExitCode] =
     Resource
@@ -225,11 +224,11 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
             .info(s"${gr}Operator $name was started$xx in namespace '$namespace'")
         )
       _ <- F.delay(logger.info(s"${gr}Starting reconciler $name$xx in namespace '$namespace'"))
-      reconciler = pipe.reconciler.run().guaranteeCase {
+      reconciler = pipe.reconciler.run.guaranteeCase {
         case Canceled => F.delay(logger.debug("Reconciler was canceled!"))
         case _ => F.unit
       }
-    } yield (par2(consumer, reconciler), closableWatcher)).onError {
+    } yield (F.race(consumer, reconciler), closableWatcher)).onError {
       case ex: Throwable =>
         F.delay(logger.error(s"Unable to start operator", ex))
     }

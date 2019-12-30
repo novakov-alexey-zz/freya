@@ -7,6 +7,8 @@ import freya.K8sNamespace.Namespace
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
+import scala.concurrent.duration._
+
 class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb] with LazyLogging {
 
   override def onAdd(krb: Kerb, meta: Metadata): F[Unit] =
@@ -47,7 +49,7 @@ object TestCrdOperator extends IOApp with TestParams {
 
 trait TestParams {
   val client = IO(new DefaultKubernetesClient)
-  val crdCfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix)
+  val crdCfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, 100.millis)
   val cmCfg = Configuration.ConfigMapConfig(classOf[Kerb], Namespace("test"), prefix)
 }
 
@@ -59,14 +61,16 @@ object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
       new Controller[IO, Kerb] {
 
         override def onInit(): IO[Unit] =
-          IO {
-            helper.currentResources.foreach { resource =>
-              resource.fold(
-                error => logger.error("Failed to get current CRD instances", error._1),
-                resource => logger.info(s"current ${crdCfg.getKind} CRDs: ${resource._2}")
-              )
-            }
-          }
+          helper.currentResources.fold(
+            IO.raiseError,
+            r =>
+              IO(r.foreach { resource =>
+                resource.fold(
+                  error => logger.error("Failed to get current CRD instances", error._1),
+                  resource => logger.info(s"current ${crdCfg.getKind} CRDs: ${resource._2}")
+                )
+              })
+          )
       }
 
     Operator

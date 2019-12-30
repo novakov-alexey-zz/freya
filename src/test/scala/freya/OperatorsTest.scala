@@ -41,7 +41,7 @@ class OperatorsTest
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
 
-  val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
+  val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, 1.millis, checkK8sOnStartup = false)
   val server = new KubernetesServer(false, false)
 
   before {

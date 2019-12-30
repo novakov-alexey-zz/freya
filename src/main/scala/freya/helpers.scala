@@ -13,6 +13,7 @@ import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 
 import scala.annotation.unused
+import scala.util.Try
 
 sealed abstract class AbstractHelper[F[_]: Effect, T](val client: KubernetesClient, val cfg: Configuration[T]) {
   val kind: String = cfg.getKind
@@ -34,11 +35,13 @@ class ConfigMapHelper[F[_]: Effect, T](
   val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
   private val cmApi = new ConfigMapApi(client)
 
-  def currentConfigMaps: ResourcesList[T] = {
-    val maps = cmApi.in(targetNamespace)
-    cmApi
-      .list(maps, selector)
-      .map(ConfigMapHelper.convertCm(cfg.forKind, parser)(_))
+  def currentConfigMaps: Either[Throwable, ResourcesList[T]] = {
+    val maps = Try(cmApi.in(targetNamespace)).toEither
+    maps.map { m =>
+      cmApi
+        .list(m, selector)
+        .map(ConfigMapHelper.convertCm(cfg.forKind, parser)(_))
+    }
   }
 }
 
@@ -60,11 +63,13 @@ class CrdHelper[F[_]: Effect, T](
 ) extends AbstractHelper[F, T](client, cfg) {
   private val crdApi = new CrdApi(client)
 
-  def currentResources: ResourcesList[T] = {
-    val crs = crdApi.in[T](targetNamespace, crd)
+  def currentResources: Either[Throwable, ResourcesList[T]] = {
+    val crs = Try(crdApi.in[T](targetNamespace, crd)).toEither
 
-    crdApi
-      .list(crs)
-      .map(CrdHelper.convertCr(cfg.forKind, parser)(_))
+    crs.map { c =>
+      crdApi
+        .list(c)
+        .map(CrdHelper.convertCr(cfg.forKind, parser)(_))
+    }
   }
 }

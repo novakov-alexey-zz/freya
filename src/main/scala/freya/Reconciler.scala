@@ -11,26 +11,31 @@ import freya.watcher.actions.ReconcileAction
 
 import scala.concurrent.duration._
 
-class Reconciler[F[_], T](channel: Channel[F, T], currentResources: F[ResourcesList[T]])(
-  implicit F: ConcurrentEffect[F],
-  T: Timer[F]
-) extends LazyLogging {
+class Reconciler[F[_], T](
+  delay: FiniteDuration = 60.seconds,
+  channel: Channel[F, T],
+  currentResources: F[Either[Throwable, ResourcesList[T]]]
+)(implicit F: ConcurrentEffect[F], T: Timer[F])
+    extends LazyLogging {
 
-  def run(delay: FiniteDuration = 60.seconds): F[ReconcilerSignal] =
+  def run: F[ReconcilerSignal] =
     F.suspend {
       for {
         _ <- T.sleep(delay)
-        _ <- F.delay(logger.debug("Reconciler is running >>>>"))
-        l <- currentResources
-        _ <- l.map {
-          case Left((t, resource)) => channel.put(Left(ParseReconcileError[T](t, resource)))
-          case Right((e, m)) => channel.put(Right(ReconcileAction[T](e, m)))
-        }.sequence
-        ec <- run(delay)
+        _ <- F.delay(logger.info("Reconciler is running >>>>"))
+        r <- currentResources
+        _ <- publish(r)
+        ec <- run
       } yield ec
     }.recoverWith {
       case e =>
         F.delay(logger.error("Failed in reconciling loop", e)) *>
             signals.ReconcileExitCode.pure[F]
     }
+
+  private def publish(resources: Either[Throwable, ResourcesList[T]]): F[Unit] =
+    resources.fold(t => F.delay(logger.error(s"Failed to get current resources", t)), _.map {
+      case Left((t, resource)) => channel.put(Left(ParseReconcileError[T](t, resource)))
+      case Right((e, m)) => channel.put(Right(ReconcileAction[T](e, m)))
+    }.sequence.void)
 }

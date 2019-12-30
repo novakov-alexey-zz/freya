@@ -10,16 +10,16 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
-class ReconcilerTest extends AnyFlatSpec with IOUtils with Matchers {
+class ReconcilerTest extends AnyFlatSpec with Matchers {
 
   it should "be able to stop" in {
     ///given
     val channel = MVar[IO].empty[Either[OperatorError[Kerb], OperatorAction[Kerb]]].unsafeRunSync()
-    val r = new Reconciler[IO, Kerb](channel, IO(List.empty[Resource[Kerb]]))
-    val io = r.run()
+    val r = new Reconciler[IO, Kerb](5.seconds, channel, IO(Right(List.empty[Resource[Kerb]])))
+    val io = r.run
 
     //when
-    val res = par2(io, IO.sleep(0.milliseconds)).unsafeRunSync()
+    val res = IO.race(io, IO.sleep(0.milliseconds)).unsafeRunSync()
     //then
     res should ===(Right(()))
   }
@@ -27,10 +27,10 @@ class ReconcilerTest extends AnyFlatSpec with IOUtils with Matchers {
   it should "return exit code" in {
     //given
     val channel = MVar[IO].empty[Either[OperatorError[Kerb], OperatorAction[Kerb]]].unsafeRunSync()
-    val r = new Reconciler[IO, Kerb](channel, IO.raiseError(new RuntimeException("test exception")))
-    val io = r.run(0.millis)
+    val r = new Reconciler[IO, Kerb](0.millis, channel, IO.raiseError(new RuntimeException("test exception")))
+    val io = r.run
     //when
-    val res = par2(io, IO.sleep(1.minute)).unsafeRunSync()
+    val res = IO.race(io, IO.sleep(1.minute)).unsafeRunSync()
     //then
     res should ===(Left((signals.ReconcileExitCode)))
   }

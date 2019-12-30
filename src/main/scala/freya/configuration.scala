@@ -21,6 +21,7 @@ sealed abstract class Configuration[T](
   val forKind: Class[T],
   val prefix: String,
   val namespace: K8sNamespace = AllNamespaces,
+  val reconcile: FiniteDuration,
   val customKind: Option[String] = None,
   val checkK8sOnStartup: Boolean = false
 ) {
@@ -38,17 +39,20 @@ sealed abstract class Configuration[T](
 
 object Configuration {
 
+  val ReconcileInterval: FiniteDuration = 60.seconds
+
   final case class CrdConfig[T](
     override val forKind: Class[T],
     override val namespace: K8sNamespace,
     override val prefix: String,
+    override val reconcile: FiniteDuration = ReconcileInterval,
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None,
     deployCrd: Boolean = true,
     shortNames: List[String] = List.empty[String],
     pluralName: String = "",
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
-  ) extends Configuration(forKind, prefix, namespace, customKind) {
+  ) extends Configuration(forKind, prefix, namespace, reconcile, customKind) {
 
     def getPluralCaseInsensitive: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
@@ -59,9 +63,10 @@ object Configuration {
     override val forKind: Class[T],
     override val namespace: K8sNamespace,
     override val prefix: String,
+    override val reconcile: FiniteDuration = ReconcileInterval,
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None
-  ) extends Configuration(forKind, prefix, namespace, customKind)
+  ) extends Configuration(forKind, prefix, namespace, reconcile, customKind)
 
 }
 sealed trait K8sNamespace {

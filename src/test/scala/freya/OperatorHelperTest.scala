@@ -57,7 +57,7 @@ class OperatorHelperTest
     val helper = new ConfigMapHelper[IO, Kerb](cfg, client, None, parser)
 
     val maps = helper.currentConfigMaps
-    maps should be(List.empty)
+    maps should ===(Right(List.empty))
 
     val currentCms = mutable.ArrayBuffer.empty[Resource[Kerb]]
     val namespace = new NamespaceBuilder().withNewMetadata.withName(ns.value).endMetadata.build
@@ -73,7 +73,7 @@ class OperatorHelperTest
 
       currentCms += Right((spec, meta))
       //then
-      helper.currentConfigMaps.toSet should ===(currentCms.toSet)
+      helper.currentConfigMaps.map(_.toSet) should ===(Right(currentCms.toSet))
     }
   }
 
