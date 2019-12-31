@@ -8,6 +8,7 @@ import freya.Controller.ConfigMapController
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Retry.Times
 import freya.generators.arbitrary
+import freya.models.{Resource, ResourcesList}
 import freya.resource.ConfigMapParser
 import freya.signals.ConsumerSignal
 import freya.watcher.AbstractWatcher.CloseableWatcher
@@ -41,7 +42,7 @@ class OperatorsTest
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
 
-  val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, 1.millis, checkK8sOnStartup = false)
+  val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
   val server = new KubernetesServer(false, false)
 
   before {
@@ -110,7 +111,7 @@ class OperatorsTest
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, SpecClass]
     implicit val watchable: Watchable[Watch, Watcher[SpecClass]] = fakeWatchable
 
-    Operator.ofCrd[F, Kerb](cfg, client[F], controller) -> singleWatcher
+    Operator.ofCrd[F, Kerb](cfg, client[F], controller).withReconciler(1.millis) -> singleWatcher
   }
 
   property("Crd Operator handles different events") {
@@ -124,7 +125,7 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, InfoClass.gen[Kerb](cfg.getKind)) { (action, crd) =>
+    forAll(WatcherAction.gen, SpecClass.gen[Kerb](cfg.getKind)) { (action, crd) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
@@ -132,6 +133,35 @@ class OperatorsTest
       //then
       eventually {
         controller.events should contain((action, crd.getSpec, meta))
+      }
+    }
+
+    cancelable.unsafeRunSync()
+  }
+
+  property("Crd Operator gets event from reconciler process") {
+    //given
+    val controller = new CrdTestController[IO]
+    val (fakeWatchable, _) = makeWatchable[Kerb, SpecClass]
+    implicit val watchable: Watchable[Watch, Watcher[SpecClass]] = fakeWatchable
+
+    val testResources = new mutable.ArrayBuffer[Resource[Kerb]]()
+    implicit val helper: CrdHelperMaker[IO, Kerb] = (context: CrdHelperContext[Kerb]) =>
+      new CrdHelper[IO, Kerb](context) {
+        override def currentResources: Either[Throwable, ResourcesList[Kerb]] =
+          Right(testResources.toList)
+      }
+
+    val operator = Operator.ofCrd[IO, Kerb](cfg, client[IO], controller).withReconciler(1.millis)
+    //when
+    val cancelable = startOperator(operator.run)
+
+    forAll(SpecClass.gen[Kerb](cfg.getKind)) { crd =>
+      val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+      testResources += Right((crd.getSpec.asInstanceOf[Kerb], meta))
+      //then
+      eventually {
+        controller.reconciledEvents should contain((crd.getSpec, meta))
       }
     }
 
@@ -151,7 +181,7 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, InfoClass.gen[Kerb](cfg.getKind), arbitrary[Boolean], minSuccessful(maxRestarts)) {
+    forAll(WatcherAction.gen, SpecClass.gen[Kerb](cfg.getKind), arbitrary[Boolean], minSuccessful(maxRestarts)) {
       (action, crd, close) =>
         //when
         if (close)

@@ -43,13 +43,14 @@ object TestCrdOperator extends IOApp with TestParams {
   override def run(args: List[String]): IO[ExitCode] = {
     Operator
       .ofCrd[IO, Kerb](crdCfg, client, new KrbController[IO])
+      .withReconciler(60.seconds)
       .run
   }
 }
 
 trait TestParams {
   val client = IO(new DefaultKubernetesClient)
-  val crdCfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, 100.millis)
+  val crdCfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix)
   val cmCfg = Configuration.ConfigMapConfig(classOf[Kerb], Namespace("test"), prefix)
 }
 

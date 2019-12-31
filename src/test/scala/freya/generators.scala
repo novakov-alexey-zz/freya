@@ -32,7 +32,7 @@ object ObjectMetaTest {
     } yield ObjectMetaTest(name, namespace, labels)
 }
 
-object InfoClass {
+object SpecClass {
 
   def gen[T: Arbitrary](kind: String): Gen[SpecClass] =
     for {

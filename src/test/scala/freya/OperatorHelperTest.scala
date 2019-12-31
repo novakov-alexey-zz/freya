@@ -56,7 +56,7 @@ class OperatorHelperTest
     val parser = new ConfigMapParser()
     val helper = new ConfigMapHelper[IO, Kerb](cfg, client, None, parser)
 
-    val maps = helper.currentConfigMaps
+    val maps = helper.currentResources
     maps should ===(Right(List.empty))
 
     val currentCms = mutable.ArrayBuffer.empty[Resource[Kerb]]
@@ -73,7 +73,7 @@ class OperatorHelperTest
 
       currentCms += Right((spec, meta))
       //then
-      helper.currentConfigMaps.map(_.toSet) should ===(Right(currentCms.toSet))
+      helper.currentResources.map(_.toSet) should ===(Right(currentCms.toSet))
     }
   }
 
@@ -85,7 +85,8 @@ class OperatorHelperTest
 
     val parser = new CrdParser()
     val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
-    val helper = new CrdHelper[IO, Kerb](cfg, client, None, crd, parser)
+    val context = new CrdHelperContext[Kerb](cfg, client, None, crd, parser)
+    val helper = new CrdHelper[IO, Kerb](context)
     val krbClient = client
       .customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
 
@@ -100,7 +101,7 @@ class OperatorHelperTest
     val ns = new NamespaceBuilder().withNewMetadata.withName(testNs.value).endMetadata.build
     client.namespaces().createOrReplace(ns)
 
-    forAll(InfoClass.gen[Kerb](cfg.getKind)) { ic =>
+    forAll(SpecClass.gen[Kerb](cfg.getKind)) { ic =>
       ic.getMetadata.setNamespace(testNs.value)
       //when
       krbClient

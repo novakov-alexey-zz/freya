@@ -13,13 +13,13 @@ import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 
 final case class CrdWatcherContext[F[_]: ConcurrentEffect, T](
-                                                               ns: K8sNamespace,
-                                                               kind: String,
-                                                               consumer: Consumer[F, T],
-                                                               convertCr: SpecClass => Resource[T],
-                                                               channel: Channel[F, T],
-                                                               client: KubernetesClient,
-                                                               crd: CustomResourceDefinition
+  ns: K8sNamespace,
+  kind: String,
+  consumer: Consumer[F, T],
+  convertCr: SpecClass => Resource[T],
+  channel: Channel[F, T],
+  client: KubernetesClient,
+  crd: CustomResourceDefinition
 )
 
 class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContext[F, T])

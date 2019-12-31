@@ -12,7 +12,7 @@ import freya.watcher.actions.ReconcileAction
 import scala.concurrent.duration._
 
 class Reconciler[F[_], T](
-  delay: FiniteDuration = 60.seconds,
+  delay: FiniteDuration,
   channel: Channel[F, T],
   currentResources: F[Either[Throwable, ResourcesList[T]]]
 )(implicit F: ConcurrentEffect[F], T: Timer[F])

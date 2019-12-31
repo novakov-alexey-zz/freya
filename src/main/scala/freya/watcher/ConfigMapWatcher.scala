@@ -15,14 +15,14 @@ import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 
 final case class ConfigMapWatcherContext[F[_]: ConcurrentEffect, T](
-                                                                     namespace: K8sNamespace,
-                                                                     kind: String,
-                                                                     controller: ConfigMapController[F, T],
-                                                                     consumer: Consumer[F, T],
-                                                                     convert: ConfigMap => Resource[T],
-                                                                     channel: Channel[F, T],
-                                                                     client: KubernetesClient,
-                                                                     selector: (String, String)
+  namespace: K8sNamespace,
+  kind: String,
+  controller: ConfigMapController[F, T],
+  consumer: Consumer[F, T],
+  convert: ConfigMap => Resource[T],
+  channel: Channel[F, T],
+  client: KubernetesClient,
+  selector: (String, String)
 )
 
 class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherContext[F, T])

@@ -15,15 +15,15 @@ import freya.internal.AnsiColors._
 import freya.internal.OperatorUtils._
 import freya.internal.crd.Deployer
 import freya.resource.{ConfigMapParser, CrdParser, Labels}
-import freya.signals.{ConsumerSignal, OperatorSignal}
-import freya.watcher.AbstractWatcher.CloseableWatcher
+import freya.signals.{ConsumerSignal, OperatorSignal, ReconcilerSignal}
+import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
 import freya.watcher._
 import freya.watcher.actions.OperatorAction
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.utils.Serialization
 
-import scala.concurrent.duration.DurationLong
+import scala.concurrent.duration.{DurationLong, FiniteDuration}
 import scala.util.Random
 
 trait CrdWatchMaker[F[_], T] {
@@ -54,19 +54,33 @@ object CrdDeployer {
       Deployer.deployCrd(client, cfg, isOpenShift)
 }
 
+trait CrdHelperMaker[F[_], T] {
+  def make(context: CrdHelperContext[T]): CrdHelper[F, T]
+}
+
+object CrdHelperMaker {
+  implicit def helper[F[_], T]: CrdHelperMaker[F, T] =
+    (context: CrdHelperContext[T]) => new CrdHelper[F, T](context)
+}
+
 object Operator extends LazyLogging {
 
   def ofCrd[F[_]: ConcurrentEffect: Timer, T](
     cfg: CrdConfig[T],
     client: F[KubernetesClient],
     controller: Controller[F, T]
-  )(implicit watchMaker: CrdWatchMaker[F, T], deployer: CrdDeployer[F, T]): Operator[F, T] =
+  )(
+    implicit watchMaker: CrdWatchMaker[F, T],
+    helperMaker: CrdHelperMaker[F, T],
+    deployer: CrdDeployer[F, T]
+  ): Operator[F, T] =
     ofCrd[F, T](cfg, client)((_: CrdHelper[F, T]) => controller)
 
   def ofCrd[F[_], T](cfg: CrdConfig[T], client: F[KubernetesClient])(controller: CrdHelper[F, T] => Controller[F, T])(
     implicit F: ConcurrentEffect[F],
     T: Timer[F],
     watchMaker: CrdWatchMaker[F, T],
+    helperMaker: CrdHelperMaker[F, T],
     deployer: CrdDeployer[F, T]
   ): Operator[F, T] = {
 
@@ -76,8 +90,10 @@ object Operator extends LazyLogging {
       crd <- deployer.deployCrd(c, cfg, isOpenShift)
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       parser <- CrdParser()
-
-      helper = new CrdHelper[F, T](cfg, c, isOpenShift, crd, parser)
+      helper = {
+        val context = CrdHelperContext(cfg, c, isOpenShift, crd, parser)
+        helperMaker.make(context)
+      }
       ctl = controller(helper)
       context = CrdWatcherContext(
         cfg.namespace,
@@ -90,8 +106,7 @@ object Operator extends LazyLogging {
       )
 
       w <- F.delay(watchMaker.make(context).watch)
-      reconciler = new Reconciler(cfg.reconcile, channel, F.delay(helper.currentResources))
-    } yield createPipeline(helper, ctl, w, reconciler)
+    } yield createPipeline(helper, ctl, w, channel)
 
     new Operator[F, T](pipeline)
   }
@@ -127,8 +142,7 @@ object Operator extends LazyLogging {
       )
 
       w <- F.delay(watchMaker.make(context).watch)
-      reconciler = new Reconciler[F, T](cfg.reconcile, channel, F.delay(helper.currentConfigMaps))
-    } yield createPipeline(helper, ctl, w, reconciler)
+    } yield createPipeline(helper, ctl, w, channel)
 
     new Operator[F, T](pipeline)
   }
@@ -137,9 +151,9 @@ object Operator extends LazyLogging {
     helper: AbstractHelper[F, T],
     controller: Controller[F, T],
     watcher: F[(CloseableWatcher, F[ConsumerSignal])],
-    reconciler: Reconciler[F, T]
+    channel: Channel[F, T]
   ) =
-    OperatorPipeline[F, T](helper, watcher, reconciler, controller.onInit())
+    OperatorPipeline[F, T](helper, watcher, channel, controller.onInit())
 
   private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: Configuration[T]): F[Option[Boolean]] =
     for {
@@ -159,12 +173,14 @@ object Operator extends LazyLogging {
 private case class OperatorPipeline[F[_], T](
   helper: AbstractHelper[F, T],
   consumer: F[(CloseableWatcher, F[ConsumerSignal])],
-  reconciler: Reconciler[F, T],
+  channel: Channel[F, T],
   onInit: F[Unit]
 )
 
-class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F: ConcurrentEffect[F])
-    extends LazyLogging {
+class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]], reconcilerInterval: Option[FiniteDuration] = None)(
+  implicit F: ConcurrentEffect[F],
+  T: Timer[F]
+) extends LazyLogging {
 
   def run: F[ExitCode] =
     Resource
@@ -179,6 +195,9 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
         case e =>
           F.delay(logger.error("Got error while running an operator", e)) *> ExitCode.Error.pure[F]
       }
+
+  def withReconciler(interval: FiniteDuration): Operator[F, T] =
+    new Operator[F, T](pipeline, Some(interval))
 
   def withRestart(retry: Retry = Infinite())(implicit T: Timer[F]): F[ExitCode] =
     run.flatMap(loop(_, retry))
@@ -223,13 +242,21 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]])(implicit F
           logger
             .info(s"${gr}Operator $name was started$xx in namespace '$namespace'")
         )
-      _ <- F.delay(logger.info(s"${gr}Starting reconciler $name$xx in namespace '$namespace'"))
-      reconciler = pipe.reconciler.run.guaranteeCase {
-        case Canceled => F.delay(logger.debug("Reconciler was canceled!"))
-        case _ => F.unit
-      }
+      reconciler = runReconciler(pipe, name, namespace)
     } yield (F.race(consumer, reconciler), closableWatcher)).onError {
       case ex: Throwable =>
         F.delay(logger.error(s"Unable to start operator", ex))
+    }
+
+  private def runReconciler(pipe: OperatorPipeline[F, T], name: String, namespace: K8sNamespace) =
+    reconcilerInterval match {
+      case None => F.never[ReconcilerSignal]
+      case Some(i) =>
+        val r = new Reconciler[F, T](i, pipe.channel, F.delay(pipe.helper.currentResources))
+        F.delay(logger.info(s"${gr}Starting reconciler $name$xx in namespace '$namespace'")) *>
+          r.run.guaranteeCase {
+            case Canceled => F.delay(logger.debug("Reconciler was canceled!"))
+            case _ => F.unit
+          }
     }
 }

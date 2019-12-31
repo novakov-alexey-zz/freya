@@ -50,7 +50,7 @@ class ServerMockTest
     val krbClient = client
       .customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
 
-    forAll(WatcherAction.gen, InfoClass.gen[Kerb](cfg.getKind)) { (action, ic) =>
+    forAll(WatcherAction.gen, SpecClass.gen[Kerb](cfg.getKind)) { (action, ic) =>
       val ns = new NamespaceBuilder().withNewMetadata.withName(ic.getMetadata.getNamespace).endMetadata.build
       client.namespaces().create(ns)
 
