@@ -5,7 +5,7 @@ import cats.implicits._
 import freya.errors.{OperatorError, ParseResourceError}
 import freya.internal.api.CrdApi
 import freya.models.Resource
-import freya.signals.ConsumerSignal
+import freya.ExitCodes.ConsumerExitCode
 import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
 import freya.{Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
@@ -27,14 +27,14 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T](context: CrdWatcherContex
 
   private val crdApi = new CrdApi(context.client)
 
-  override def watch: F[(CloseableWatcher, F[ConsumerSignal])] = {
+  override def watch: F[(CloseableWatcher, F[ConsumerExitCode])] = {
     val watchable = crdApi.in[T](targetNamespace, context.crd)
     registerWatcher(watchable)
   }
 
   protected[freya] def registerWatcher(
     watchable: Watchable[Watch, Watcher[SpecClass]]
-  ): F[(CloseableWatcher, F[ConsumerSignal])] = {
+  ): F[(CloseableWatcher, F[ConsumerExitCode])] = {
     val watch = Sync[F].delay(watchable.watch(new Watcher[SpecClass]() {
 
       override def eventReceived(action: Watcher.Action, spec: SpecClass): Unit = {

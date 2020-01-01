@@ -3,10 +3,10 @@ package freya.watcher
 import cats.effect.ConcurrentEffect
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import freya.{Controller, signals}
+import freya.{Controller, ExitCodes}
 import freya.errors.{ParseReconcileError, ParseResourceError, WatcherClosedError}
 import freya.internal.AnsiColors.{gr, re, xx}
-import freya.signals.ConsumerSignal
+import freya.ExitCodes.ConsumerExitCode
 import freya.watcher.AbstractWatcher.Channel
 import freya.watcher.actions._
 import io.fabric8.kubernetes.client.Watcher.Action.{ADDED, DELETED, ERROR, MODIFIED}
@@ -14,7 +14,7 @@ import io.fabric8.kubernetes.client.Watcher.Action.{ADDED, DELETED, ERROR, MODIF
 class Consumer[F[_], T](val controller: Controller[F, T], val kind: String)(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
 
-  private[freya] def consume(channel: Channel[F, T]): F[ConsumerSignal] =
+  private[freya] def consume(channel: Channel[F, T]): F[ConsumerExitCode] =
     for {
       action <- channel.take
       _ <- F.delay(logger.debug(s"consuming action $action"))
@@ -25,7 +25,7 @@ class Consumer[F[_], T](val controller: Controller[F, T], val kind: String)(impl
           e match {
             case WatcherClosedError(e) =>
               logger.error("K8s closed socket, so closing consumer as well", e)
-              signals.WatcherClosedSignal.pure[F]
+              ExitCodes.WatcherClosedExitCode.pure[F]
             case ParseResourceError(a, t, r) =>
               handleAction(FailedAction(a, t, r)) *> consume(channel)
             case ParseReconcileError(t, r) =>

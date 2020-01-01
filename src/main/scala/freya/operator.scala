@@ -9,13 +9,14 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.CrdConfig
 import freya.Controller.ConfigMapController
+import freya.ExitCodes.{ConsumerExitCode, OperatorExitCode, ReconcilerExitCode}
 import freya.Retry.{Infinite, Times}
 import freya.errors.OperatorError
 import freya.internal.AnsiColors._
 import freya.internal.OperatorUtils._
+import freya.internal.Reconciler
 import freya.internal.crd.Deployer
 import freya.resource.{ConfigMapParser, CrdParser, Labels}
-import freya.signals.{ConsumerSignal, OperatorSignal, ReconcilerSignal}
 import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
 import freya.watcher._
 import freya.watcher.actions.OperatorAction
@@ -52,24 +53,6 @@ object CrdDeployer {
   implicit def deployer[F[_]: Sync, T]: CrdDeployer[F, T] =
     (client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]) =>
       Deployer.deployCrd(client, cfg, isOpenShift)
-}
-
-trait CrdHelperMaker[F[_], T] {
-  def make(context: CrdHelperContext[T]): CrdHelper[F, T]
-}
-
-object CrdHelperMaker {
-  implicit def helper[F[_], T]: CrdHelperMaker[F, T] =
-    (context: CrdHelperContext[T]) => new CrdHelper[F, T](context)
-}
-
-trait ConfigMapHelperMaker[F[_], T] {
-  def make(context: ConfigMapHelperContext[T]): ConfigMapHelper[F, T]
-}
-
-object ConfigMapHelperMaker {
-  implicit def helper[F[_], T]: ConfigMapHelperMaker[F, T] =
-    (context: ConfigMapHelperContext[T]) => new ConfigMapHelper[F, T](context)
 }
 
 object Operator extends LazyLogging {
@@ -167,7 +150,7 @@ object Operator extends LazyLogging {
   private def createPipeline[T, F[_]: ConcurrentEffect](
     helper: AbstractHelper[F, T],
     controller: Controller[F, T],
-    watcher: F[(CloseableWatcher, F[ConsumerSignal])],
+    watcher: F[(CloseableWatcher, F[ConsumerExitCode])],
     channel: Channel[F, T]
   ) =
     OperatorPipeline[F, T](helper, watcher, channel, controller.onInit())
@@ -189,7 +172,7 @@ object Operator extends LazyLogging {
 
 private case class OperatorPipeline[F[_], T](
   helper: AbstractHelper[F, T],
-  consumer: F[(CloseableWatcher, F[ConsumerSignal])],
+  consumer: F[(CloseableWatcher, F[ConsumerExitCode])],
   channel: Channel[F, T],
   onInit: F[Unit]
 )
@@ -243,7 +226,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]], reconciler
     else ec.pure[F]
   }
 
-  def start: F[(F[OperatorSignal], CloseableWatcher)] =
+  def start: F[(F[OperatorExitCode], CloseableWatcher)] =
     (for {
       pipe <- pipeline
       _ <- F.delay(Serialization.jsonMapper().registerModule(DefaultScalaModule))
@@ -267,7 +250,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]], reconciler
 
   private def runReconciler(pipe: OperatorPipeline[F, T], name: String, namespace: K8sNamespace) =
     reconcilerInterval match {
-      case None => F.never[ReconcilerSignal]
+      case None => F.never[ReconcilerExitCode]
       case Some(i) =>
         val r = new Reconciler[F, T](i, pipe.channel, F.delay(pipe.helper.currentResources))
         F.delay(logger.info(s"${gr}Starting reconciler $name$xx in namespace '$namespace'")) *>

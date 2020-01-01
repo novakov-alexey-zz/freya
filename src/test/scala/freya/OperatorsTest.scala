@@ -10,7 +10,7 @@ import freya.Retry.{Infinite, Times}
 import freya.generators.arbitrary
 import freya.models.{Resource, ResourcesList}
 import freya.resource.ConfigMapParser
-import freya.signals.ConsumerSignal
+import freya.ExitCodes.ConsumerExitCode
 import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.watcher._
 import io.fabric8.kubernetes.api.model.ConfigMap
@@ -81,7 +81,7 @@ class OperatorsTest
   ): ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) =>
       new ConfigMapWatcher(context) {
-        override def watch: F[(CloseableWatcher, F[ConsumerSignal])] =
+        override def watch: F[(CloseableWatcher, F[ConsumerExitCode])] =
           registerWatcher(watchable)
       }
 
@@ -90,7 +90,7 @@ class OperatorsTest
   ): CrdWatchMaker[F, T] =
     (context: CrdWatcherContext[F, T]) =>
       new CustomResourceWatcher(context) {
-        override def watch: F[(CloseableWatcher, F[ConsumerSignal])] =
+        override def watch: F[(CloseableWatcher, F[ConsumerExitCode])] =
           registerWatcher(watchable)
       }
 
@@ -302,7 +302,7 @@ class OperatorsTest
     eventually {
       exitCode.isCompleted should ===(true)
       val ec = Await.result(exitCode, 0.second)
-      ec should ===(signals.WatcherClosedSignal)
+      ec should ===(ExitCodes.WatcherClosedExitCode)
     }
   }
 

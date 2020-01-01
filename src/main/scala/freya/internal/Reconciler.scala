@@ -1,24 +1,25 @@
-package freya
+package freya.internal
 
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.errors.ParseReconcileError
 import freya.models.ResourcesList
-import freya.signals.ReconcilerSignal
+import freya.ExitCodes
+import freya.ExitCodes.ReconcilerExitCode
 import freya.watcher.AbstractWatcher.Channel
 import freya.watcher.actions.ReconcileAction
 
 import scala.concurrent.duration._
 
-class Reconciler[F[_], T](
+private[freya] class Reconciler[F[_], T](
   delay: FiniteDuration,
   channel: Channel[F, T],
   currentResources: F[Either[Throwable, ResourcesList[T]]]
 )(implicit F: ConcurrentEffect[F], T: Timer[F])
     extends LazyLogging {
 
-  def run: F[ReconcilerSignal] =
+  def run: F[ReconcilerExitCode] =
     F.suspend {
       for {
         _ <- T.sleep(delay)
@@ -30,7 +31,7 @@ class Reconciler[F[_], T](
     }.recoverWith {
       case e =>
         F.delay(logger.error("Failed in reconciling loop", e)) *>
-            signals.ReconcileExitCode.pure[F]
+            ExitCodes.ReconcileExitCode.pure[F]
     }
 
   private def publish(resources: Either[Throwable, ResourcesList[T]]): F[Unit] =

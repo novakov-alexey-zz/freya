@@ -9,15 +9,14 @@ object models {
   type ResourcesList[T] = List[Resource[T]]
 }
 
-object signals {
-  type ConsumerSignal = ExitCode
-  type ReconcilerSignal = ExitCode
-  type OperatorSignal = Either[ConsumerSignal, ReconcilerSignal]
+object ExitCodes {
+  type ConsumerExitCode = ExitCode
+  type ReconcilerExitCode = ExitCode
+  type OperatorExitCode = Either[ConsumerExitCode, ReconcilerExitCode]
 
-  val WatcherClosedSignal: ConsumerSignal = ExitCode(2)
-  val ReconcileExitCode: ReconcilerSignal = ExitCode(3)
+  val WatcherClosedExitCode: ConsumerExitCode = ExitCode(2)
+  val ReconcileExitCode: ReconcilerExitCode = ExitCode(3)
 }
-
 
 trait CustomResourceParser {
   def parse[T](clazz: Class[T], specClass: SpecClass): Either[Throwable, T]

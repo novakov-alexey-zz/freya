@@ -6,7 +6,7 @@ import freya.Controller.ConfigMapController
 import freya.errors.{OperatorError, ParseResourceError}
 import freya.internal.api.ConfigMapApi
 import freya.models.Resource
-import freya.signals.ConsumerSignal
+import freya.ExitCodes.ConsumerExitCode
 import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
 import freya.{Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.ConfigMap
@@ -30,7 +30,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
 
   private val configMapApi = new ConfigMapApi(context.client)
 
-  override def watch: F[(CloseableWatcher, F[ConsumerSignal])] =
+  override def watch: F[(CloseableWatcher, F[ConsumerExitCode])] =
     Sync[F].delay(
       KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap]) //TODO: why internal API is called?
     ) *> {
@@ -40,7 +40,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
 
   protected[freya] def registerWatcher(
     watchable: Watchable[Watch, Watcher[ConfigMap]]
-  ): F[(CloseableWatcher, F[ConsumerSignal])] = {
+  ): F[(CloseableWatcher, F[ConsumerExitCode])] = {
 
     val watch = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {

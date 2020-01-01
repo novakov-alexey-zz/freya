@@ -13,6 +13,24 @@ import io.fabric8.kubernetes.client.KubernetesClient
 
 import scala.util.Try
 
+trait CrdHelperMaker[F[_], T] {
+  def make(context: CrdHelperContext[T]): CrdHelper[F, T]
+}
+
+object CrdHelperMaker {
+  implicit def helper[F[_], T]: CrdHelperMaker[F, T] =
+    (context: CrdHelperContext[T]) => new CrdHelper[F, T](context)
+}
+
+trait ConfigMapHelperMaker[F[_], T] {
+  def make(context: ConfigMapHelperContext[T]): ConfigMapHelper[F, T]
+}
+
+object ConfigMapHelperMaker {
+  implicit def helper[F[_], T]: ConfigMapHelperMaker[F, T] =
+    (context: ConfigMapHelperContext[T]) => new ConfigMapHelper[F, T](context)
+}
+
 sealed abstract class AbstractHelper[F[_], T](val client: KubernetesClient, val cfg: Configuration[T]) {
   val kind: String = cfg.getKind
   val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(client.getNamespace, cfg.namespace)

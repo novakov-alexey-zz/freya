@@ -3,6 +3,7 @@ package freya
 import cats.effect.IO
 import cats.effect.concurrent.MVar
 import freya.errors.OperatorError
+import freya.internal.Reconciler
 import freya.models.Resource
 import freya.watcher.actions.OperatorAction
 import org.scalatest.flatspec.AnyFlatSpec
@@ -32,6 +33,6 @@ class ReconcilerTest extends AnyFlatSpec with Matchers {
     //when
     val res = IO.race(io, IO.sleep(1.minute)).unsafeRunSync()
     //then
-    res should ===(Left((signals.ReconcileExitCode)))
+    res should ===(Left((ExitCodes.ReconcileExitCode)))
   }
 }
