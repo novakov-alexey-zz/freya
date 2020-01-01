@@ -178,7 +178,7 @@ object KerbCrdOperator extends IOApp {
 
 ConfigMap Operator option:
 
-```scala mdoc
+```scala mdoc:compile-only
 import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
@@ -210,7 +210,7 @@ native ConfigMap kind with label `io.myorg.kerboperator/kind=Kerb` in case of Co
 
 Crd Operator:
 
-```scala mdoc
+```scala mdoc:compile-only
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.AdditionalPrinterColumn
@@ -241,7 +241,7 @@ CrdConfig(
 
 ConfigMap Operator:
 
-```scala mdoc
+```scala mdoc:compile-only
 import freya.Configuration.ConfigMapConfig
 import freya.K8sNamespace.AllNamespaces
 
@@ -259,21 +259,55 @@ ConfigMapConfig(
 )
 ```
 
-## Restart configuration
+## Start with parallel reconcile
 
-Operator can be launched with restart configuration. In case Operator web-socket connection
-is closed, then it will be restarted according to `Retry` configuration.
+Freya can start your operator with parallel reconciler thread, which is puling current 
+resources (CRs or ConfigMaps) at specified time interval. This feature allows to pro-actively check
+existing resources and make sure that desired configuration is reflected in terms of Kubernetes objects.
+It is also useful, when your controller failed to handle real-time event. It can process such event later,
+once reconcile process is getting desired resources and pushes them to controller, so that controller can process those 
+events second or n-th time. Reconciler always returns all resources regardless they were already handled
+by your operator or not. Thus it is important that your operators works in `idempotent` manner. 
 
-### Retry infinitely with random delay
+```scala mdoc:compile-only
+import freya.Configuration.CrdConfig
+import freya.K8sNamespace.Namespace
+import cats.effect.{IO, Timer}
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
-Having operator values:
-
-```scala mdoc
 val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
-```
 
-One can start operator with:
+// p.s. use IOApp as in previous examples instead of below timer and cs values
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+
+// override reconcile method
+
+class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
+  extends Controller[F, Kerb] with LazyLogging {
+
+  override def reconcile(krb: Kerb, meta: Metadata): F[Unit] =
+    F.delay(logger.info(s"Kerb to reconcile: $krb, $meta")) 
+}
+
+Operator
+  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
+  .withReconciler(1.minute)
+  .withRestart()
+``` 
+
+Above configuration will call controller's `reconcile` method every minute, since operator start, in case at least
+one CR/ConfigMap resource is found.
+
+## Restart configuration
+
+Freya can automatically restart your operator in case of any failure during the CRs/ConfigMaps event listening.
+In terms Cats-Effect IO, once IO task is completed, which means Freya Operator has exited from its normal
+listening process, it will be restarted with the same parameters. There are few options to control restart behavior.
+
+### Retry infinitely with random delay
 
 ```scala mdoc
 import cats.effect.{IO, Timer}
@@ -285,17 +319,19 @@ import scala.concurrent.ExecutionContext
 // p.s. use IOApp as in previous examples instead of below timer and cs values
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val client = IO(new DefaultKubernetesClient)
 
 Operator
   .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
    .withRestart(Infinite(minDelay = 1.second, maxDelay = 10.seconds))
 ```
 
-`Infinity` type will restart operator infinitely making random delay between retries within `[minDelay, maxDelay)` time range.
+`Infinite` type will restart operator infinitely making random delay between retries within `[minDelay, maxDelay)` time range.
 
 ### Retry with fixed number of restarts
 
-```scala mdoc
+```scala mdoc:compile-only
 import cats.effect.IO
 import freya.Retry.Times
 import freya.Operator

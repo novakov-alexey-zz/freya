@@ -237,17 +237,6 @@ CrdConfig(
     AdditionalPrinterColumn(name = "realm", columnType = "string", jsonPath = "realm")
   )
 )
-// res1: CrdConfig[Kerb] = CrdConfig(
-//   class repl.Session$App0$Kerb,
-//   Namespace("test"),
-//   "io.myorg.kerboperator",
-//   true,
-//   Some("Kerberos"),
-//   true,
-//   List("kr"),
-//   "kerbs",
-//   List(AdditionalPrinterColumn("realm", "string", "realm"))
-// )
 ```
 
 ConfigMap Operator:
@@ -268,25 +257,70 @@ ConfigMapConfig(
   // if None, then `kind` name is a case class name, i.e. Kerb
   customKind = Some("Kerberos")
 )
-// res2: ConfigMapConfig[Kerb] = ConfigMapConfig(
-//   class repl.Session$App0$Kerb,
-//   all,
-//   "io.myorg.kerboperator",
-//   true,
-//   Some("Kerberos")
-// )
 ```
+
+## Start with parallel reconcile
+
+Freya can start your operator with parallel reconciler thread, which is puling current 
+resources (CRs or ConfigMaps) at specified time interval. This feature allows to pro-actively check
+existing resources and make sure that desired configuration is reflected in terms of Kubernetes objects.
+It is also useful, when your controller failed to handle real-time event. It can process such event later,
+once reconcile process is getting desired resources and pushes them to controller, so that controller can process those 
+events second or n-th time. Reconciler always returns all resources regardless they were already handled
+by your operator or not. Thus it is important that your operators works in `idempotent` manner. 
+
+```scala
+import freya.Configuration.CrdConfig
+import freya.K8sNamespace.Namespace
+import cats.effect.{IO, Timer}
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
+
+val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val client = IO(new DefaultKubernetesClient)
+
+// p.s. use IOApp as in previous examples instead of below timer and cs values
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
+implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+
+// override reconcile method
+
+class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
+  extends Controller[F, Kerb] with LazyLogging {
+
+  override def reconcile(krb: Kerb, meta: Metadata): F[Unit] =
+    F.delay(logger.info(s"Kerb to reconcile: $krb, $meta")) 
+}
+
+Operator
+  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
+  .withReconciler(1.minute)
+  .withRestart()
+``` 
+
+Above configuration will call controller's `reconcile` method every minute, since operator start, in case at least
+one CR/ConfigMap resource is found.
 
 ## Restart configuration
 
-Operator can be launched with restart configuration. In case Operator web-socket connection
-is closed, then it will be restarted according to `Retry` configuration.
+Freya can automatically restart your operator in case of any failure during the CRs/ConfigMaps event listening.
+In terms Cats-Effect IO, once IO task is completed, which means Freya Operator has exited from its normal
+listening process, it will be restarted with the same parameters. There are few options to control restart behavior.
 
 ### Retry infinitely with random delay
 
-Having operator values:
-
 ```scala
+import cats.effect.{IO, Timer}
+import freya.Retry.Infinite
+import freya.Operator
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
+
+// p.s. use IOApp as in previous examples instead of below timer and cs values
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+// timer: Timer[IO] = cats.effect.internals.IOTimer@395bd1 
+implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@289908a2
 val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
 // cfg: CrdConfig[Kerb] = CrdConfig(
 //   class repl.Session$App0$Kerb,
@@ -301,39 +335,23 @@ val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerbope
 // )
 val client = IO(new DefaultKubernetesClient)
 // client: IO[DefaultKubernetesClient] = Delay(<function0>)
-```
-
-One can start operator with:
-
-```scala
-import cats.effect.{IO, Timer}
-import freya.Retry.Infinite
-import freya.Operator
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
-
-// p.s. use IOApp as in previous examples instead of below timer and cs values
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-// timer: Timer[IO] = cats.effect.internals.IOTimer@6e802703 
-implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@13e6eac0
 
 Operator
   .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
    .withRestart(Infinite(minDelay = 1.second, maxDelay = 10.seconds))
-// res3: IO[ExitCode] = Bind(
+// res5: IO[ExitCode] = Bind(
 //   Bind(
 //     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$5398/0x0000000801bcf840@7eac9a44,
+//       cats.effect.internals.IOBracket$$$Lambda$14565/0x0000000802e30840@37040dd9,
 //       false
 //     ),
 //     <function1>
 //   ),
-//   freya.Operator$$Lambda$5400/0x0000000801bd1040@11fb02ad
+//   freya.Operator$$Lambda$14567/0x0000000802e27040@90fdf6e
 // )
 ```
 
-`Infinity` type will restart operator infinitely making random delay between retries within `[minDelay, maxDelay)` time range.
+`Infinite` type will restart operator infinitely making random delay between retries within `[minDelay, maxDelay)` time range.
 
 ### Retry with fixed number of restarts
 
@@ -344,33 +362,11 @@ import freya.Operator
 import scala.concurrent.duration._
 
 val cfg2 = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
-// cfg2: CrdConfig[Kerb] = CrdConfig(
-//   class repl.Session$App0$Kerb,
-//   Namespace("test"),
-//   "io.myorg.kerboperator",
-//   true,
-//   None,
-//   true,
-//   List(),
-//   "",
-//   List()
-// )
 val client2 = IO(new DefaultKubernetesClient)
-// client2: IO[DefaultKubernetesClient] = Delay(<function0>)
 
 Operator
   .ofCrd[IO, Kerb](cfg2, client2, new KerbController[IO])
    .withRestart(Times(maxRetries = 3, delay = 2.seconds, multiplier = 2))
-// res4: IO[ExitCode] = Bind(
-//   Bind(
-//     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$5398/0x0000000801bcf840@1e0ad94,
-//       false
-//     ),
-//     <function1>
-//   ),
-//   freya.Operator$$Lambda$5400/0x0000000801bd1040@4e159d8a
-// )
 ```
 
 Above configuration will lead to the following delay in seconds: 2, 4 and 8. `multiplier` is used to 
