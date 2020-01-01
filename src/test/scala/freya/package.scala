@@ -26,4 +26,7 @@ package object freya {
     val (kerb, _) = parser.parseCM(classOf[Kerb], cm).getOrElse(sys.error("Error when transforming ConfigMap to Krb2"))
     kerb
   }
+
+  def toMetadata(cm: ConfigMap): Metadata =
+    Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
 }

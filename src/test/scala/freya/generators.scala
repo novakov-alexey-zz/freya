@@ -59,17 +59,19 @@ object CM {
 
   def gen[T](implicit A: Arbitrary[T]): Gen[ConfigMap] = gen[T](Map.empty[String, String])
 
-  def gen[T](labels: Map[String, String])(implicit A: Arbitrary[T]): Gen[ConfigMap] =
+  def genBoth[T](labels: Map[String, String])(implicit A: Arbitrary[T]): Gen[(ConfigMap, T)] =
     for {
       spec <- Arbitrary.arbitrary[T]
       meta <- ObjectMetaTest.gen(labels)
     } yield {
-
-      new ConfigMapBuilder()
+      (new ConfigMapBuilder()
         .withMetadata(meta)
         .withData(Map(ConfigMapParser.SpecificationKey -> mapper.writeValueAsString(spec)).asJava)
-        .build()
+        .build(), spec)
     }
+
+  def gen[T](labels: Map[String, String])(implicit A: Arbitrary[T]): Gen[ConfigMap] =
+    genBoth[T](labels).map(_._1)
 }
 
 object Gens {

@@ -23,6 +23,6 @@ class ConfigMapApi(client: KubernetesClient) {
   def list(cms: FilteredN, selector: Map[String, String]): List[ConfigMap] =
     cms.withLabels(selector.asJava).list.getItems.asScala.toList
 
-  def one(cms: FilteredN, selector: (String, String)): Filtered =
+  def select(cms: FilteredN, selector: (String, String)): Filtered =
     cms.withLabels(Map(selector).asJava)
 }

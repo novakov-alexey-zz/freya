@@ -380,19 +380,23 @@ within Operator code manually.
 
 ### CRD Helper
 
-```scala mdoc
+```scala mdoc:compile-only
 import freya.CrdHelper 
 
 val controller = (helper: CrdHelper[IO, Kerb]) =>
   new Controller[IO, Kerb] {
 
     override def onInit(): IO[Unit] =
-      IO {
-        helper.currentResources.fold(
-          errors => println("Failed to get current CRD instances: " + errors.map(_.getMessage).mkString("\n")),
-          crds => println(s"current ${cfg.getKind} CRDs: $crds")
-        )
-      }
+      helper.currentResources.fold(
+        IO.raiseError, // refusing to process
+        r =>
+            IO(r.foreach { resource =>
+              resource.fold(
+                error => println("Failed to get current CRD instances" + error._1),
+                resource => println(s"current ${cfg.getKind} CRDs: ${resource._2}")
+              )
+            })
+      )
   }
 
 Operator
@@ -402,7 +406,7 @@ Operator
 
 `CrdHelper` provides several properties such as: 
 
--   `freya.Operator.Crd` - configuration which is passed on operator construction
+-   `freya.Configuration.CrdConfig` - configuration which is passed on operator construction
 -   `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
 -   `Option[Boolean]` - isOpenShift property
 -   `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object

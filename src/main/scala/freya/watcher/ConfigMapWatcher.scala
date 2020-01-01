@@ -34,7 +34,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
     Sync[F].delay(
       KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap]) //TODO: why internal API is called?
     ) *> {
-      val watchable = configMapApi.one(configMapApi.in(targetNamespace), context.selector)
+      val watchable = configMapApi.select(configMapApi.in(targetNamespace), context.selector)
       registerWatcher(watchable)
     }
 

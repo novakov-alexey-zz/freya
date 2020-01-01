@@ -6,7 +6,7 @@ import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
 import freya.Configuration.CrdConfig
 import freya.Controller.ConfigMapController
 import freya.K8sNamespace.{AllNamespaces, Namespace}
-import freya.Retry.Times
+import freya.Retry.{Infinite, Times}
 import freya.generators.arbitrary
 import freya.models.{Resource, ResourcesList}
 import freya.resource.ConfigMapParser
@@ -198,9 +198,6 @@ class OperatorsTest
     cancelable.unsafeRunSync()
   }
 
-  def toMetadata(cm: ConfigMap): Metadata =
-    Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-
   property("Crd Operator handles different events on restarts") {
     //given
     val controller = new CrdTestController[IO]
@@ -243,7 +240,7 @@ class OperatorsTest
     val maxRestarts = PosInt(20)
 
     //when
-    val cancelable = startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
+    val cancelable = startOperator(operator.withRestart(Infinite(0.seconds, 1.seconds)))
     var currentWatcher = getWatcherOrFail(singleWatcher)
 
     //then

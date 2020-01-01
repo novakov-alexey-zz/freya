@@ -23,10 +23,6 @@ Freya main features:
 1. Auto-deployment of Json Schema for CRD validation.
 1. Effect management and Functional Programming is powered by Cats-Effect.    
 
-## Examples
-
--   Kerberos Operator: https://github.com/novakov-alexey/krb-operator 
-
 ## SBT dependency
 
 ```scala
@@ -286,7 +282,7 @@ ConfigMapConfig(
 Operator can be launched with restart configuration. In case Operator web-socket connection
 is closed, then it will be restarted according to `Retry` configuration.
 
-### Retry with infinitely with random delay
+### Retry infinitely with random delay
 
 Having operator values:
 
@@ -318,9 +314,9 @@ import scala.concurrent.ExecutionContext
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-// timer: Timer[IO] = cats.effect.internals.IOTimer@773cdd7a 
+// timer: Timer[IO] = cats.effect.internals.IOTimer@6e802703 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@72111891
+// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@13e6eac0
 
 Operator
   .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
@@ -328,12 +324,12 @@ Operator
 // res3: IO[ExitCode] = Bind(
 //   Bind(
 //     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$17324/0x00000008028a1040@39c90ba2,
+//       cats.effect.internals.IOBracket$$$Lambda$5398/0x0000000801bcf840@7eac9a44,
 //       false
 //     ),
 //     <function1>
 //   ),
-//   freya.Operator$$Lambda$17326/0x00000008028af840@280fc6ec
+//   freya.Operator$$Lambda$5400/0x0000000801bd1040@11fb02ad
 // )
 ```
 
@@ -368,12 +364,12 @@ Operator
 // res4: IO[ExitCode] = Bind(
 //   Bind(
 //     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$17324/0x00000008028a1040@60db5912,
+//       cats.effect.internals.IOBracket$$$Lambda$5398/0x0000000801bcf840@1e0ad94,
 //       false
 //     ),
 //     <function1>
 //   ),
-//   freya.Operator$$Lambda$17326/0x00000008028af840@361a2413
+//   freya.Operator$$Lambda$5400/0x0000000801bd1040@4e159d8a
 // )
 ```
 
@@ -382,8 +378,8 @@ calculate next delay by `previous delay * multiplier`.
 
 ## Deploy JSON Schema
 
-Put JSON file in CLASSPATH at `schema/<kind>.{json|js}` path, in order to deploy JSON schema as `OpenApi v.3` together with 
-CRD definition automatically during the Operator startup.
+In order to deploy JSON Schema, put JSON file in CLASSPATH at `schema/<kind>.{json|js}` path. 
+Freya deploys JSON schema together with CRD definition automatically during the Operator startup.
 
 For Kerberos Operator example, JSON Schema looks the following.
 
@@ -434,7 +430,11 @@ At resources/schema/kerb.json:
 
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
 set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
-won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd` is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work properly without CRD being retrivied from K8s api-server.   
+won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd`
+is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work without CRD being
+retrieved from K8s api-server. 
+
+Manual deployment of CRD is usually done with YAML files using tools like `kubectl`.   
 
 ## Controller Helpers
 
@@ -451,33 +451,26 @@ val controller = (helper: CrdHelper[IO, Kerb]) =>
   new Controller[IO, Kerb] {
 
     override def onInit(): IO[Unit] =
-      IO {
-        helper.currentResources.fold(
-          errors => println("Failed to get current CRD instances: " + errors.map(_.getMessage).mkString("\n")),
-          crds => println(s"current ${cfg.getKind} CRDs: $crds")
-        )
-      }
+      helper.currentResources.fold(
+        IO.raiseError, // refusing to process
+        r =>
+            IO(r.foreach { resource =>
+              resource.fold(
+                error => println("Failed to get current CRD instances" + error._1),
+                resource => println(s"current ${cfg.getKind} CRDs: ${resource._2}")
+              )
+            })
+      )
   }
-// controller: CrdHelper[IO, Kerb] => Controller[IO, Kerb] = <function1>
 
 Operator
   .ofCrd[IO, Kerb](cfg, client)(controller)
   .withRestart()
-// res5: IO[ExitCode] = Bind(
-//   Bind(
-//     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$17324/0x00000008028a1040@366ca7ca,
-//       false
-//     ),
-//     <function1>
-//   ),
-//   freya.Operator$$Lambda$17326/0x00000008028af840@ab8bbd6
-// )
 ```
 
 `CrdHelper` provides several properties such as: 
 
--   `freya.Operator.Crd` - configuration which is passed on operator construction
+-   `freya.Configuration.CrdConfig` - configuration which is passed on operator construction
 -   `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
 -   `Option[Boolean]` - isOpenShift property
 -   `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object

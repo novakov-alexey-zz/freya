@@ -22,7 +22,7 @@ class Reconciler[F[_], T](
     F.suspend {
       for {
         _ <- T.sleep(delay)
-        _ <- F.delay(logger.info("Reconciler is running >>>>"))
+        _ <- F.delay(logger.debug("Reconciler is running >>>>"))
         r <- currentResources
         _ <- publish(r)
         ec <- run
