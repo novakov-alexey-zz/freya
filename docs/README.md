@@ -23,6 +23,10 @@ Freya main features:
 1. Auto-deployment of Json Schema for CRD validation.
 1. Effect management and Functional Programming is powered by Cats-Effect.    
 
+## Examples	
+
+-   Kerberos Operator: https://github.com/novakov-alexey/krb-operator 
+
 ## SBT dependency
 
 ```scala
