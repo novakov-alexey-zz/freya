@@ -65,11 +65,9 @@ object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
           helper.currentResources.fold(
             IO.raiseError,
             r =>
-              IO(r.foreach { resource =>
-                resource.fold(
-                  error => logger.error("Failed to get current CRD instances", error._1),
-                  resource => logger.info(s"current ${crdCfg.getKind} CRDs: ${resource._2}")
-                )
+              IO(r.foreach {
+                case Left((error, r)) => logger.error(s"Failed to parse CRD instances $r", error)
+                case Right((resource, _)) => logger.info(s"current ${crdCfg.getKind} CRDs: $resource")
               })
           )
       }
