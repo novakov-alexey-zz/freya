@@ -75,11 +75,16 @@ lazy val `freya` = (project in file(".")).settings(
         jacksonJsonSchema % Test,
         scalaJsonSchema % Test
       ),
-  mdocIn := new File("docs/README.md"),
-  mdocOut := new File("README.md"),
-  mdocVariables := Map("VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>")),
   git.useGitDescribe := true
-).enablePlugins(MdocPlugin, GitVersioning)
+).enablePlugins(GitVersioning)
+
+lazy val `mdocs` = project.in(file("mdocs")).settings(
+    mdocIn := new File("mdocs/README.md"),
+    mdocOut := new File("README.md"),
+    mdocVariables := Map("VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>"))
+  )
+  .dependsOn(`freya`)
+  .enablePlugins(MdocPlugin)
 
 lazy val generate = taskKey[Unit]("Generate JSON Schema")
 generate := (runMain in Test).toTask("freya.ScalaJsonSchema").value

@@ -322,9 +322,9 @@ import scala.concurrent.ExecutionContext
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-// timer: Timer[IO] = cats.effect.internals.IOTimer@1a81acda 
+// timer: Timer[IO] = cats.effect.internals.IOTimer@7abed413 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@1afaeec1
+// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@526bc0e8
 val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
 // cfg: CrdConfig[Kerb] = CrdConfig(
 //   class repl.Session$App0$Kerb,
@@ -346,12 +346,12 @@ Operator
 // res5: IO[ExitCode] = Bind(
 //   Bind(
 //     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$6963/0x0000000802087040@699331d2,
+//       cats.effect.internals.IOBracket$$$Lambda$9938/0x0000000802d91040@589f3faf,
 //       false
 //     ),
 //     <function1>
 //   ),
-//   freya.Operator$$Lambda$6965/0x0000000802088840@5ccc9da
+//   freya.Operator$$Lambda$9940/0x0000000802d92840@5c2ab501
 // )
 ```
 
