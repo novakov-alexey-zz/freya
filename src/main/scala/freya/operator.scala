@@ -253,7 +253,7 @@ class Operator[F[_], T] private (pipeline: F[OperatorPipeline[F, T]], reconciler
       case None => F.never[ReconcilerExitCode]
       case Some(i) =>
         val r = new Reconciler[F, T](i, pipe.channel, F.delay(pipe.helper.currentResources))
-        F.delay(logger.info(s"${gr}Starting reconciler $name$xx in namespace '$namespace'")) *>
+        F.delay(logger.info(s"${gr}Starting reconciler $name$xx in namespace '$namespace' with $i interval")) *>
           r.run.guaranteeCase {
             case Canceled => F.delay(logger.debug("Reconciler was canceled!"))
             case _ => F.unit
