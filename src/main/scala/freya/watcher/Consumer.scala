@@ -3,12 +3,12 @@ package freya.watcher
 import cats.effect.ConcurrentEffect
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import freya.{Controller, ExitCodes}
+import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{ParseReconcileError, ParseResourceError, WatcherClosedError}
 import freya.internal.AnsiColors.{gr, re, xx}
-import freya.ExitCodes.ConsumerExitCode
 import freya.watcher.AbstractWatcher.Channel
 import freya.watcher.actions._
+import freya.{Controller, ExitCodes}
 import io.fabric8.kubernetes.client.Watcher.Action.{ADDED, DELETED, ERROR, MODIFIED}
 
 class Consumer[F[_], T](val controller: Controller[F, T], val kind: String)(implicit F: ConcurrentEffect[F])
@@ -39,23 +39,25 @@ class Consumer[F[_], T](val controller: Controller[F, T], val kind: String)(impl
       case ServerAction(wAction, resource, meta, namespace) =>
         wAction match {
           case ADDED =>
-            F.delay(logger.info(s"Event received ${gr}ADDED$xx kind=$kind name=${meta.name} in namespace '$namespace'")) *>
+            F.delay(
+              logger.debug(s"Event received ${gr}ADDED$xx kind=$kind name=${meta.name} in namespace '$namespace'")
+            ) *>
                 controller.onAdd(resource, meta) *>
-                F.delay(logger.info(s"Event ${gr}ADDED$xx for kind=$kind name=${meta.name} has been handled"))
+                F.delay(logger.debug(s"Event ${gr}ADDED$xx for kind=$kind name=${meta.name} has been handled"))
 
           case DELETED =>
             F.delay(
-              logger.info(s"Event received ${gr}DELETED$xx kind=$kind name=${meta.name} in namespace '$namespace'")
+              logger.debug(s"Event received ${gr}DELETED$xx kind=$kind name=${meta.name} in namespace '$namespace'")
             ) *>
                 controller.onDelete(resource, meta) *>
-                F.delay(logger.info(s"Event ${gr}DELETED$xx for kind=$kind name=${meta.name} has been handled"))
+                F.delay(logger.debug(s"Event ${gr}DELETED$xx for kind=$kind name=${meta.name} has been handled"))
 
           case MODIFIED =>
             F.delay(
-              logger.info(s"Event received ${gr}MODIFIED$xx kind=$kind name=${meta.name} in namespace=$namespace")
+              logger.debug(s"Event received ${gr}MODIFIED$xx kind=$kind name=${meta.name} in namespace=$namespace")
             ) *>
                 controller.onModify(resource, meta) *>
-                F.delay(logger.info(s"Event ${gr}MODIFIED$xx for kind=$kind name=${meta.name} has been handled"))
+                F.delay(logger.debug(s"Event ${gr}MODIFIED$xx for kind=$kind name=${meta.name} has been handled"))
 
           case ERROR =>
             F.delay(

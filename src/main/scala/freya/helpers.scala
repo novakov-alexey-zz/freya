@@ -50,7 +50,7 @@ object ConfigMapHelper {
     parser.parseCM(kind, cm).leftMap(_ -> cm)
 }
 
-class ConfigMapHelper[F[_], T](context: ConfigMapHelperContext[T])
+class ConfigMapHelper[F[_], T](val context: ConfigMapHelperContext[T])
     extends AbstractHelper[F, T](context.client, context.cfg) {
 
   val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
@@ -83,7 +83,7 @@ object CrdHelper {
     } yield (spec, meta)
 }
 
-class CrdHelper[F[_], T](context: CrdHelperContext[T]) extends AbstractHelper[F, T](context.client, context.cfg) {
+class CrdHelper[F[_], T](val context: CrdHelperContext[T]) extends AbstractHelper[F, T](context.client, context.cfg) {
   private val crdApi = new CrdApi(client)
 
   def currentResources: Either[Throwable, ResourcesList[T]] = {
