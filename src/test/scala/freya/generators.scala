@@ -64,14 +64,17 @@ object CM {
       spec <- Arbitrary.arbitrary[T]
       meta <- ObjectMetaTest.gen(labels)
     } yield {
-      (new ConfigMapBuilder()
-        .withMetadata(meta)
-        .withData(Map(ConfigMapParser.SpecificationKey -> mapper.writeValueAsString(spec)).asJava)
-        .build(), spec)
+      (
+        new ConfigMapBuilder()
+          .withMetadata(meta)
+          .withData(Map(ConfigMapParser.SpecificationKey -> mapper.writeValueAsString(spec)).asJava)
+          .build(),
+        spec
+      )
     }
 
   def gen[T](labels: Map[String, String])(implicit A: Arbitrary[T]): Gen[ConfigMap] =
-    genBoth[T](labels).map(_._1)
+    genBoth[T](labels).map { case (cm, _) => cm }
 }
 
 object Gens {
