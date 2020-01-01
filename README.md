@@ -23,10 +23,14 @@ Freya main features:
 1. Auto-deployment of Json Schema for CRD validation.
 1. Effect management and Functional Programming is powered by Cats-Effect.    
 
+## Examples	
+
+-   Kerberos Operator: [https://github.com/novakov-alexey/krb-operator]() 
+
 ## SBT dependency
 
 ```scala
-"io.github.novakov-alexey" %% "freya" % "0.1.0" // for Scala 2.13 only at the moment
+"io.github.novakov-alexey" %% "freya" % "0.1.1" // for Scala 2.13 only at the moment
 ```
 
 ## How to use
@@ -318,9 +322,9 @@ import scala.concurrent.ExecutionContext
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-// timer: Timer[IO] = cats.effect.internals.IOTimer@395bd1 
+// timer: Timer[IO] = cats.effect.internals.IOTimer@1a81acda 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@289908a2
+// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@1afaeec1
 val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
 // cfg: CrdConfig[Kerb] = CrdConfig(
 //   class repl.Session$App0$Kerb,
@@ -342,12 +346,12 @@ Operator
 // res5: IO[ExitCode] = Bind(
 //   Bind(
 //     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$14565/0x0000000802e30840@37040dd9,
+//       cats.effect.internals.IOBracket$$$Lambda$6963/0x0000000802087040@699331d2,
 //       false
 //     ),
 //     <function1>
 //   ),
-//   freya.Operator$$Lambda$14567/0x0000000802e27040@90fdf6e
+//   freya.Operator$$Lambda$6965/0x0000000802088840@5ccc9da
 // )
 ```
 
