@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Configuration.CrdConfig
 import freya.internal.crd.{Deployer, SpecDoneable, SpecList}
+import freya.models.Resource
 import freya.resource.{ConfigMapParser, CrdParser}
 import freya.watcher.SpecClass
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
@@ -53,12 +54,13 @@ class OperatorHelperTest
     val cfg = Configuration.ConfigMapConfig(classOf[Kerb], ns, prefix)
     val client = server.getClient
     val parser = new ConfigMapParser()
-    val helper = new ConfigMapHelper[IO, Kerb](cfg, client, None, parser)
+    val context = ConfigMapHelperContext(cfg, client, None, parser)
+    val helper = new ConfigMapHelper[IO, Kerb](context)
 
-    val maps = helper.currentConfigMaps
-    maps should be(Right(Map.empty))
+    val maps = helper.currentResources
+    maps should ===(Right(List.empty))
 
-    val currentCms = mutable.Map.empty[Metadata, Kerb]
+    val currentCms = mutable.ArrayBuffer.empty[Resource[Kerb]]
     val namespace = new NamespaceBuilder().withNewMetadata.withName(ns.value).endMetadata.build
     client.namespaces().create(namespace)
 
@@ -70,9 +72,9 @@ class OperatorHelperTest
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
       val spec = parseCM(parser, cm)
 
-      currentCms += (meta -> spec)
+      currentCms += Right((spec, meta))
       //then
-      helper.currentConfigMaps should be(Right(currentCms))
+      helper.currentResources.map(_.toSet) should ===(Right(currentCms.toSet))
     }
   }
 
@@ -84,7 +86,8 @@ class OperatorHelperTest
 
     val parser = new CrdParser()
     val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
-    val helper = new CrdHelper[IO, Kerb](cfg, client, None, crd, parser)
+    val context = new CrdHelperContext[Kerb](cfg, client, None, crd, parser)
+    val helper = new CrdHelper[IO, Kerb](context)
     val krbClient = client
       .customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
 
@@ -99,7 +102,7 @@ class OperatorHelperTest
     val ns = new NamespaceBuilder().withNewMetadata.withName(testNs.value).endMetadata.build
     client.namespaces().createOrReplace(ns)
 
-    forAll(InfoClass.gen[Kerb](cfg.getKind)) { ic =>
+    forAll(SpecClass.gen[Kerb](cfg.getKind)) { ic =>
       ic.getMetadata.setNamespace(testNs.value)
       //when
       krbClient

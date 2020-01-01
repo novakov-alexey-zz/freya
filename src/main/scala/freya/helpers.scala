@@ -1,78 +1,98 @@
 package freya
 
-import cats.effect.Effect
-import cats.implicits._
+import cats.syntax.either._
 import freya.Configuration.CrdConfig
 import freya.internal.OperatorUtils
 import freya.internal.api.{ConfigMapApi, CrdApi}
-import freya.resource.{ConfigMapParser, CrdParser, Labels}
+import freya.models.{Resource, ResourcesList}
+import freya.resource.{ConfigMapParser, Labels}
 import freya.watcher.SpecClass
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 
-import scala.annotation.unused
+import scala.util.Try
 
-sealed abstract class AbstractHelper[F[_]: Effect, T](val client: KubernetesClient, val cfg: Configuration[T]) {
+trait CrdHelperMaker[F[_], T] {
+  def make(context: CrdHelperContext[T]): CrdHelper[F, T]
+}
+
+object CrdHelperMaker {
+  implicit def helper[F[_], T]: CrdHelperMaker[F, T] =
+    (context: CrdHelperContext[T]) => new CrdHelper[F, T](context)
+}
+
+trait ConfigMapHelperMaker[F[_], T] {
+  def make(context: ConfigMapHelperContext[T]): ConfigMapHelper[F, T]
+}
+
+object ConfigMapHelperMaker {
+  implicit def helper[F[_], T]: ConfigMapHelperMaker[F, T] =
+    (context: ConfigMapHelperContext[T]) => new ConfigMapHelper[F, T](context)
+}
+
+sealed abstract class AbstractHelper[F[_], T](val client: KubernetesClient, val cfg: Configuration[T]) {
   val kind: String = cfg.getKind
   val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(client.getNamespace, cfg.namespace)
+
+  def currentResources: Either[Throwable, ResourcesList[T]]
 }
+
+final case class ConfigMapHelperContext[T](
+  cfg: Configuration.ConfigMapConfig[T],
+  client: KubernetesClient,
+  isOpenShift: Option[Boolean],
+  parser: ConfigMapParser
+)
 
 object ConfigMapHelper {
-  def convertCm[T](kind: Class[T], parser: ConfigMapParser)(cm: ConfigMap): Either[Throwable, (T, Metadata)] =
-    parser.parseCM(kind, cm)
+  def convertCm[T](kind: Class[T], parser: ConfigMapParser)(cm: ConfigMap): Resource[T] =
+    parser.parseCM(kind, cm).leftMap(_ -> cm)
 }
 
-class ConfigMapHelper[F[_]: Effect, T](
-                                        cfg: Configuration.ConfigMapConfig[T],
-                                        client: KubernetesClient,
-                                        @unused isOpenShift: Option[Boolean],
-                                        parser: ConfigMapParser
-) extends AbstractHelper[F, T](client, cfg) {
+class ConfigMapHelper[F[_], T](val context: ConfigMapHelperContext[T])
+    extends AbstractHelper[F, T](context.client, context.cfg) {
 
   val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
   private val cmApi = new ConfigMapApi(client)
 
-  def currentConfigMaps: Either[List[Throwable], Map[Metadata, T]] = {
-    val cms = cmApi.in(targetNamespace)
-
-    cmApi
-      .list(cms, selector)
-      .map(ConfigMapHelper.convertCm(cfg.forKind, parser)(_).toValidatedNec)
-      .sequence
-      .map(_.map { case (entity, meta) => meta -> entity }.toMap)
-      .toEither
-      .leftMap(_.toList)
+  def currentResources: Either[Throwable, ResourcesList[T]] = {
+    val maps = Try(cmApi.in(targetNamespace)).toEither
+    maps.map { m =>
+      cmApi
+        .list(m, selector)
+        .map(ConfigMapHelper.convertCm(cfg.forKind, context.parser)(_))
+    }
   }
 }
 
+final case class CrdHelperContext[T](
+  cfg: CrdConfig[T],
+  client: KubernetesClient,
+  isOpenShift: Option[Boolean],
+  crd: CustomResourceDefinition,
+  parser: CustomResourceParser
+)
+
 object CrdHelper {
 
-  def convertCr[T](kind: Class[T], parser: CrdParser)(info: SpecClass): Either[Throwable, (T, Metadata)] =
+  def convertCr[T](kind: Class[T], parser: CustomResourceParser)(specClass: SpecClass): Resource[T] =
     for {
-      spec <- parser.parse(kind, info)
-      meta <- Right(Metadata(info.getMetadata.getName, info.getMetadata.getNamespace))
+      spec <- parser.parse(kind, specClass).leftMap(_ -> specClass)
+      meta <- Right(Metadata(specClass.getMetadata.getName, specClass.getMetadata.getNamespace))
     } yield (spec, meta)
 }
 
-class CrdHelper[F[_]: Effect, T](
-                                  cfg: CrdConfig[T],
-                                  client: KubernetesClient,
-                                  @unused val isOpenShift: Option[Boolean],
-                                  val crd: CustomResourceDefinition,
-                                  val parser: CrdParser
-) extends AbstractHelper[F, T](client, cfg) {
+class CrdHelper[F[_], T](val context: CrdHelperContext[T]) extends AbstractHelper[F, T](context.client, context.cfg) {
   private val crdApi = new CrdApi(client)
 
-  def currentResources: Either[List[Throwable], Map[Metadata, T]] = {
-    val crds = crdApi.in[T](targetNamespace, crd)
+  def currentResources: Either[Throwable, ResourcesList[T]] = {
+    val crs = Try(crdApi.in[T](targetNamespace, context.crd)).toEither
 
-    crdApi
-      .list(crds)
-      .map(CrdHelper.convertCr(cfg.forKind, parser)(_).toValidatedNec)
-      .sequence
-      .map(_.map { case (entity, meta) => meta -> entity }.toMap)
-      .toEither
-      .leftMap(_.toList)
+    crs.map { c =>
+      crdApi
+        .list(c)
+        .map(CrdHelper.convertCr(cfg.forKind, context.parser)(_))
+    }
   }
 }

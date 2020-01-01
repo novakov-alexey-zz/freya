@@ -23,6 +23,10 @@ Freya main features:
 1. Auto-deployment of Json Schema for CRD validation.
 1. Effect management and Functional Programming is powered by Cats-Effect.    
 
+## Examples	
+
+-   Kerberos Operator: [https://github.com/novakov-alexey/krb-operator]() 
+
 ## SBT dependency
 
 ```scala
@@ -178,7 +182,7 @@ object KerbCrdOperator extends IOApp {
 
 ConfigMap Operator option:
 
-```scala mdoc
+```scala mdoc:compile-only
 import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
@@ -210,7 +214,7 @@ native ConfigMap kind with label `io.myorg.kerboperator/kind=Kerb` in case of Co
 
 Crd Operator:
 
-```scala mdoc
+```scala mdoc:compile-only
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.AdditionalPrinterColumn
@@ -241,7 +245,7 @@ CrdConfig(
 
 ConfigMap Operator:
 
-```scala mdoc
+```scala mdoc:compile-only
 import freya.Configuration.ConfigMapConfig
 import freya.K8sNamespace.AllNamespaces
 
@@ -259,21 +263,55 @@ ConfigMapConfig(
 )
 ```
 
-## Restart configuration
+## Start with parallel reconcile
 
-Operator can be launched with restart configuration. In case Operator web-socket connection
-is closed, then it will be restarted according to `Retry` configuration.
+Freya can start your operator with parallel reconciler thread, which is puling current 
+resources (CRs or ConfigMaps) at specified time interval. This feature allows to pro-actively check
+existing resources and make sure that desired configuration is reflected in terms of Kubernetes objects.
+It is also useful, when your controller failed to handle real-time event. It can process such event later,
+once reconcile process is getting desired resources and pushes them to controller, so that controller can process those 
+events second or n-th time. Reconciler always returns all resources regardless they were already handled
+by your operator or not. Thus it is important that your operators works in `idempotent` manner. 
 
-### Retry with infinitely with random delay
+```scala mdoc:compile-only
+import freya.Configuration.CrdConfig
+import freya.K8sNamespace.Namespace
+import cats.effect.{IO, Timer}
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
-Having operator values:
-
-```scala mdoc
 val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
-```
 
-One can start operator with:
+// p.s. use IOApp as in previous examples instead of below timer and cs values
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+
+// override reconcile method
+
+class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
+  extends Controller[F, Kerb] with LazyLogging {
+
+  override def reconcile(krb: Kerb, meta: Metadata): F[Unit] =
+    F.delay(logger.info(s"Kerb to reconcile: $krb, $meta")) 
+}
+
+Operator
+  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
+  .withReconciler(1.minute)
+  .withRestart()
+``` 
+
+Above configuration will call controller's `reconcile` method every minute, since operator start, in case at least
+one CR/ConfigMap resource is found.
+
+## Restart configuration
+
+Freya can automatically restart your operator in case of any failure during the CRs/ConfigMaps event listening.
+In terms Cats-Effect IO, once IO task is completed, which means Freya Operator has exited from its normal
+listening process, it will be restarted with the same parameters. There are few options to control restart behavior.
+
+### Retry infinitely with random delay
 
 ```scala mdoc
 import cats.effect.{IO, Timer}
@@ -285,17 +323,19 @@ import scala.concurrent.ExecutionContext
 // p.s. use IOApp as in previous examples instead of below timer and cs values
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val client = IO(new DefaultKubernetesClient)
 
 Operator
   .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
    .withRestart(Infinite(minDelay = 1.second, maxDelay = 10.seconds))
 ```
 
-`Infinity` type will restart operator infinitely making random delay between retries within `[minDelay, maxDelay)` time range.
+`Infinite` type will restart operator infinitely making random delay between retries within `[minDelay, maxDelay)` time range.
 
 ### Retry with fixed number of restarts
 
-```scala mdoc
+```scala mdoc:compile-only
 import cats.effect.IO
 import freya.Retry.Times
 import freya.Operator
@@ -314,8 +354,8 @@ calculate next delay by `previous delay * multiplier`.
 
 ## Deploy JSON Schema
 
-Put JSON file in CLASSPATH at `schema/<kind>.{json|js}` path, in order to deploy JSON schema as `OpenApi v.3` together with 
-CRD definition automatically during the Operator startup.
+In order to deploy JSON Schema, put JSON file in CLASSPATH at `schema/<kind>.{json|js}` path. 
+Freya deploys JSON schema together with CRD definition automatically during the Operator startup.
 
 For Kerberos Operator example, JSON Schema looks the following.
 
@@ -366,7 +406,11 @@ At resources/schema/kerb.json:
 
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
 set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
-won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd` is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work properly without CRD being retrivied from K8s api-server.   
+won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd`
+is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work without CRD being
+retrieved from K8s api-server. 
+
+Manual deployment of CRD is usually done with YAML files using tools like `kubectl`.   
 
 ## Controller Helpers
 
@@ -376,19 +420,23 @@ within Operator code manually.
 
 ### CRD Helper
 
-```scala mdoc
+```scala mdoc:compile-only
 import freya.CrdHelper 
 
 val controller = (helper: CrdHelper[IO, Kerb]) =>
   new Controller[IO, Kerb] {
 
     override def onInit(): IO[Unit] =
-      IO {
-        helper.currentResources.fold(
-          errors => println("Failed to get current CRD instances: " + errors.map(_.getMessage).mkString("\n")),
-          crds => println(s"current ${cfg.getKind} CRDs: $crds")
-        )
-      }
+      helper.currentResources.fold(
+        IO.raiseError, // refusing to process
+        r =>
+            IO(r.foreach { resource =>
+              resource.fold(
+                error => println("Failed to get current CRD instances" + error._1),
+                resource => println(s"current ${cfg.getKind} CRDs: ${resource._2}")
+              )
+            })
+      )
   }
 
 Operator
@@ -398,7 +446,7 @@ Operator
 
 `CrdHelper` provides several properties such as: 
 
--   `freya.Operator.Crd` - configuration which is passed on operator construction
+-   `freya.Configuration.CrdConfig` - configuration which is passed on operator construction
 -   `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
 -   `Option[Boolean]` - isOpenShift property
 -   `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object

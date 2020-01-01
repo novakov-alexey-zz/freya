@@ -32,7 +32,7 @@ object ObjectMetaTest {
     } yield ObjectMetaTest(name, namespace, labels)
 }
 
-object InfoClass {
+object SpecClass {
 
   def gen[T: Arbitrary](kind: String): Gen[SpecClass] =
     for {
@@ -59,17 +59,22 @@ object CM {
 
   def gen[T](implicit A: Arbitrary[T]): Gen[ConfigMap] = gen[T](Map.empty[String, String])
 
-  def gen[T](labels: Map[String, String])(implicit A: Arbitrary[T]): Gen[ConfigMap] =
+  def genBoth[T](labels: Map[String, String])(implicit A: Arbitrary[T]): Gen[(ConfigMap, T)] =
     for {
       spec <- Arbitrary.arbitrary[T]
       meta <- ObjectMetaTest.gen(labels)
     } yield {
-
-      new ConfigMapBuilder()
-        .withMetadata(meta)
-        .withData(Map(ConfigMapParser.SpecificationKey -> mapper.writeValueAsString(spec)).asJava)
-        .build()
+      (
+        new ConfigMapBuilder()
+          .withMetadata(meta)
+          .withData(Map(ConfigMapParser.SpecificationKey -> mapper.writeValueAsString(spec)).asJava)
+          .build(),
+        spec
+      )
     }
+
+  def gen[T](labels: Map[String, String])(implicit A: Arbitrary[T]): Gen[ConfigMap] =
+    genBoth[T](labels).map { case (cm, _) => cm }
 }
 
 object Gens {

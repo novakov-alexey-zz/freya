@@ -3,6 +3,7 @@ package freya.resource
 import cats.effect.Sync
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import freya.CustomResourceParser
 import freya.watcher.SpecClass
 
 import scala.util.{Failure, Success, Try}
@@ -12,12 +13,12 @@ private[freya] object CrdParser {
     Sync[F].delay(new CrdParser)
 }
 
-private[freya] class CrdParser {
+private[freya] class CrdParser extends CustomResourceParser {
   private val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
 
-  def parse[T](clazz: Class[T], info: SpecClass): Either[Throwable, T] = {
-    val spec = Try(mapper.convertValue(info.getSpec, clazz)).toEither
+  def parse[T](clazz: Class[T], specClass: SpecClass): Either[Throwable, T] = {
+    val spec = Try(mapper.convertValue(specClass.getSpec, clazz)).toEither
 
     spec match {
       case Right(s) =>

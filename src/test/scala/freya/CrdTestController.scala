@@ -7,9 +7,10 @@ import io.fabric8.kubernetes.client.Watcher.Action
 import scala.collection.mutable
 
 class CrdTestController[F[_]](implicit override val F: ConcurrentEffect[F])
-  extends Controller[F, Kerb]
+    extends Controller[F, Kerb]
     with LazyLogging {
   val events: mutable.Set[(Action, Kerb, Metadata)] = mutable.Set.empty
+  val reconciledEvents: mutable.Set[(Kerb, Metadata)] = mutable.Set.empty
   var initialized: Boolean = false
 
   override def onAdd(krb: Kerb, meta: Metadata): F[Unit] =
@@ -21,10 +22,12 @@ class CrdTestController[F[_]](implicit override val F: ConcurrentEffect[F])
   override def onModify(krb: Kerb, meta: Metadata): F[Unit] =
     F.delay(events += ((Action.MODIFIED, krb, meta)))
 
+  override def reconcile(krb: Kerb, meta: Metadata): F[Unit] =
+    F.delay(reconciledEvents += ((krb, meta)))
+
   override def onInit(): F[Unit] =
-    F.delay({
+    F.delay {
       this.initialized = true
       logger.debug("Controller initialized")
-    })
+    }
 }
-
