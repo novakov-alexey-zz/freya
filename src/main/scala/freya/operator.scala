@@ -63,6 +63,15 @@ object CrdHelperMaker {
     (context: CrdHelperContext[T]) => new CrdHelper[F, T](context)
 }
 
+trait ConfigMapHelperMaker[F[_], T] {
+  def make(context: ConfigMapHelperContext[T]): ConfigMapHelper[F, T]
+}
+
+object ConfigMapHelperMaker {
+  implicit def helper[F[_], T]: ConfigMapHelperMaker[F, T] =
+    (context: ConfigMapHelperContext[T]) => new ConfigMapHelper[F, T](context)
+}
+
 object Operator extends LazyLogging {
 
   def ofCrd[F[_]: ConcurrentEffect: Timer, T](
@@ -79,7 +88,7 @@ object Operator extends LazyLogging {
   def ofCrd[F[_], T](cfg: CrdConfig[T], client: F[KubernetesClient])(controller: CrdHelper[F, T] => Controller[F, T])(
     implicit F: ConcurrentEffect[F],
     T: Timer[F],
-    watchMaker: CrdWatchMaker[F, T],
+    watch: CrdWatchMaker[F, T],
     helperMaker: CrdHelperMaker[F, T],
     deployer: CrdDeployer[F, T]
   ): Operator[F, T] = {
@@ -105,7 +114,7 @@ object Operator extends LazyLogging {
         crd
       )
 
-      w <- F.delay(watchMaker.make(context).watch)
+      w <- F.delay(watch.make(context).watch)
     } yield createPipeline(helper, ctl, w, channel)
 
     new Operator[F, T](pipeline)
@@ -115,12 +124,17 @@ object Operator extends LazyLogging {
     cfg: Configuration.ConfigMapConfig[T],
     client: F[KubernetesClient],
     controller: ConfigMapController[F, T]
-  )(implicit watchMaker: ConfigMapWatchMaker[F, T]): Operator[F, T] =
+  )(implicit watchMaker: ConfigMapWatchMaker[F, T], helper: ConfigMapHelperMaker[F, T]): Operator[F, T] =
     ofConfigMap[F, T](cfg, client)((_: ConfigMapHelper[F, T]) => controller)
 
   def ofConfigMap[F[_], T](cfg: Configuration.ConfigMapConfig[T], client: F[KubernetesClient])(
     controller: ConfigMapHelper[F, T] => ConfigMapController[F, T]
-  )(implicit F: ConcurrentEffect[F], T: Timer[F], watchMaker: ConfigMapWatchMaker[F, T]): Operator[F, T] = {
+  )(
+    implicit F: ConcurrentEffect[F],
+    T: Timer[F],
+    watchMaker: ConfigMapWatchMaker[F, T],
+    helperMaker: ConfigMapHelperMaker[F, T]
+  ): Operator[F, T] = {
 
     val pipeline = for {
       k8sClient <- client
@@ -128,7 +142,10 @@ object Operator extends LazyLogging {
       channel <- MVar[F].empty[Either[OperatorError[T], OperatorAction[T]]]
       parser <- ConfigMapParser()
 
-      helper = new ConfigMapHelper[F, T](cfg, k8sClient, isOpenShift, parser)
+      helper = {
+        val context = ConfigMapHelperContext(cfg, k8sClient, isOpenShift, parser)
+        helperMaker.make(context)
+      }
       ctl = controller(helper)
       context = ConfigMapWatcherContext(
         cfg.namespace,

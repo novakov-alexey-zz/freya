@@ -42,8 +42,10 @@ class OperatorsTest
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
 
-  val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
+  val crdCfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
+  val configMapcfg = Configuration.ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
   val server = new KubernetesServer(false, false)
+  val cmParser = ConfigMapParser[IO]().unsafeRunSync()
 
   before {
     server.before()
@@ -100,9 +102,8 @@ class OperatorsTest
   ): (Operator[F, Kerb], mutable.Set[Watcher[ConfigMap]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
-    val cfg = Configuration.ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
 
-    Operator.ofConfigMap[F, Kerb](cfg, client[F], controller) -> singleWatcher
+    Operator.ofConfigMap[F, Kerb](configMapcfg, client[F], controller) -> singleWatcher
   }
 
   def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
@@ -111,7 +112,7 @@ class OperatorsTest
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, SpecClass]
     implicit val watchable: Watchable[Watch, Watcher[SpecClass]] = fakeWatchable
 
-    Operator.ofCrd[F, Kerb](cfg, client[F], controller).withReconciler(1.millis) -> singleWatcher
+    Operator.ofCrd[F, Kerb](crdCfg, client[F], controller).withReconciler(1.millis) -> singleWatcher
   }
 
   property("Crd Operator handles different events") {
@@ -125,7 +126,7 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, SpecClass.gen[Kerb](cfg.getKind)) { (action, crd) =>
+    forAll(WatcherAction.gen, SpecClass.gen[Kerb](crdCfg.getKind)) { (action, crd) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
@@ -142,8 +143,7 @@ class OperatorsTest
   property("Crd Operator gets event from reconciler process") {
     //given
     val controller = new CrdTestController[IO]
-    val (fakeWatchable, _) = makeWatchable[Kerb, SpecClass]
-    implicit val watchable: Watchable[Watch, Watcher[SpecClass]] = fakeWatchable
+    implicit val (fakeWatchable, _) = makeWatchable[Kerb, SpecClass]
 
     val testResources = new mutable.ArrayBuffer[Resource[Kerb]]()
     implicit val helper: CrdHelperMaker[IO, Kerb] = (context: CrdHelperContext[Kerb]) =>
@@ -152,11 +152,11 @@ class OperatorsTest
           Right(testResources.toList)
       }
 
-    val operator = Operator.ofCrd[IO, Kerb](cfg, client[IO], controller).withReconciler(1.millis)
+    val operator = Operator.ofCrd[IO, Kerb](crdCfg, client[IO], controller).withReconciler(1.millis)
     //when
     val cancelable = startOperator(operator.run)
 
-    forAll(SpecClass.gen[Kerb](cfg.getKind)) { crd =>
+    forAll(SpecClass.gen[Kerb](crdCfg.getKind)) { crd =>
       val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
       testResources += Right((crd.getSpec.asInstanceOf[Kerb], meta))
       //then
@@ -167,6 +167,39 @@ class OperatorsTest
 
     cancelable.unsafeRunSync()
   }
+
+  property("ConfigMap Operator gets event from reconciler process") {
+    //given
+    val controller = new ConfigMapTestController[IO]
+    implicit val (fakeWatchable, _) = makeWatchable[Kerb, ConfigMap]
+
+    val testResources = new mutable.ArrayBuffer[Resource[Kerb]]()
+    implicit val helper: ConfigMapHelperMaker[IO, Kerb] = (context: ConfigMapHelperContext[Kerb]) =>
+      new ConfigMapHelper[IO, Kerb](context) {
+        override def currentResources: Either[Throwable, ResourcesList[Kerb]] =
+          Right(testResources.toList)
+      }
+
+    val operator = Operator.ofConfigMap[IO, Kerb](configMapcfg, client[IO], controller).withReconciler(1.millis)
+    //when
+    val cancelable = startOperator(operator.run)
+
+    forAll(CM.gen[Kerb]) { cm =>
+      val meta = toMetadata(cm)
+      val spec = parseCM(cmParser, cm)
+
+      testResources += Right((spec, meta))
+      //then
+      eventually {
+        controller.reconciledEvents should contain((spec, meta))
+      }
+    }
+
+    cancelable.unsafeRunSync()
+  }
+
+  def toMetadata(cm: ConfigMap): Metadata =
+    Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
 
   property("Crd Operator handles different events on restarts") {
     //given
@@ -181,7 +214,7 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, SpecClass.gen[Kerb](cfg.getKind), arbitrary[Boolean], minSuccessful(maxRestarts)) {
+    forAll(WatcherAction.gen, SpecClass.gen[Kerb](crdCfg.getKind), arbitrary[Boolean], minSuccessful(maxRestarts)) {
       (action, crd, close) =>
         //when
         if (close)
@@ -215,7 +248,6 @@ class OperatorsTest
 
     //then
     controller.initialized should ===(true)
-    val parser = ConfigMapParser[IO]().unsafeRunSync()
 
     forAll(WatcherAction.gen, CM.gen[Kerb], arbitrary[Boolean], minSuccessful(maxRestarts)) { (action, cm, close) =>
       //when
@@ -227,8 +259,8 @@ class OperatorsTest
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
 
-      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-      val spec = parseCM(parser, cm)
+      val meta = toMetadata(cm)
+      val spec = parseCM(cmParser, cm)
 
       //then
       eventually {
@@ -261,7 +293,7 @@ class OperatorsTest
       singleWatcher.foreach(_.eventReceived(action, cm))
 
       //then
-      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      val meta = toMetadata(cm)
       val spec = parseCM(parser, cm)
       eventually {
         controller.events should contain((action, spec, meta))
@@ -277,7 +309,7 @@ class OperatorsTest
     }
   }
 
-  property("Operator return Error code on failure") {
+  property("Operator returns error code on failure") {
     val controller = new ConfigMapTestController[IO] {
       override def onInit(): IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
     }
@@ -311,12 +343,11 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    val parser = ConfigMapParser[IO]().unsafeRunSync()
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
-      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-      val spec = parseCM(parser, cm)
+      val meta = toMetadata(cm)
+      val spec = parseCM(cmParser, cm)
 
       //then
       eventually {
@@ -356,11 +387,10 @@ class OperatorsTest
 
     //when
     val cancelable = startOperator(operator.run)
-    val parser = ConfigMapParser[IO]().unsafeRunSync()
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
-      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-      val spec = parseCM(parser, cm)
+      val meta = toMetadata(cm)
+      val spec = parseCM(cmParser, cm)
 
       if (spec.failInTest)
         cm.getData.put(ConfigMapParser.SpecificationKey, "error")
@@ -410,10 +440,9 @@ class OperatorsTest
     //when
     val cancelable = startOperator(operator.run)
 
-    val parser = ConfigMapParser[IO]().unsafeRunSync()
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
-      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-      val spec = parseCM(parser, cm)
+      val meta = toMetadata(cm)
+      val spec = parseCM(cmParser, cm)
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
 
@@ -429,11 +458,9 @@ class OperatorsTest
 
   property("ConfigMap operator handles only supported ConfigMaps") {
     //given
-    val parser = ConfigMapParser[IO]().unsafeRunSync()
-
     val controller = new CountingFailureFlagController() {
       override def isSupported(cm: ConfigMap): Boolean = {
-        val spec = parseCM(parser, cm)
+        val spec = parseCM(cmParser, cm)
         !spec.failInTest
       }
     }
@@ -443,8 +470,8 @@ class OperatorsTest
     val cancelable = startOperator(operator.run)
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
-      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
-      val spec = parseCM(parser, cm)
+      val meta = toMetadata(cm)
+      val spec = parseCM(cmParser, cm)
 
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))

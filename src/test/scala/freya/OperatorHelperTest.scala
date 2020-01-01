@@ -54,7 +54,8 @@ class OperatorHelperTest
     val cfg = Configuration.ConfigMapConfig(classOf[Kerb], ns, prefix)
     val client = server.getClient
     val parser = new ConfigMapParser()
-    val helper = new ConfigMapHelper[IO, Kerb](cfg, client, None, parser)
+    val context = ConfigMapHelperContext(cfg, client, None, parser)
+    val helper = new ConfigMapHelper[IO, Kerb](context)
 
     val maps = helper.currentResources
     maps should ===(Right(List.empty))

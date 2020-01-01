@@ -11,7 +11,6 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 
-import scala.annotation.unused
 import scala.util.Try
 
 sealed abstract class AbstractHelper[F[_], T](val client: KubernetesClient, val cfg: Configuration[T]) {
@@ -21,17 +20,20 @@ sealed abstract class AbstractHelper[F[_], T](val client: KubernetesClient, val 
   def currentResources: Either[Throwable, ResourcesList[T]]
 }
 
+final case class ConfigMapHelperContext[T](
+  cfg: Configuration.ConfigMapConfig[T],
+  client: KubernetesClient,
+  isOpenShift: Option[Boolean],
+  parser: ConfigMapParser
+)
+
 object ConfigMapHelper {
   def convertCm[T](kind: Class[T], parser: ConfigMapParser)(cm: ConfigMap): Resource[T] =
     parser.parseCM(kind, cm).leftMap(_ -> cm)
 }
 
-class ConfigMapHelper[F[_], T](
-  cfg: Configuration.ConfigMapConfig[T],
-  client: KubernetesClient,
-  @unused isOpenShift: Option[Boolean],
-  parser: ConfigMapParser
-) extends AbstractHelper[F, T](client, cfg) {
+class ConfigMapHelper[F[_], T](context: ConfigMapHelperContext[T])
+    extends AbstractHelper[F, T](context.client, context.cfg) {
 
   val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
   private val cmApi = new ConfigMapApi(client)
@@ -41,7 +43,7 @@ class ConfigMapHelper[F[_], T](
     maps.map { m =>
       cmApi
         .list(m, selector)
-        .map(ConfigMapHelper.convertCm(cfg.forKind, parser)(_))
+        .map(ConfigMapHelper.convertCm(cfg.forKind, context.parser)(_))
     }
   }
 }
@@ -63,9 +65,7 @@ object CrdHelper {
     } yield (spec, meta)
 }
 
-class CrdHelper[F[_], T](
-  context: CrdHelperContext[T]
-) extends AbstractHelper[F, T](context.client, context.cfg) {
+class CrdHelper[F[_], T](context: CrdHelperContext[T]) extends AbstractHelper[F, T](context.client, context.cfg) {
   private val crdApi = new CrdApi(client)
 
   def currentResources: Either[Throwable, ResourcesList[T]] = {
