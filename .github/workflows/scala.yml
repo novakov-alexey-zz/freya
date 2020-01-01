@@ -16,4 +16,4 @@ jobs:
     - name: Run tests
       run: sbt test
     - name: Compile documentation
-      run: sbt mdoc
+      run: sbt mdocs/mdoc

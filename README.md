@@ -30,7 +30,7 @@ Freya main features:
 ## SBT dependency
 
 ```scala
-"io.github.novakov-alexey" %% "freya" % "0.1.1" // for Scala 2.13 only at the moment
+"io.github.novakov-alexey" %% "freya" % "0.1.2" // for Scala 2.13 only at the moment
 ```
 
 ## How to use
@@ -322,9 +322,9 @@ import scala.concurrent.ExecutionContext
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-// timer: Timer[IO] = cats.effect.internals.IOTimer@7abed413 
+// timer: Timer[IO] = cats.effect.internals.IOTimer@78357aa0 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@526bc0e8
+// cs: ContextShift[IO] = cats.effect.internals.IOContextShift@1ae9cc73
 val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
 // cfg: CrdConfig[Kerb] = CrdConfig(
 //   class repl.Session$App0$Kerb,
@@ -346,12 +346,12 @@ Operator
 // res5: IO[ExitCode] = Bind(
 //   Bind(
 //     Async(
-//       cats.effect.internals.IOBracket$$$Lambda$9938/0x0000000802d91040@589f3faf,
+//       cats.effect.internals.IOBracket$$$Lambda$7023/0x0000000802081840@60cf69f2,
 //       false
 //     ),
 //     <function1>
 //   ),
-//   freya.Operator$$Lambda$9940/0x0000000802d92840@5c2ab501
+//   freya.Operator$$Lambda$7025/0x0000000802083040@268adf7a
 // )
 ```
 
