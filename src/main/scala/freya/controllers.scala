@@ -6,13 +6,13 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import scala.annotation.unused
 
 abstract class Controller[F[_], T](implicit val F: Sync[F]) {
-  def onAdd(@unused entity: T, @unused metadata: Metadata): F[Unit] = F.unit
+  def onAdd(@unused resource: T, @unused metadata: Metadata): F[Unit] = F.unit
 
-  def onDelete(@unused entity: T, @unused metadata: Metadata): F[Unit] = F.unit
+  def onDelete(@unused resource: T, @unused metadata: Metadata): F[Unit] = F.unit
 
-  def onModify(@unused entity: T, @unused metadata: Metadata): F[Unit] = F.unit
+  def onModify(@unused resource: T, @unused metadata: Metadata): F[Unit] = F.unit
 
-  def reconcile(@unused entity: T, @unused metadata: Metadata): F[Unit] = F.unit
+  def reconcile(@unused resource: T, @unused metadata: Metadata): F[Unit] = F.unit
 
   def onInit(): F[Unit] = F.unit
 }
