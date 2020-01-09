@@ -313,14 +313,13 @@ listening process, it will be restarted with the same parameters. There are few 
 
 ### Retry infinitely with random delay
 
-```scala mdoc
+```scala mdoc:compile-only
 import cats.effect.{IO, Timer}
 import freya.Retry.Infinite
 import freya.Operator
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
-// p.s. use IOApp as in previous examples instead of below timer and cs values
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
@@ -336,16 +335,19 @@ Operator
 ### Retry with fixed number of restarts
 
 ```scala mdoc:compile-only
-import cats.effect.IO
+import cats.effect.{IO, Timer}
 import freya.Retry.Times
 import freya.Operator
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
 
-val cfg2 = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
-val client2 = IO(new DefaultKubernetesClient)
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val client = IO(new DefaultKubernetesClient)
 
 Operator
-  .ofCrd[IO, Kerb](cfg2, client2, new KerbController[IO])
+  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
    .withRestart(Times(maxRetries = 3, delay = 2.seconds, multiplier = 2))
 ```
 
@@ -421,8 +423,15 @@ within Operator code manually.
 ### CRD Helper
 
 ```scala mdoc:compile-only
+import cats.effect.{IO, Timer}
 import freya.CrdHelper 
+import scala.concurrent.ExecutionContext
 
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+
+val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val client = IO(new DefaultKubernetesClient)
 val controller = (helper: CrdHelper[IO, Kerb]) =>
   new Controller[IO, Kerb] {
 
