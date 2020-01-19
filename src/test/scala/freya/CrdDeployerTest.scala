@@ -14,8 +14,8 @@ class CrdDeployerTest extends AsyncFlatSpec with Matchers with BeforeAndAfterAll
 
   it should "deploy CRD" in {
       val client = server.getClient
-      val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix)
-      val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None)
+      val cfg = CrdConfig[Kerb](Namespace("test"), prefix)
+      val crd = Deployer.deployCrd[IO](client, cfg, None)
       crd.map(_.getMetadata.getName should ===(s"${cfg.getPluralCaseInsensitive}.$prefix")).unsafeToFuture()
     }
 

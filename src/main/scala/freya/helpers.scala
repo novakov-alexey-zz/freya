@@ -4,22 +4,23 @@ import cats.syntax.either._
 import freya.Configuration.CrdConfig
 import freya.internal.OperatorUtils
 import freya.internal.api.{ConfigMapApi, CrdApi}
-import freya.models.{Resource, ResourcesList}
+import freya.models.{CustomResource, Resource, ResourcesList}
 import freya.resource.{ConfigMapParser, Labels}
-import freya.watcher.SpecClass
+import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 
+import scala.reflect.ClassTag
 import scala.util.Try
 
-trait CrdHelperMaker[F[_], T] {
-  def make(context: CrdHelperContext[T]): CrdHelper[F, T]
+trait CrdHelperMaker[F[_], T, U] {
+  def make(context: CrdHelperContext[T]): CrdHelper[F, T, U]
 }
 
 object CrdHelperMaker {
-  implicit def helper[F[_], T]: CrdHelperMaker[F, T] =
-    (context: CrdHelperContext[T]) => new CrdHelper[F, T](context)
+  implicit def helper[F[_], T, U: ClassTag]: CrdHelperMaker[F, T, U] =
+    (context: CrdHelperContext[T]) => new CrdHelper[F, T, U](context)
 }
 
 trait ConfigMapHelperMaker[F[_], T] {
@@ -31,11 +32,11 @@ object ConfigMapHelperMaker {
     (context: ConfigMapHelperContext[T]) => new ConfigMapHelper[F, T](context)
 }
 
-sealed abstract class AbstractHelper[F[_], T](val client: KubernetesClient, val cfg: Configuration[T]) {
+sealed abstract class AbstractHelper[F[_], T, U](val client: KubernetesClient, val cfg: Configuration[T]) {
   val kind: String = cfg.getKind
   val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(client.getNamespace, cfg.namespace)
 
-  def currentResources: Either[Throwable, ResourcesList[T]]
+  def currentResources: Either[Throwable, ResourcesList[T, U]]
 }
 
 final case class ConfigMapHelperContext[T](
@@ -46,17 +47,19 @@ final case class ConfigMapHelperContext[T](
 )
 
 object ConfigMapHelper {
-  def convertCm[T](kind: Class[T], parser: ConfigMapParser)(cm: ConfigMap): Resource[T] =
-    parser.parseCM(kind, cm).leftMap(_ -> cm)
+  def convertCm[T](kind: Class[T], parser: ConfigMapParser)(cm: ConfigMap): Resource[T, Unit] =
+    parser.parseCM(kind, cm).leftMap(_ -> cm).map {
+      case (resource, meta) => CustomResource(resource, meta, ())
+    }
 }
 
 class ConfigMapHelper[F[_], T](val context: ConfigMapHelperContext[T])
-    extends AbstractHelper[F, T](context.client, context.cfg) {
+    extends AbstractHelper[F, T, Unit](context.client, context.cfg) {
 
   val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
   private val cmApi = new ConfigMapApi(client)
 
-  def currentResources: Either[Throwable, ResourcesList[T]] = {
+  def currentResources: Either[Throwable, ResourcesList[T, Unit]] = {
     val maps = Try(cmApi.in(targetNamespace)).toEither
     maps.map { m =>
       cmApi
@@ -76,17 +79,25 @@ final case class CrdHelperContext[T](
 
 object CrdHelper {
 
-  def convertCr[T](kind: Class[T], parser: CustomResourceParser)(specClass: SpecClass): Resource[T] =
+  def convertCr[T, U: ClassTag](kind: Class[T], parser: CustomResourceParser)(
+    resource: AnyCustomResource
+  ): Resource[T, U] =
     for {
-      spec <- parser.parse(kind, specClass).leftMap(_ -> specClass)
-      meta <- Right(Metadata(specClass.getMetadata.getName, specClass.getMetadata.getNamespace))
-    } yield (spec, meta)
+      (spec, status) <- parser
+        .parse(kind, getStatusClass, resource)
+        .leftMap(_ -> resource)
+      meta <- Right(Metadata(resource.getMetadata.getName, resource.getMetadata.getNamespace))
+    } yield CustomResource(spec, meta, status)
+
+  private def getStatusClass[U: ClassTag, T]: Class[U] =
+    implicitly[ClassTag[U]].runtimeClass.asInstanceOf[Class[U]]
 }
 
-class CrdHelper[F[_], T](val context: CrdHelperContext[T]) extends AbstractHelper[F, T](context.client, context.cfg) {
+class CrdHelper[F[_], T, U: ClassTag](val context: CrdHelperContext[T])
+    extends AbstractHelper[F, T, U](context.client, context.cfg) {
   private val crdApi = new CrdApi(client)
 
-  def currentResources: Either[Throwable, ResourcesList[T]] = {
+  def currentResources: Either[Throwable, ResourcesList[T, U]] = {
     val crs = Try(crdApi.in[T](targetNamespace, context.crd)).toEither
 
     crs.map { c =>

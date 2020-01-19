@@ -3,9 +3,9 @@ package freya
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
-import freya.internal.crd.{SpecDoneable, SpecList}
+import freya.internal.crd.{AnyCrDoneable, AnyCrList}
 import freya.resource.ConfigMapParser
-import freya.watcher.SpecClass
+import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import org.scalatest.concurrent.Eventually
@@ -41,16 +41,16 @@ class ServerMockTest
 
   property("Crd operator handles different events") {
     val client = server.getClient
-    val cfg = Configuration.CrdConfig(classOf[Kerb], AllNamespaces, prefix)
+    val cfg = Configuration.CrdConfig[Kerb]( AllNamespaces, prefix)
 
     val controller = new CrdTestController[IO]
-    val operator = Operator.ofCrd[IO, Kerb](cfg, IO.pure(client), controller).run
+    val operator = Operator.ofCrd[IO, Kerb, KerbStatus](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)
     val crd = client.customResourceDefinitions.withName("kerbs.io.github.novakov-alexey").get()
     val krbClient = client
-      .customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
+      .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
 
-    forAll(WatcherAction.gen, SpecClass.gen[Kerb](cfg.getKind)) { (action, ic) =>
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](cfg.getKind)) { (action, ic) =>
       val ns = new NamespaceBuilder().withNewMetadata.withName(ic.getMetadata.getNamespace).endMetadata.build
       client.namespaces().create(ns)
 
@@ -70,7 +70,7 @@ class ServerMockTest
 
   property("ConfigMap operator handles different events") {
     val client = server.getClient
-    val cfg = Configuration.ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
+    val cfg = Configuration.ConfigMapConfig[Kerb](AllNamespaces, prefix, checkK8sOnStartup = false)
     val controller = new ConfigMapTestController[IO]
     val operator = Operator.ofConfigMap[IO, Kerb](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)

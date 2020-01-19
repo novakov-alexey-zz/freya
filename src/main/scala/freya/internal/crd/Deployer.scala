@@ -4,10 +4,11 @@ import cats.effect.Sync
 import cats.implicits._
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.typesafe.scalalogging.LazyLogging
+import freya.AdditionalPrinterColumn
+import freya.Configuration.CrdConfig
 import freya.internal.AnsiColors._
 import freya.internal.api.CrdApi
-import freya.watcher.SpecClass
-import freya.{AdditionalPrinterColumn, Configuration}
+import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.api.model.apiextensions._
 import io.fabric8.kubernetes.client.utils.Serialization
@@ -18,10 +19,10 @@ import scala.jdk.CollectionConverters._
 
 private[freya] object Deployer extends LazyLogging {
 
-  def deployCrd[F[_]: Sync, T](
-                                client: KubernetesClient,
-                                cfg: Configuration.CrdConfig[T],
-                                isOpenShift: Option[Boolean]
+  def deployCrd[F[_]: Sync](
+    client: KubernetesClient,
+    cfg: CrdConfig[_],
+    isOpenShift: Option[Boolean]
   ): F[CustomResourceDefinition] =
     for {
       _ <- Sync[F].delay(Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false))
@@ -39,14 +40,13 @@ private[freya] object Deployer extends LazyLogging {
           ) *>
               h.pure[F]
         case Nil if cfg.deployCrd =>
-          createCrd[F, T](
+          createCrd[F](
             client,
             cfg.prefix,
             kind,
             cfg.shortNames,
             cfg.getPluralCaseInsensitive,
             cfg.additionalPrinterColumns,
-            cfg.forKind,
             isOpenShift
           )
         case _ =>
@@ -58,7 +58,7 @@ private[freya] object Deployer extends LazyLogging {
       _ <- Sync[F].delay {
         // register the new crd for json serialization
         val apiVersion = s"${cfg.prefix}/${crd.getSpec.getVersion}"
-        KubernetesDeserializer.registerCustomKind(apiVersion, kind, classOf[SpecClass])
+        KubernetesDeserializer.registerCustomKind(apiVersion, kind, classOf[AnyCustomResource])
         KubernetesDeserializer.registerCustomKind(
           apiVersion,
           s"${kind}List",
@@ -67,19 +67,18 @@ private[freya] object Deployer extends LazyLogging {
       }
     } yield crd
 
-  private def createCrd[F[_]: Sync, T](
+  private def createCrd[F[_]: Sync](
     client: KubernetesClient,
     apiPrefix: String,
     kind: String,
     shortNames: List[String],
     pluralName: String,
     additionalPrinterColumns: List[AdditionalPrinterColumn],
-    infoClass: Class[T],
     isOpenshift: Option[Boolean]
   ) =
     for {
       _ <- Sync[F].delay(logger.info(s"Creating CustomResourceDefinition for $kind."))
-      jsonSchema <- Sync[F].delay(JSONSchemaReader.readSchema(infoClass))
+      jsonSchema <- Sync[F].delay(JSONSchemaReader.readSchema(kind))
 
       builder = {
         val crdBuilder = jsonSchema match {

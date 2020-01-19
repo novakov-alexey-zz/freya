@@ -32,18 +32,19 @@ object ObjectMetaTest {
     } yield ObjectMetaTest(name, namespace, labels)
 }
 
-object SpecClass {
+object AnyCustomResource {
 
-  def gen[T: Arbitrary](kind: String): Gen[SpecClass] =
+  def gen[T: Arbitrary](kind: String): Gen[AnyCustomResource] =
     for {
       spec <- arbitrary[T]
       meta <- ObjectMetaTest.gen
     } yield {
-      val sc = new SpecClass
+      val sc = new AnyCustomResource
       sc.setApiVersion("io.github.novakov-alexey/v1")
       sc.setKind(kind)
       sc.setSpec(spec.asInstanceOf[AnyRef])
       sc.setMetadata(meta)
+      sc.setStatus(KerbStatus())
       sc
     }
 }

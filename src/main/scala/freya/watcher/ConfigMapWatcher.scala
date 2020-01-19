@@ -2,13 +2,12 @@ package freya.watcher
 
 import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
-import freya.Controller.ConfigMapController
+import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{OperatorError, ParseResourceError}
 import freya.internal.api.ConfigMapApi
 import freya.models.Resource
-import freya.ExitCodes.ConsumerExitCode
 import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
-import freya.{Controller, K8sNamespace}
+import freya.{CmController, Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
@@ -17,16 +16,20 @@ import io.fabric8.kubernetes.internal.KubernetesDeserializer
 final case class ConfigMapWatcherContext[F[_]: ConcurrentEffect, T](
   namespace: K8sNamespace,
   kind: String,
-  controller: ConfigMapController[F, T],
-  consumer: Consumer[F, T],
-  convert: ConfigMap => Resource[T],
-  channel: Channel[F, T],
+  controller: CmController[F, T],
+  consumer: ActionConsumer[F, T, Unit],
+  convert: ConfigMap => Resource[T, Unit],
+  channel: Channel[F, T, Unit],
   client: KubernetesClient,
   selector: (String, String)
 )
 
 class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherContext[F, T])
-    extends AbstractWatcher[F, T, Controller[F, T]](context.namespace, context.channel, context.client.getNamespace) {
+    extends AbstractWatcher[F, T, Unit, Controller[F, T, Unit]](
+      context.namespace,
+      context.channel,
+      context.client.getNamespace
+    ) {
 
   private val configMapApi = new ConfigMapApi(context.client)
 
@@ -46,11 +49,11 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect, T](context: ConfigMapWatcherConte
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
         if (context.controller.isSupported(cm)) {
           logger.debug(s"ConfigMap in namespace $targetNamespace was $action\nConfigMap:\n$cm\n")
-          val converted = context.convert(cm).leftMap[OperatorError[T]] {
+          val converted = context.convert(cm).leftMap[OperatorError] {
             case (t, resource) =>
               ParseResourceError(action, t, resource)
           }
-          enqueueAction(action, converted, cm)
+          enqueueAction(action, converted)
         } else logger.debug(s"Unsupported ConfigMap skipped: ${cm.toString}")
       }
 

@@ -1,27 +1,32 @@
 package freya
 
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
+import cats.syntax.apply._
 import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
+import freya.models.{CustomResource, NewStatus}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
 import scala.concurrent.duration._
 
-class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb] with LazyLogging {
+class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb, KerbStatus] with LazyLogging {
 
-  override def onAdd(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"new Kerb added: $krb, $meta"))
+  private def noStatus: F[NewStatus[KerbStatus]] =
+    F.pure(Some(KerbStatus()))
 
-  override def onDelete(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"Kerb deleted: $krb, $meta"))
+  override def onAdd(krb: CustomResource[Kerb, KerbStatus]): F[NewStatus[KerbStatus]] =
+    F.delay(logger.info(s"new Kerb added: ${krb.spec}, ${krb.metadata}")) *> noStatus
 
-  override def onModify(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"Kerb modified: $krb, $meta"))
+  override def onDelete(krb: CustomResource[Kerb, KerbStatus]): F[NewStatus[KerbStatus]] =
+    F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}")) *> noStatus
+
+  override def onModify(krb: CustomResource[Kerb, KerbStatus]): F[NewStatus[KerbStatus]] =
+    F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}")) *> noStatus
 }
 
-class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb] with CmController {
+class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) extends CmController[F, Kerb] {
 
   override def isSupported(cm: ConfigMap): Boolean =
     cm.getMetadata.getName.startsWith("krb")
@@ -30,36 +35,34 @@ class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[
 object TestCmOperator extends IOApp with TestParams {
   implicit val cs: ContextShift[IO] = contextShift
 
-  override def run(args: List[String]): IO[ExitCode] = {
+  override def run(args: List[String]): IO[ExitCode] =
     Operator
       .ofConfigMap[IO, Kerb](cmCfg, client, new KrbCmController[IO])
       .run
-  }
 }
 
 object TestCrdOperator extends IOApp with TestParams {
   implicit val cs: ContextShift[IO] = freya.cs
 
-  override def run(args: List[String]): IO[ExitCode] = {
+  override def run(args: List[String]): IO[ExitCode] =
     Operator
-      .ofCrd[IO, Kerb](crdCfg, client, new KrbController[IO])
+      .ofCrd[IO, Kerb, KerbStatus](crdCfg, client, new KrbController[IO])
       .withReconciler(60.seconds)
       .run
-  }
 }
 
 trait TestParams {
   val client = IO(new DefaultKubernetesClient)
-  val crdCfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix)
-  val cmCfg = Configuration.ConfigMapConfig(classOf[Kerb], Namespace("test"), prefix)
+  val crdCfg = CrdConfig[Kerb](Namespace("test"), prefix)
+  val cmCfg = Configuration.ConfigMapConfig[Kerb](Namespace("test"), prefix)
 }
 
 object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
   implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] = {
-    val controller = (helper: CrdHelper[IO, Kerb]) =>
-      new Controller[IO, Kerb] {
+    val controller = (helper: CrdHelper[IO, Kerb, KerbStatus]) =>
+      new Controller[IO, Kerb, KerbStatus] {
 
         override def onInit(): IO[Unit] =
           helper.currentResources.fold(
@@ -67,13 +70,13 @@ object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
             r =>
               IO(r.foreach {
                 case Left((error, r)) => logger.error(s"Failed to parse CRD instances $r", error)
-                case Right((resource, _)) => logger.info(s"current ${crdCfg.getKind} CRDs: $resource")
+                case Right(resource) => logger.info(s"current ${crdCfg.getKind} CRDs: ${resource.spec}")
               })
           )
       }
 
     Operator
-      .ofCrd[IO, Kerb](crdCfg, client)(controller)
+      .ofCrd[IO, Kerb, KerbStatus](crdCfg, client)(controller)
       .withRestart()
   }
 }

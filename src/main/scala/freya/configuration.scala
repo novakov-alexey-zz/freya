@@ -3,6 +3,7 @@ package freya
 import freya.K8sNamespace.AllNamespaces
 
 import scala.concurrent.duration.{FiniteDuration, _}
+import scala.reflect.ClassTag
 
 sealed trait Retry
 
@@ -17,8 +18,7 @@ object Retry {
 final case class Metadata(name: String, namespace: String)
 final case class AdditionalPrinterColumn(name: String, columnType: String, jsonPath: String)
 
-sealed abstract class Configuration[T](
-  val forKind: Class[T],
+sealed abstract class Configuration[T: ClassTag](
   val prefix: String,
   val namespace: K8sNamespace = AllNamespaces,
   val customKind: Option[String] = None,
@@ -34,12 +34,13 @@ sealed abstract class Configuration[T](
 
   def getKind: String =
     customKind.getOrElse(forKind.getSimpleName)
+
+  val forKind: Class[T] = implicitly[ClassTag[T]].runtimeClass.asInstanceOf[Class[T]]
 }
 
 object Configuration {
 
-  final case class CrdConfig[T](
-    override val forKind: Class[T],
+  final case class CrdConfig[T: ClassTag](
     override val namespace: K8sNamespace,
     override val prefix: String,
     override val checkK8sOnStartup: Boolean = true,
@@ -48,20 +49,19 @@ object Configuration {
     shortNames: List[String] = List.empty[String],
     pluralName: String = "",
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
-  ) extends Configuration(forKind, prefix, namespace, customKind) {
+  ) extends Configuration(prefix, namespace, customKind) {
 
     def getPluralCaseInsensitive: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
     }.toLowerCase
   }
 
-  final case class ConfigMapConfig[T](
-    override val forKind: Class[T],
+  final case class ConfigMapConfig[T: ClassTag](
     override val namespace: K8sNamespace,
     override val prefix: String,
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None
-  ) extends Configuration(forKind, prefix, namespace, customKind)
+  ) extends Configuration(prefix, namespace, customKind)
 
 }
 sealed trait K8sNamespace {

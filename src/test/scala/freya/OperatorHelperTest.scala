@@ -4,10 +4,10 @@ import cats.effect.IO
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Configuration.CrdConfig
-import freya.internal.crd.{Deployer, SpecDoneable, SpecList}
-import freya.models.Resource
+import freya.internal.crd.{AnyCrDoneable, AnyCrList, Deployer}
+import freya.models.{CustomResource, Resource}
 import freya.resource.{ConfigMapParser, CrdParser}
-import freya.watcher.SpecClass
+import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
@@ -51,7 +51,7 @@ class OperatorHelperTest
 
   private def testCmHelper(ns: K8sNamespace) = {
     //given
-    val cfg = Configuration.ConfigMapConfig(classOf[Kerb], ns, prefix)
+    val cfg = Configuration.ConfigMapConfig[Kerb](ns, prefix)
     val client = server.getClient
     val parser = new ConfigMapParser()
     val context = ConfigMapHelperContext(cfg, client, None, parser)
@@ -60,7 +60,7 @@ class OperatorHelperTest
     val maps = helper.currentResources
     maps should ===(Right(List.empty))
 
-    val currentCms = mutable.ArrayBuffer.empty[Resource[Kerb]]
+    val currentCms = mutable.ArrayBuffer.empty[Resource[Kerb, Unit]]
     val namespace = new NamespaceBuilder().withNewMetadata.withName(ns.value).endMetadata.build
     client.namespaces().create(namespace)
 
@@ -72,7 +72,7 @@ class OperatorHelperTest
       val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
       val spec = parseCM(parser, cm)
 
-      currentCms += Right((spec, meta))
+      currentCms += Right(CustomResource(spec, meta, ()))
       //then
       helper.currentResources.map(_.toSet) should ===(Right(currentCms.toSet))
     }
@@ -80,16 +80,16 @@ class OperatorHelperTest
 
   ignore("Crd helper should return current CRDs") {
     //given
-    val cfg = CrdConfig(classOf[Kerb], testNs, prefix, checkK8sOnStartup = false)
+    val cfg = CrdConfig[Kerb](testNs, prefix, checkK8sOnStartup = false)
     val client = new DefaultKubernetesClient() // mock server does not work properly with CRDs
     Serialization.jsonMapper().registerModule(DefaultScalaModule)
 
     val parser = new CrdParser()
-    val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
+    val crd = Deployer.deployCrd[IO](client, cfg, None).unsafeRunSync()
     val context = new CrdHelperContext[Kerb](cfg, client, None, crd, parser)
-    val helper = new CrdHelper[IO, Kerb](context)
+    val helper = new CrdHelper[IO, Kerb, KerbStatus](context)
     val krbClient = client
-      .customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
+      .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
 
     //when
     krbClient.inNamespace(testNs.value).delete()
@@ -102,7 +102,7 @@ class OperatorHelperTest
     val ns = new NamespaceBuilder().withNewMetadata.withName(testNs.value).endMetadata.build
     client.namespaces().createOrReplace(ns)
 
-    forAll(SpecClass.gen[Kerb](cfg.getKind)) { ic =>
+    forAll(AnyCustomResource.gen[Kerb](cfg.getKind)) { ic =>
       ic.getMetadata.setNamespace(testNs.value)
       //when
       krbClient

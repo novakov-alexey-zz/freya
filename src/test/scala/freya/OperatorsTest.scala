@@ -3,15 +3,16 @@ package freya
 import java.util.concurrent.ConcurrentHashMap
 
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
-import freya.Configuration.CrdConfig
-import freya.Controller.ConfigMapController
+import cats.implicits._
+import freya.Configuration.{ConfigMapConfig, CrdConfig}
+import freya.ExitCodes.ConsumerExitCode
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Retry.{Infinite, Times}
 import freya.generators.arbitrary
-import freya.models.{Resource, ResourcesList}
+import freya.models.{CustomResource, NewStatus, Resource, ResourcesList}
 import freya.resource.ConfigMapParser
-import freya.ExitCodes.ConsumerExitCode
 import freya.watcher.AbstractWatcher.CloseableWatcher
+import freya.watcher.FeedbackConsumer.FeedbackChannel
 import freya.watcher._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
@@ -42,8 +43,8 @@ class OperatorsTest
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
 
-  val crdCfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix, checkK8sOnStartup = false)
-  val configMapcfg = Configuration.ConfigMapConfig(classOf[Kerb], AllNamespaces, prefix, checkK8sOnStartup = false)
+  val crdCfg = CrdConfig[Kerb](Namespace("test"), prefix, checkK8sOnStartup = false)
+  val configMapcfg = ConfigMapConfig[Kerb](AllNamespaces, prefix, checkK8sOnStartup = false)
   val server = new KubernetesServer(false, false)
   val cmParser = ConfigMapParser[IO]().unsafeRunSync()
 
@@ -59,8 +60,7 @@ class OperatorsTest
     Sync[F].pure(server.getClient)
 
   def makeWatchable[T, U]: (Watchable[Watch, Watcher[U]], mutable.Set[Watcher[U]]) = {
-    val singleWatcher =
-      java.util.Collections.newSetFromMap(new ConcurrentHashMap[Watcher[U], java.lang.Boolean]).asScala
+    val singleWatcher = concurrentHashSet[Watcher[U]]
 
     val watchable = new Watchable[Watch, Watcher[U]] {
       override def watch(watcher: Watcher[U]): Watch = {
@@ -85,10 +85,10 @@ class OperatorsTest
           registerWatcher(watchable)
       }
 
-  implicit def crdWatch[F[_]: ConcurrentEffect, T](
-    implicit watchable: Watchable[Watch, Watcher[SpecClass]]
-  ): CrdWatchMaker[F, T] =
-    (context: CrdWatcherContext[F, T]) =>
+  implicit def crdWatch[F[_]: ConcurrentEffect, T, U](
+    implicit watchable: Watchable[Watch, Watcher[AnyCustomResource]]
+  ): CrdWatchMaker[F, T, U] =
+    (context: CrdWatcherContext[F, T, U]) =>
       new CustomResourceWatcher(context) {
         override def watch: F[(CloseableWatcher, F[ConsumerExitCode])] =
           registerWatcher(watchable)
@@ -98,22 +98,48 @@ class OperatorsTest
     (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
   def configMapOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
-    controller: ConfigMapController[F, Kerb]
-  ): (Operator[F, Kerb], mutable.Set[Watcher[ConfigMap]]) = {
+    controller: CmController[F, Kerb]
+  ): (Operator[F, Kerb, Unit], mutable.Set[Watcher[ConfigMap]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
 
     Operator.ofConfigMap[F, Kerb](configMapcfg, client[F], controller) -> singleWatcher
   }
 
-  def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
-    controller: Controller[F, Kerb]
-  ): (Operator[F, Kerb], mutable.Set[Watcher[SpecClass]]) = {
-    val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, SpecClass]
-    implicit val watchable: Watchable[Watch, Watcher[SpecClass]] = fakeWatchable
+  private def concurrentHashSet[T]: mutable.Set[T] =
+    java.util.Collections.newSetFromMap(new ConcurrentHashMap[T, java.lang.Boolean]).asScala
 
-    Operator.ofCrd[F, Kerb](crdCfg, client[F], controller).withReconciler(1.millis) -> singleWatcher
+  def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
+    controller: Controller[F, Kerb, KerbStatus]
+  ): (Operator[F, Kerb, KerbStatus], mutable.Set[Watcher[AnyCustomResource]]) = {
+    val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, AnyCustomResource]
+    implicit val watchable: Watchable[Watch, Watcher[AnyCustomResource]] = fakeWatchable
+
+    val status = concurrentHashSet[KerbStatus]
+    implicit val feedbackConsumer: FeedbackConsumerMaker[F, Kerb, KerbStatus] = testFeedbackConsumer(status)
+
+    Operator.ofCrd[F, Kerb, KerbStatus](crdCfg, client[F], controller).withReconciler(1.millis) -> singleWatcher
   }
+
+  private def testFeedbackConsumer[F[_]: ConcurrentEffect: Timer: ContextShift](status: mutable.Set[KerbStatus]) =
+    new FeedbackConsumerMaker[F, Kerb, KerbStatus] {
+      override def make(
+        client: KubernetesClient,
+        crd: CustomResourceDefinition,
+        channel: FeedbackChannel[F, Kerb, KerbStatus]
+      ): FeedbackConsumerAlg[F] = new FeedbackConsumer(client, crd, channel) {
+        override def consume: F[ConsumerExitCode] =
+          for {
+            cr <- channel.take
+            _ <- cr match {
+              case Right(r) =>
+                status += r.status
+                consume
+              case Left(()) => ExitCodes.FeedbackExitCode.pure[F]
+            }
+          } yield ExitCodes.FeedbackExitCode
+      }
+    }
 
   property("Crd Operator handles different events") {
     //given
@@ -126,7 +152,7 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, SpecClass.gen[Kerb](crdCfg.getKind)) { (action, crd) =>
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind)) { (action, crd) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
@@ -143,22 +169,22 @@ class OperatorsTest
   property("Crd Operator gets event from reconciler process") {
     //given
     val controller = new CrdTestController[IO]
-    implicit val (fakeWatchable, _) = makeWatchable[Kerb, SpecClass]
+    implicit val (fakeWatchable, _) = makeWatchable[Kerb, AnyCustomResource]
 
-    val testResources = new mutable.ArrayBuffer[Resource[Kerb]]()
-    implicit val helper: CrdHelperMaker[IO, Kerb] = (context: CrdHelperContext[Kerb]) =>
-      new CrdHelper[IO, Kerb](context) {
-        override def currentResources: Either[Throwable, ResourcesList[Kerb]] =
+    val testResources = new mutable.ArrayBuffer[Resource[Kerb, KerbStatus]]()
+    implicit val helper: CrdHelperMaker[IO, Kerb, KerbStatus] = (context: CrdHelperContext[Kerb]) =>
+      new CrdHelper[IO, Kerb, KerbStatus](context) {
+        override def currentResources: Either[Throwable, ResourcesList[Kerb, KerbStatus]] =
           Right(testResources.toList)
       }
 
-    val operator = Operator.ofCrd[IO, Kerb](crdCfg, client[IO], controller).withReconciler(1.millis)
+    val operator = Operator.ofCrd[IO, Kerb, KerbStatus](crdCfg, client[IO], controller).withReconciler(1.millis)
     //when
     val cancelable = startOperator(operator.run)
 
-    forAll(SpecClass.gen[Kerb](crdCfg.getKind)) { crd =>
+    forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { crd =>
       val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
-      testResources += Right((crd.getSpec.asInstanceOf[Kerb], meta))
+      testResources += Right(CustomResource(crd.getSpec.asInstanceOf[Kerb], meta, KerbStatus()))
       //then
       eventually {
         controller.reconciledEvents should contain((crd.getSpec, meta))
@@ -173,10 +199,10 @@ class OperatorsTest
     val controller = new ConfigMapTestController[IO]
     implicit val (fakeWatchable, _) = makeWatchable[Kerb, ConfigMap]
 
-    val testResources = new mutable.ArrayBuffer[Resource[Kerb]]()
+    val testResources = new mutable.ArrayBuffer[Resource[Kerb, Unit]]()
     implicit val helper: ConfigMapHelperMaker[IO, Kerb] = (context: ConfigMapHelperContext[Kerb]) =>
       new ConfigMapHelper[IO, Kerb](context) {
-        override def currentResources: Either[Throwable, ResourcesList[Kerb]] =
+        override def currentResources: Either[Throwable, ResourcesList[Kerb, Unit]] =
           Right(testResources.toList)
       }
 
@@ -188,7 +214,7 @@ class OperatorsTest
       val meta = toMetadata(cm)
       val spec = parseCM(cmParser, cm)
 
-      testResources += Right((spec, meta))
+      testResources += Right(CustomResource(spec, meta, ()))
       //then
       eventually {
         controller.reconciledEvents should contain((spec, meta))
@@ -211,23 +237,27 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, SpecClass.gen[Kerb](crdCfg.getKind), arbitrary[Boolean], minSuccessful(maxRestarts)) {
-      (action, crd, close) =>
-        //when
-        if (close)
-          closeCurrentWatcher[SpecClass](singleWatcher, oldWatcher)
+    forAll(
+      WatcherAction.gen,
+      AnyCustomResource.gen[Kerb](crdCfg.getKind),
+      arbitrary[Boolean],
+      minSuccessful(maxRestarts)
+    ) { (action, crd, close) =>
+      //when
+      if (close)
+        closeCurrentWatcher[AnyCustomResource](singleWatcher, oldWatcher)
 
-        oldWatcher = getWatcherOrFail(singleWatcher)
+      oldWatcher = getWatcherOrFail(singleWatcher)
 
-        //when
-        singleWatcher.foreach(_.eventReceived(action, crd))
+      //when
+      singleWatcher.foreach(_.eventReceived(action, crd))
 
-        val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+      val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
 
-        //then
-        eventually {
-          controller.events should contain((action, crd.getSpec, meta))
-        }
+      //then
+      eventually {
+        controller.events should contain((action, crd.getSpec, meta))
+      }
     }
 
     cancelable.unsafeRunSync()
@@ -358,22 +388,22 @@ class OperatorsTest
   class CountingFailureFlagController extends ConfigMapTestController[IO] {
     var failed: Int = 0
 
-    override def onAdd(krb: Kerb, meta: Metadata): IO[Unit] = {
-      if (krb.failInTest)
+    override def onAdd(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] = {
+      if (krb.spec.failInTest)
         failed = failed + 1
-      super.onAdd(krb, meta)
+      super.onAdd(krb)
     }
 
-    override def onDelete(krb: Kerb, meta: Metadata): IO[Unit] = {
-      if (krb.failInTest)
+    override def onDelete(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] = {
+      if (krb.spec.failInTest)
         failed = failed + 1
-      super.onDelete(krb, meta)
+      super.onDelete(krb)
     }
 
-    override def onModify(krb: Kerb, meta: Metadata): IO[Unit] = {
-      if (krb.failInTest)
+    override def onModify(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] = {
+      if (krb.spec.failInTest)
         failed = failed + 1
-      super.onModify(krb, meta)
+      super.onModify(krb)
     }
   }
 
@@ -411,25 +441,25 @@ class OperatorsTest
   property("Operator handles controller failures") {
     //given
     val controller: ConfigMapTestController[IO] = new ConfigMapTestController[IO] {
-      val error: IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
+      val error: IO[NewStatus[Unit]] = IO.raiseError(new RuntimeException("test exception"))
 
-      override def onAdd(krb: Kerb, meta: Metadata): IO[Unit] =
-        if (krb.failInTest)
+      override def onAdd(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] =
+        if (krb.spec.failInTest)
           error
         else
-          super.onAdd(krb, meta)
+          super.onAdd(krb)
 
-      override def onDelete(krb: Kerb, meta: Metadata): IO[Unit] =
-        if (krb.failInTest)
+      override def onDelete(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] =
+        if (krb.spec.failInTest)
           error
         else
-          super.onDelete(krb, meta)
+          super.onDelete(krb)
 
-      override def onModify(krb: Kerb, meta: Metadata): IO[Unit] =
-        if (krb.failInTest)
+      override def onModify(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] =
+        if (krb.spec.failInTest)
           error
         else
-          super.onModify(krb, meta)
+          super.onModify(krb)
     }
 
     val (operator, singleWatcher) = configMapOperator[IO](controller)

@@ -4,8 +4,8 @@ import java.lang
 
 import freya.K8sNamespace
 import freya.K8sNamespace.AllNamespaces
-import freya.internal.crd.{SpecDoneable, SpecList}
-import freya.watcher.SpecClass
+import freya.internal.crd.{AnyCrDoneable, AnyCrList}
+import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent}
 import io.fabric8.kubernetes.client.dsl.FilterWatchListMultiDeletable
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch, Watcher}
@@ -50,14 +50,14 @@ object CrdApi {
 
 class CrdApi(client: KubernetesClient) {
   type Filtered[T] =
-    FilterWatchListMultiDeletable[SpecClass, SpecList, lang.Boolean, Watch, Watcher[SpecClass]]
+    FilterWatchListMultiDeletable[AnyCustomResource, AnyCrList, lang.Boolean, Watch, Watcher[AnyCustomResource]]
 
   def in[T](ns: K8sNamespace, crd: CustomResourceDefinition): Filtered[T] = {
-    val _crs = client.customResources(crd, classOf[SpecClass], classOf[SpecList], classOf[SpecDoneable])
+    val _crs = client.customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
     if (AllNamespaces == ns) _crs.inAnyNamespace else _crs.inNamespace(ns.value)
   }
 
-  def list[T](crs: Filtered[T]): List[SpecClass] =
+  def list[T](crs: Filtered[T]): List[AnyCustomResource] =
     crs.list().getItems.asScala.toList
 
 }
