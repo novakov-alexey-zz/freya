@@ -44,7 +44,7 @@ class ServerMockTest
     val cfg = Configuration.CrdConfig[Kerb]( AllNamespaces, prefix)
 
     val controller = new CrdTestController[IO]
-    val operator = Operator.ofCrd[IO, Kerb, KerbStatus](cfg, IO.pure(client), controller).run
+    val operator = Operator.ofCrd[IO, Kerb, Status](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)
     val crd = client.customResourceDefinitions.withName("kerbs.io.github.novakov-alexey").get()
     val krbClient = client

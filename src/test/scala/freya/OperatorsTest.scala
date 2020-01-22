@@ -110,30 +110,33 @@ class OperatorsTest
     java.util.Collections.newSetFromMap(new ConcurrentHashMap[T, java.lang.Boolean]).asScala
 
   def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
-    controller: Controller[F, Kerb, KerbStatus]
-  ): (Operator[F, Kerb, KerbStatus], mutable.Set[Watcher[AnyCustomResource]]) = {
+    controller: Controller[F, Kerb, Status]
+  ): (Operator[F, Kerb, Status], mutable.Set[Watcher[AnyCustomResource]], mutable.Set[CustomResource[Kerb, Status]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, AnyCustomResource]
     implicit val watchable: Watchable[Watch, Watcher[AnyCustomResource]] = fakeWatchable
 
-    val status = concurrentHashSet[KerbStatus]
-    implicit val feedbackConsumer: FeedbackConsumerMaker[F, Kerb, KerbStatus] = testFeedbackConsumer(status)
+    val status = mutable.Set.empty[CustomResource[Kerb, Status]]
+    implicit val feedbackConsumer: FeedbackConsumerMaker[F, Kerb, Status] = testFeedbackConsumer(status)
 
-    Operator.ofCrd[F, Kerb, KerbStatus](crdCfg, client[F], controller).withReconciler(1.millis) -> singleWatcher
+    val operator = Operator.ofCrd[F, Kerb, Status](crdCfg, client[F], controller).withReconciler(1.millis)
+    (operator, singleWatcher, status)
   }
 
-  private def testFeedbackConsumer[F[_]: ConcurrentEffect: Timer: ContextShift](status: mutable.Set[KerbStatus]) =
-    new FeedbackConsumerMaker[F, Kerb, KerbStatus] {
+  private def testFeedbackConsumer[F[_]: ConcurrentEffect: Timer: ContextShift](
+    status: mutable.Set[CustomResource[Kerb, Status]]
+  ) =
+    new FeedbackConsumerMaker[F, Kerb, Status] {
       override def make(
         client: KubernetesClient,
         crd: CustomResourceDefinition,
-        channel: FeedbackChannel[F, Kerb, KerbStatus]
+        channel: FeedbackChannel[F, Kerb, Status]
       ): FeedbackConsumerAlg[F] = new FeedbackConsumer(client, crd, channel) {
         override def consume: F[ConsumerExitCode] =
           for {
             cr <- channel.take
             _ <- cr match {
               case Right(r) =>
-                status += r.status
+                status += r
                 consume
               case Left(()) => ExitCodes.FeedbackExitCode.pure[F]
             }
@@ -144,7 +147,7 @@ class OperatorsTest
   property("Crd Operator handles different events") {
     //given
     val controller = new CrdTestController[IO]
-    val (operator, singleWatcher) = crdOperator[IO](controller)
+    val (operator, singleWatcher, status) = crdOperator[IO](controller)
 
     //when
     val cancelable = startOperator(operator.run)
@@ -161,9 +164,18 @@ class OperatorsTest
       eventually {
         controller.events should contain((action, crd.getSpec, meta))
       }
+      eventually {
+        checkStatus(status, crd, meta)
+      }
     }
 
     cancelable.unsafeRunSync()
+  }
+
+  private def checkStatus(status: mutable.Set[CustomResource[Kerb, Status]], crd: AnyCustomResource, meta: Metadata) = {
+    val kerb = crd.getSpec.asInstanceOf[Kerb]
+    val cr = CustomResource(kerb, meta, Status(crd.getSpec.asInstanceOf[Kerb].failInTest))
+    status should contain(cr)
   }
 
   property("Crd Operator gets event from reconciler process") {
@@ -171,23 +183,29 @@ class OperatorsTest
     val controller = new CrdTestController[IO]
     implicit val (fakeWatchable, _) = makeWatchable[Kerb, AnyCustomResource]
 
-    val testResources = new mutable.ArrayBuffer[Resource[Kerb, KerbStatus]]()
-    implicit val helper: CrdHelperMaker[IO, Kerb, KerbStatus] = (context: CrdHelperContext[Kerb]) =>
-      new CrdHelper[IO, Kerb, KerbStatus](context) {
-        override def currentResources: Either[Throwable, ResourcesList[Kerb, KerbStatus]] =
+    val testResources = new mutable.ArrayBuffer[Resource[Kerb, Status]]()
+    implicit val helper: CrdHelperMaker[IO, Kerb, Status] = (context: CrdHelperContext[Kerb]) =>
+      new CrdHelper[IO, Kerb, Status](context) {
+        override def currentResources: Either[Throwable, ResourcesList[Kerb, Status]] =
           Right(testResources.toList)
       }
 
-    val operator = Operator.ofCrd[IO, Kerb, KerbStatus](crdCfg, client[IO], controller).withReconciler(1.millis)
+    val status = mutable.Set.empty[CustomResource[Kerb, Status]]
+    implicit val feedbackConsumer: FeedbackConsumerMaker[IO, Kerb, Status] = testFeedbackConsumer(status)
+
+    val operator = Operator.ofCrd[IO, Kerb, Status](crdCfg, client[IO], controller).withReconciler(1.millis)
     //when
     val cancelable = startOperator(operator.run)
 
     forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { crd =>
       val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
-      testResources += Right(CustomResource(crd.getSpec.asInstanceOf[Kerb], meta, KerbStatus()))
+      testResources += Right(CustomResource(crd.getSpec.asInstanceOf[Kerb], meta, Status()))
       //then
       eventually {
         controller.reconciledEvents should contain((crd.getSpec, meta))
+      }
+      eventually {
+        checkStatus(status, crd, meta)
       }
     }
 
@@ -227,7 +245,7 @@ class OperatorsTest
   property("Crd Operator handles different events on restarts") {
     //given
     val controller = new CrdTestController[IO]
-    val (operator, singleWatcher) = crdOperator[IO](controller)
+    val (operator, singleWatcher, _) = crdOperator[IO](controller)
     val maxRestarts = PosInt(20)
 
     //when

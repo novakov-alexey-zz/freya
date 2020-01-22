@@ -22,8 +22,8 @@ abstract class Controller[F[_], T, U](implicit val F: Sync[F]) {
 abstract class CmController[F[_], T](implicit override val F: Sync[F]) extends Controller[F, T, Unit] {
   type NoStatus = NewStatus[Unit]
 
-  implicit def unitToNoStatus(x: F[Unit]): F[NoStatus] =
-    x *> F.pure(None)
+  implicit def unitToNoStatus(unit: F[Unit]): F[NoStatus] =
+    unit *> F.pure(None)
 
   def isSupported(@unused cm: ConfigMap): Boolean = true
 }

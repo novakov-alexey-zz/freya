@@ -11,18 +11,18 @@ import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
 import scala.concurrent.duration._
 
-class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb, KerbStatus] with LazyLogging {
+class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb, Status] with LazyLogging {
 
-  private def noStatus: F[NewStatus[KerbStatus]] =
-    F.pure(Some(KerbStatus()))
+  private def noStatus: F[NewStatus[Status]] =
+    F.pure(Some(Status()))
 
-  override def onAdd(krb: CustomResource[Kerb, KerbStatus]): F[NewStatus[KerbStatus]] =
+  override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"new Kerb added: ${krb.spec}, ${krb.metadata}")) *> noStatus
 
-  override def onDelete(krb: CustomResource[Kerb, KerbStatus]): F[NewStatus[KerbStatus]] =
+  override def onDelete(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}")) *> noStatus
 
-  override def onModify(krb: CustomResource[Kerb, KerbStatus]): F[NewStatus[KerbStatus]] =
+  override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}")) *> noStatus
 }
 
@@ -46,7 +46,7 @@ object TestCrdOperator extends IOApp with TestParams {
 
   override def run(args: List[String]): IO[ExitCode] =
     Operator
-      .ofCrd[IO, Kerb, KerbStatus](crdCfg, client, new KrbController[IO])
+      .ofCrd[IO, Kerb, Status](crdCfg, client, new KrbController[IO])
       .withReconciler(60.seconds)
       .run
 }
@@ -61,8 +61,8 @@ object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
   implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] = {
-    val controller = (helper: CrdHelper[IO, Kerb, KerbStatus]) =>
-      new Controller[IO, Kerb, KerbStatus] {
+    val controller = (helper: CrdHelper[IO, Kerb, Status]) =>
+      new Controller[IO, Kerb, Status] {
 
         override def onInit(): IO[Unit] =
           helper.currentResources.fold(
@@ -76,7 +76,7 @@ object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
       }
 
     Operator
-      .ofCrd[IO, Kerb, KerbStatus](crdCfg, client)(controller)
+      .ofCrd[IO, Kerb, Status](crdCfg, client)(controller)
       .withRestart()
   }
 }

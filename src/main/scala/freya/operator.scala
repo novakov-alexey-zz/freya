@@ -78,8 +78,8 @@ object Operator extends LazyLogging {
     client: F[KubernetesClient],
     controller: Controller[F, T, U]
   )(
-    implicit watchMaker: CrdWatchMaker[F, T, U],
-    helperMaker: CrdHelperMaker[F, T, U],
+    implicit watch: CrdWatchMaker[F, T, U],
+    helper: CrdHelperMaker[F, T, U],
     deployer: CrdDeployer[F, T],
     consumer: FeedbackConsumerMaker[F, T, U]
   ): Operator[F, T, U] =

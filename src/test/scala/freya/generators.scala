@@ -44,7 +44,7 @@ object AnyCustomResource {
       sc.setKind(kind)
       sc.setSpec(spec.asInstanceOf[AnyRef])
       sc.setMetadata(meta)
-      sc.setStatus(KerbStatus())
+      sc.setStatus(Status())
       sc
     }
 }

@@ -87,7 +87,7 @@ class OperatorHelperTest
     val parser = new CrdParser()
     val crd = Deployer.deployCrd[IO](client, cfg, None).unsafeRunSync()
     val context = new CrdHelperContext[Kerb](cfg, client, None, crd, parser)
-    val helper = new CrdHelper[IO, Kerb, KerbStatus](context)
+    val helper = new CrdHelper[IO, Kerb, Status](context)
     val krbClient = client
       .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
 

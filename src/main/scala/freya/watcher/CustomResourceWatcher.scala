@@ -1,6 +1,6 @@
 package freya.watcher
 
-import cats.effect.{ConcurrentEffect, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, Sync}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{OperatorError, ParseResourceError}
@@ -36,7 +36,7 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T, U](context: CrdWatcherCon
   protected[freya] def registerWatcher(
     watchable: Watchable[Watch, Watcher[AnyCustomResource]]
   ): F[(CloseableWatcher, F[ConsumerExitCode])] = {
-    val watch = Sync[F].delay(watchable.watch(new Watcher[AnyCustomResource]() {
+    val startWatcher = Sync[F].delay(watchable.watch(new Watcher[AnyCustomResource]() {
 
       override def eventReceived(action: Watcher.Action, cr: AnyCustomResource): Unit = {
         logger.debug(s"Custom resource in namespace '${cr.getMetadata.getNamespace}' was $action\nCR spec:\n$cr")
@@ -54,8 +54,12 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T, U](context: CrdWatcherCon
         CustomResourceWatcher.super.onClose(e)
     }))
 
-    Sync[F].delay(logger.info(s"CustomResource watcher running for kinds '${context.kind}'")) *> watch.map(
-      _ -> context.consumer.consume(context.channel) *> context.feedback.consume
+    Sync[F].delay(logger.info(s"CustomResource watcher running for kinds '${context.kind}'")) *> startWatcher.map(
+      _ -> {
+        val actionConsumer = context.consumer.consume(context.channel)
+        val feedbackConsumer = context.feedback.consume
+        Concurrent[F].race(actionConsumer, feedbackConsumer).map(_.fold(identity, identity))
+      }
     )
   }
 }

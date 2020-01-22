@@ -15,8 +15,8 @@ class ReconcilerTest extends AnyFlatSpec with Matchers {
 
   it should "be able to stop" in {
     ///given
-    val channel = MVar[IO].empty[Either[OperatorError, OperatorAction[Kerb, KerbStatus]]].unsafeRunSync()
-    val r = new Reconciler[IO, Kerb, KerbStatus](5.seconds, channel, IO(Right(List.empty[Resource[Kerb, KerbStatus]])))
+    val channel = MVar[IO].empty[Either[OperatorError, OperatorAction[Kerb, Status]]].unsafeRunSync()
+    val r = new Reconciler[IO, Kerb, Status](5.seconds, channel, IO(Right(List.empty[Resource[Kerb, Status]])))
     val io = r.run
 
     //when
@@ -27,9 +27,9 @@ class ReconcilerTest extends AnyFlatSpec with Matchers {
 
   it should "return exit code" in {
     //given
-    val channel = MVar[IO].empty[Either[OperatorError, OperatorAction[Kerb, KerbStatus]]].unsafeRunSync()
+    val channel = MVar[IO].empty[Either[OperatorError, OperatorAction[Kerb, Status]]].unsafeRunSync()
     val r =
-      new Reconciler[IO, Kerb, KerbStatus](0.millis, channel, IO.raiseError(new RuntimeException("test exception")))
+      new Reconciler[IO, Kerb, Status](0.millis, channel, IO.raiseError(new RuntimeException("test exception")))
     val io = r.run
     //when
     val res = IO.race(io, IO.sleep(1.minute)).unsafeRunSync()
