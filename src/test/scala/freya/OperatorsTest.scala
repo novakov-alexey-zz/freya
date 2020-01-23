@@ -174,7 +174,7 @@ class OperatorsTest
 
   private def checkStatus(status: mutable.Set[CustomResource[Kerb, Status]], crd: AnyCustomResource, meta: Metadata) = {
     val kerb = crd.getSpec.asInstanceOf[Kerb]
-    val cr = CustomResource(kerb, meta, Status(crd.getSpec.asInstanceOf[Kerb].failInTest))
+    val cr = CustomResource(kerb, meta, Status(crd.getSpec.asInstanceOf[Kerb].failInTest).some)
     status should contain(cr)
   }
 
@@ -199,7 +199,7 @@ class OperatorsTest
 
     forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { crd =>
       val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
-      testResources += Right(CustomResource(crd.getSpec.asInstanceOf[Kerb], meta, Status()))
+      testResources += Right(CustomResource(crd.getSpec.asInstanceOf[Kerb], meta, Status().some))
       //then
       eventually {
         controller.reconciledEvents should contain((crd.getSpec, meta))
@@ -232,7 +232,7 @@ class OperatorsTest
       val meta = toMetadata(cm)
       val spec = parseCM(cmParser, cm)
 
-      testResources += Right(CustomResource(spec, meta, ()))
+      testResources += Right(CustomResource(spec, meta, None))
       //then
       eventually {
         controller.reconciledEvents should contain((spec, meta))

@@ -95,5 +95,5 @@ class ActionConsumer[F[_], T, U](
     }).handleErrorWith(e => F.delay(logger.error(s"Controller failed to handle action: $oAction", e)) *> noStatus)
 
   private def updateStatus(cr: CustomResource[T, U], status: F[NewStatus[U]]): F[Unit] =
-    status.flatMap(_.fold(F.unit)(s => feedback.put(cr.copy(status = s).asRight[Unit])))
+    status.flatMap(_.fold(F.unit)(s => feedback.put(cr.copy(status = Some(s)).asRight[Unit])))
 }

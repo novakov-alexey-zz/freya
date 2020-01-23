@@ -4,7 +4,7 @@ import cats.effect.concurrent.MVar
 import cats.effect.{ConcurrentEffect, ExitCode}
 import cats.implicits._
 import freya.ExitCodes
-import freya.K8sNamespace.AllNamespaces
+import freya.K8sNamespace.Namespace
 import freya.internal.api.CrdApi
 import freya.models.CustomResource
 import freya.watcher.FeedbackConsumer.FeedbackChannel
@@ -39,7 +39,7 @@ class FeedbackConsumer[F[_], T, U](
             _anyCr.setStatus(cr.status.asInstanceOf[AnyRef])
             _anyCr
           }
-          F.delay(crdApi.in(AllNamespaces, crd).updateStatus(anyCr)) *> consume
+          F.delay(crdApi.in(Namespace(cr.metadata.namespace), crd).updateStatus(anyCr)) *> consume
       }
     } yield ExitCodes.FeedbackExitCode
 }

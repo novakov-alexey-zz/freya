@@ -8,7 +8,7 @@ object models {
   type Resource[T, U] = Either[(Throwable, HasMetadata), CustomResource[T, U]]
   type ResourcesList[T, U] = List[Resource[T, U]]
   type NewStatus[U] = Option[U]
-  final case class CustomResource[T, U](spec: T, metadata: Metadata, status: U)
+  final case class CustomResource[T, U](spec: T, metadata: Metadata, status: Option[U])
 }
 
 object ExitCodes {
@@ -22,5 +22,5 @@ object ExitCodes {
 }
 
 trait CustomResourceParser {
-  def parse[T, U](spec: Class[T], status: Class[U], cr: AnyCustomResource): Either[Throwable, (T, U)]
+  def parse[T, U](spec: Class[T], status: Class[U], cr: AnyCustomResource): Either[Throwable, (T, Option[U])]
 }

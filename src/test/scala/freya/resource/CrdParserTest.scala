@@ -12,7 +12,7 @@ class CrdParserTest extends AnyPropSpec with ScalaCheckPropertyChecks with Match
   property("CrdParser parses valid spec") {
     forAll(AnyCustomResource.gen[Kerb]("kerb")) { spec =>
       val parsed = parser.parse(classOf[Kerb], classOf[Status], spec)
-      parsed should ===(Right((spec.getSpec, spec.getStatus)))
+      parsed should ===(Right((spec.getSpec, Some(spec.getStatus))))
     }
   }
 

@@ -49,7 +49,7 @@ final case class ConfigMapHelperContext[T](
 object ConfigMapHelper {
   def convertCm[T](kind: Class[T], parser: ConfigMapParser)(cm: ConfigMap): Resource[T, Unit] =
     parser.parseCM(kind, cm).leftMap(_ -> cm).map {
-      case (resource, meta) => CustomResource(resource, meta, ())
+      case (resource, meta) => CustomResource(resource, meta, None)
     }
 }
 

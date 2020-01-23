@@ -1,6 +1,7 @@
 package freya.resource
 
 import cats.effect.Sync
+import cats.implicits._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.CustomResourceParser
@@ -17,10 +18,17 @@ private[freya] class CrdParser extends CustomResourceParser {
   private val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
 
-  def parse[T, U](specClass: Class[T], statusClass: Class[U], cr: AnyCustomResource): Either[Throwable, (T, U)] = {
+  def parse[T, U](
+    specClass: Class[T],
+    statusClass: Class[U],
+    cr: AnyCustomResource
+  ): Either[Throwable, (T, Option[U])] = {
     for {
       spec <- parseProperty(specClass, cr.getSpec, "spec")
-      status <- parseProperty(statusClass, cr.getStatus, "status")
+      status <- Option(cr.getStatus) match {
+        case None => None.asRight[Throwable]
+        case Some(s) => parseProperty(statusClass, s, "status").map(Some(_))
+      }
     } yield (spec, status)
   }
 

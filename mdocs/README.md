@@ -99,6 +99,7 @@ case classes `Kerb` and `Principal`
 ```scala mdoc:reset-object
 final case class Principal(name: String, password: String, value: String = "")
 final case class Kerb(realm: String, principals: List[Principal])
+final case class Status(ready: Boolean = false)
 ```
 
 2 . Implement your actions for Add, Modify, Delete events by extending
@@ -109,24 +110,28 @@ Crd Controller option:
 ```scala mdoc
 import com.typesafe.scalalogging.LazyLogging
 import cats.effect.ConcurrentEffect
+import cats.syntax.apply._
 import freya.{Controller, Metadata}
+import freya.models.{CustomResource, NewStatus}
 
 class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
-  extends Controller[F, Kerb] with LazyLogging {
+  extends Controller[F, Kerb, Status] with LazyLogging {
 
-  override def onAdd(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"new Kerb added: $krb, $meta"))
+  override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
+    F.delay(logger.info(s"new Krb added: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
 
-  override def onDelete(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"Kerb deleted: $krb, $meta"))
+  override def onDelete(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
+    F.delay(logger.info(s"Krb deleted: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
 
-  override def onModify(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"Kerb modified: $krb, $meta"))
+  override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
+    F.delay(logger.info(s"Krb modified: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
   
   override def onInit(): F[Unit] =
     F.delay(logger.info(s"init completed"))
 }
 ```
+
+where ```type NewStatus[U] = Option[U]```
 
 ConfigMap Controller option:
 
@@ -136,7 +141,7 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import freya.{Controller, CmController}
 
 class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) 
-  extends Controller[F, Kerb] with CmController {
+  extends CmController[F, Kerb] {
 
   // override onAdd, onDelete, onModify like in Crd Controller 
 
