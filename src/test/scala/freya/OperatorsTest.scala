@@ -9,6 +9,7 @@ import freya.ExitCodes.ConsumerExitCode
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Retry.{Infinite, Times}
 import freya.generators.arbitrary
+import freya.internal.api.MetadataApi
 import freya.models.{CustomResource, NewStatus, Resource, ResourcesList}
 import freya.resource.ConfigMapParser
 import freya.watcher.AbstractWatcher.CloseableWatcher
@@ -129,8 +130,10 @@ class OperatorsTest
       override def make(
         client: KubernetesClient,
         crd: CustomResourceDefinition,
-        channel: FeedbackChannel[F, Kerb, Status]
-      ): FeedbackConsumerAlg[F] = new FeedbackConsumer(client, crd, channel) {
+        channel: FeedbackChannel[F, Kerb, Status],
+        kind: String,
+        apiVersion: String
+      ): FeedbackConsumerAlg[F] = new FeedbackConsumer(client, crd, channel, kind, apiVersion) {
         override def consume: F[ConsumerExitCode] =
           for {
             cr <- channel.take
@@ -159,7 +162,7 @@ class OperatorsTest
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
-      val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+      val meta = MetadataApi.getMetadata(crd.getMetadata)
       //then
       eventually {
         controller.events should contain((action, crd.getSpec, meta))
@@ -198,7 +201,7 @@ class OperatorsTest
     val cancelable = startOperator(operator.run)
 
     forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { crd =>
-      val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+      val meta = MetadataApi.getMetadata(crd.getMetadata)
       testResources += Right(CustomResource(crd.getSpec.asInstanceOf[Kerb], meta, Status().some))
       //then
       eventually {
@@ -270,7 +273,7 @@ class OperatorsTest
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
-      val meta = Metadata(crd.getMetadata.getName, crd.getMetadata.getNamespace)
+      val meta = MetadataApi.getMetadata(crd.getMetadata)
 
       //then
       eventually {

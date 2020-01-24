@@ -25,7 +25,8 @@ object CrdApi {
     prefix: String,
     kind: String,
     shortNames: List[String],
-    pluralName: String
+    pluralName: String,
+    version: String
   ): CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder] = {
 
     val shortNamesLower = shortNames.map(_.toLowerCase())
@@ -42,7 +43,7 @@ object CrdApi {
       .withShortNames(shortNamesLower: _*)
       .endNames
       .withGroup(prefix)
-      .withVersion("v1")
+      .withVersion(version)
       .withScope("Namespaced")
       .withPreserveUnknownFields(false)
   }

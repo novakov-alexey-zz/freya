@@ -2,8 +2,9 @@ package freya
 
 import cats.effect.IO
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.Configuration.CrdConfig
+import freya.K8sNamespace.{AllNamespaces, Namespace}
+import freya.internal.api.MetadataApi
 import freya.internal.crd.{AnyCrDoneable, AnyCrList, Deployer}
 import freya.models.{CustomResource, Resource}
 import freya.resource.{ConfigMapParser, CrdParser}
@@ -69,7 +70,7 @@ class OperatorHelperTest
       cm.getMetadata.setNamespace(ns.value)
       client.configMaps().inNamespace(cm.getMetadata.getNamespace).create(cm)
 
-      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      val meta = MetadataApi.getMetadata(cm.getMetadata)
       val spec = parseCM(parser, cm)
 
       currentCms += Right(CustomResource(spec, meta, None))
@@ -109,7 +110,7 @@ class OperatorHelperTest
         .inNamespace(ic.getMetadata.getNamespace)
         .createOrReplace(ic)
 
-      val meta = Metadata(ic.getMetadata.getName, ic.getMetadata.getNamespace)
+      val meta = MetadataApi.getMetadata(ic.getMetadata)
       currentCrds += (meta -> ic.getSpec.asInstanceOf[Kerb])
       //then
       eventually {

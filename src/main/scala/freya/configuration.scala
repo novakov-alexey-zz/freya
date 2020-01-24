@@ -15,7 +15,7 @@ object Retry {
   final case class Infinite(minDelay: FiniteDuration = 1.second, maxDelay: FiniteDuration = 60.seconds) extends Retry
 }
 
-final case class Metadata(name: String, namespace: String)
+final case class Metadata(name: String, namespace: String, resourceVersion: String)
 final case class AdditionalPrinterColumn(name: String, columnType: String, jsonPath: String)
 
 sealed abstract class Configuration[T: ClassTag](
@@ -43,6 +43,7 @@ object Configuration {
   final case class CrdConfig[T: ClassTag](
     override val namespace: K8sNamespace,
     override val prefix: String,
+    version: String = "v1",
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None,
     deployCrd: Boolean = true,
@@ -54,6 +55,8 @@ object Configuration {
     def getPluralCaseInsensitive: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
     }.toLowerCase
+
+    val apiVersion: String = s"$prefix/$version"
   }
 
   final case class ConfigMapConfig[T: ClassTag](

@@ -3,6 +3,7 @@ package freya
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
+import freya.internal.api.MetadataApi
 import freya.internal.crd.{AnyCrDoneable, AnyCrList}
 import freya.resource.ConfigMapParser
 import freya.watcher.AnyCustomResource
@@ -58,7 +59,7 @@ class ServerMockTest
         .inNamespace(ic.getMetadata.getNamespace)
         .create(ic)
 
-      val meta = Metadata(ic.getMetadata.getName, ic.getMetadata.getNamespace)
+      val meta = MetadataApi.getMetadata(ic.getMetadata)
 
       eventually {
         controller.events should contain((action, ic.getSpec, meta))
@@ -82,7 +83,7 @@ class ServerMockTest
       client.namespaces().create(ns)
       client.configMaps().inNamespace(cm.getMetadata.getNamespace).create(cm)
 
-      val meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      val meta = MetadataApi.getMetadata(cm.getMetadata)
       val spec = parseCM(parser, cm)
       //then
       eventually {

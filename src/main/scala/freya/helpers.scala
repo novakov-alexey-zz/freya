@@ -86,8 +86,11 @@ object CrdHelper {
       (spec, status) <- parser
         .parse(kind, getStatusClass, resource)
         .leftMap(_ -> resource)
-      meta <- Right(Metadata(resource.getMetadata.getName, resource.getMetadata.getNamespace))
+      meta <- Right(getMetadata(resource))
     } yield CustomResource(spec, meta, status)
+
+  private def getMetadata(resource: AnyCustomResource) =
+    Metadata(resource.getMetadata.getName, resource.getMetadata.getNamespace, resource.getMetadata.getResourceVersion)
 
   private def getStatusClass[U: ClassTag, T]: Class[U] =
     implicitly[ClassTag[U]].runtimeClass.asInstanceOf[Class[U]]

@@ -61,14 +61,21 @@ trait FeedbackConsumerMaker[F[_], T, U] {
   def make(
     client: KubernetesClient,
     crd: CustomResourceDefinition,
-    channel: FeedbackChannel[F, T, U]
+    channel: FeedbackChannel[F, T, U],
+    kind: String,
+    apiVersion: String
   ): FeedbackConsumerAlg[F]
 }
 
 object FeedbackConsumerMaker {
   implicit def consumer[F[_]: ConcurrentEffect, T, U]: FeedbackConsumerMaker[F, T, U] =
-    (client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, T, U]) =>
-      new FeedbackConsumer[F, T, U](client, crd, channel)
+    (
+      client: KubernetesClient,
+      crd: CustomResourceDefinition,
+      channel: FeedbackChannel[F, T, U],
+      kind: String,
+      apiVersion: String
+    ) => new FeedbackConsumer[F, T, U](client, crd, channel, kind, apiVersion)
 }
 
 object Operator extends LazyLogging {
@@ -114,7 +121,7 @@ object Operator extends LazyLogging {
         cfg.namespace,
         cfg.getKind,
         new ActionConsumer[F, T, U](ctl, cfg.getKind, feedback),
-        consumer.make(c, crd, feedback),
+        consumer.make(c, crd, feedback, cfg.getKind, cfg.apiVersion),
         CrdHelper.convertCr[T, U](cfg.forKind, parser),
         channel,
         c,

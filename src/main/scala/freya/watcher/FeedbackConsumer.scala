@@ -8,6 +8,7 @@ import freya.K8sNamespace.Namespace
 import freya.internal.api.CrdApi
 import freya.models.CustomResource
 import freya.watcher.FeedbackConsumer.FeedbackChannel
+import io.fabric8.kubernetes.api.model.ObjectMetaBuilder
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 
@@ -22,7 +23,9 @@ object FeedbackConsumer {
 class FeedbackConsumer[F[_], T, U](
   client: KubernetesClient,
   crd: CustomResourceDefinition,
-  channel: FeedbackChannel[F, T, U]
+  channel: FeedbackChannel[F, T, U],
+  kind: String,
+  apiVersion: String
 )(implicit F: ConcurrentEffect[F])
     extends FeedbackConsumerAlg[F] {
   private val crdApi = new CrdApi(client)
@@ -33,13 +36,23 @@ class FeedbackConsumer[F[_], T, U](
       _ <- message match {
         case Left(()) => ExitCodes.FeedbackExitCode.pure[F]
         case Right(cr) =>
-          val anyCr = {
-            val _anyCr = new AnyCustomResource
-            _anyCr.setSpec(cr.spec.asInstanceOf[AnyRef])
-            _anyCr.setStatus(cr.status.asInstanceOf[AnyRef])
-            _anyCr
-          }
-          F.delay(crdApi.in(Namespace(cr.metadata.namespace), crd).updateStatus(anyCr)) *> consume
+          val resource = updatedCr(cr)
+          F.delay(crdApi.in(Namespace(cr.metadata.namespace), crd).updateStatus(resource)) *> consume
       }
     } yield ExitCodes.FeedbackExitCode
+
+  private def updatedCr(cr: CustomResource[T, U]) = {
+    val anyCr = new AnyCustomResource
+    anyCr.setKind(kind)
+    anyCr.setApiVersion(apiVersion)
+    anyCr.setSpec(cr.spec.asInstanceOf[AnyRef])
+    anyCr.setStatus(cr.status.asInstanceOf[AnyRef])
+    anyCr.setMetadata(
+      new ObjectMetaBuilder()
+        .withName(cr.metadata.name)
+        .withResourceVersion(cr.metadata.resourceVersion)
+        .build()
+    )
+    anyCr
+  }
 }

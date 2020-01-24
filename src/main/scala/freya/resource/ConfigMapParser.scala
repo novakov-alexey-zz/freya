@@ -61,7 +61,7 @@ private[freya] class ConfigMapParser extends LazyLogging {
       yaml <- cm.getData.asScala
         .get(SpecificationKey)
         .toRight(new RuntimeException(s"ConfigMap is missing '$SpecificationKey' key"))
-      meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+      meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace, cm.getMetadata.getResourceVersion)
       parsed <- parseYaml(clazz, yaml).map(_ -> meta)
     } yield parsed
 }
