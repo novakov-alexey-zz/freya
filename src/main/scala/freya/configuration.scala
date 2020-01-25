@@ -52,7 +52,7 @@ object Configuration {
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
   ) extends Configuration(prefix, namespace, customKind) {
 
-    def getPluralCaseInsensitive: String = {
+    def kindPluralCaseInsensitive: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
     }.toLowerCase
 

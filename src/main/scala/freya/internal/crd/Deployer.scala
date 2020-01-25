@@ -73,7 +73,7 @@ private[freya] object Deployer extends LazyLogging {
       jsonSchema <- Sync[F].delay(JSONSchemaReader.readSchema(cfg.getKind))
 
       baseBuilder = CrdApi
-        .getCrdBuilder(cfg.prefix, cfg.getKind, cfg.shortNames, cfg.pluralName, cfg.version)
+        .getCrdBuilder(cfg.prefix, cfg.getKind, cfg.shortNames, cfg.kindPluralCaseInsensitive, cfg.version)
         .withNewSubresources()
         .withStatus(new CustomResourceSubresourceStatusBuilder().build())
         .endSubresources()
