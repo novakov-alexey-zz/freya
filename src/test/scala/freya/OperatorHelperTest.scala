@@ -86,7 +86,7 @@ class OperatorHelperTest
     Serialization.jsonMapper().registerModule(DefaultScalaModule)
 
     val parser = new CrdParser()
-    val crd = Deployer.deployCrd[IO](client, cfg, None).unsafeRunSync()
+    val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
     val context = CrdHelperContext(cfg, client, None, crd, parser)
     val helper = new CrdHelper[IO, Kerb, Status](context)
     val krbClient = client

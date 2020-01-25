@@ -33,6 +33,7 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 class OperatorsTest
     extends AnyPropSpec
@@ -95,8 +96,14 @@ class OperatorsTest
           registerWatcher(watchable)
       }
 
-  implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
-    (_, _: CrdConfig, _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
+  implicit def crdDeployer[F[_]: Sync]: CrdDeployer[F] = new CrdDeployer[F] {
+    override def deployCrd[T: ClassTag](
+      client: KubernetesClient,
+      cfg: CrdConfig,
+      isOpenShift: Option[Boolean]
+    ): F[CustomResourceDefinition] =
+      Sync[F].pure(new CustomResourceDefinition())
+  }
 
   def configMapOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
     controller: CmController[F, Kerb]
@@ -168,7 +175,7 @@ class OperatorsTest
         controller.events should contain((action, crd.getSpec, meta))
       }
       eventually {
-        checkStatus(status, crd, meta)
+        if (action != Watcher.Action.DELETED) checkStatus(status, crd, meta)
       }
     }
 
@@ -415,7 +422,7 @@ class OperatorsTest
       super.onAdd(krb)
     }
 
-    override def onDelete(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] = {
+    override def onDelete(krb: CustomResource[Kerb, Unit]): IO[Unit] = {
       if (krb.spec.failInTest)
         failed = failed + 1
       super.onDelete(krb)
@@ -470,9 +477,9 @@ class OperatorsTest
         else
           super.onAdd(krb)
 
-      override def onDelete(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] =
+      override def onDelete(krb: CustomResource[Kerb, Unit]): IO[Unit] =
         if (krb.spec.failInTest)
-          error
+          error.void
         else
           super.onDelete(krb)
 

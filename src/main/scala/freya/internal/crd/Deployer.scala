@@ -16,10 +16,11 @@ import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, Kuber
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 
 import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 private[freya] object Deployer extends LazyLogging {
 
-  def deployCrd[F[_]: Sync](
+  def deployCrd[F[_]: Sync, T: ClassTag](
     client: KubernetesClient,
     cfg: CrdConfig,
     isOpenShift: Option[Boolean]
@@ -27,7 +28,7 @@ private[freya] object Deployer extends LazyLogging {
     for {
       _ <- Sync[F].delay(Serialization.jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false))
 
-      kind = cfg.getKind
+      kind = cfg.getKind[T]
       crds <- Sync[F].delay(
         CrdApi.list(client).filter(p => kind == p.getSpec.getNames.getKind && cfg.prefix == p.getSpec.getGroup)
       )
@@ -40,7 +41,7 @@ private[freya] object Deployer extends LazyLogging {
           ) *>
               h.pure[F]
         case Nil if cfg.deployCrd =>
-          createCrd[F](
+          createCrd[F, T](
             client,
             cfg,
             isOpenShift
@@ -63,7 +64,7 @@ private[freya] object Deployer extends LazyLogging {
       }
     } yield crd
 
-  private def createCrd[F[_]: Sync](
+  private def createCrd[F[_]: Sync, T: ClassTag](
     client: KubernetesClient,
     cfg: CrdConfig,
     isOpenshift: Option[Boolean]
@@ -73,7 +74,7 @@ private[freya] object Deployer extends LazyLogging {
       jsonSchema <- Sync[F].delay(JSONSchemaReader.readSchema(cfg.getKind))
 
       baseBuilder = CrdApi
-        .getCrdBuilder(cfg.prefix, cfg.getKind, cfg.shortNames, cfg.kindPluralCaseInsensitive, cfg.version)
+        .getCrdBuilder(cfg.prefix, cfg.getKind[T], cfg.shortNames, cfg.kindPluralCaseInsensitive[T], cfg.version)
         .withNewSubresources()
         .withStatus(new CustomResourceSubresourceStatusBuilder().build())
         .endSubresources()

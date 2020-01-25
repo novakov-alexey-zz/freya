@@ -65,10 +65,10 @@ class ActionConsumer[F[_], T, U](
                   s"Event received ${gr}DELETED$xx kind=$kind name=${resource.metadata.name} in '${resource.metadata.namespace}' namespace"
                 )
             ) *>
-                controller.onDelete(resource) <*
+                controller.onDelete(resource) *>
                 F.delay(
                   logger.debug(s"Event ${gr}DELETED$xx for kind=$kind name=${resource.metadata.name} has been handled")
-                )
+                ) *> F.pure(Option.empty[U])
 
           case MODIFIED =>
             F.delay(

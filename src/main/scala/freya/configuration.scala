@@ -25,7 +25,7 @@ sealed abstract class Configuration(
   val checkK8sOnStartup: Boolean = false
 ) {
   def validate[T: ClassTag]: Either[String, Unit] =
-    (Option(kindClass), Option(prefix)) match {
+    (Option(kindClass[T]), Option(prefix)) match {
       case (None, _) => Left("forKind must not be null")
       case (_, None) => Left("prefix must not be null")
       case (_, _) if prefix.isEmpty => Left("prefix must not be empty")
@@ -33,7 +33,7 @@ sealed abstract class Configuration(
     }
 
   def getKind[T: ClassTag]: String =
-    customKind.getOrElse(kindClass.getSimpleName)
+    customKind.getOrElse(kindClass[T].getSimpleName)
 
   def kindClass[T: ClassTag]: Class[T] =
     implicitly[ClassTag[T]].runtimeClass.asInstanceOf[Class[T]]
@@ -53,7 +53,7 @@ object Configuration {
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
   ) extends Configuration(prefix, namespace, customKind) {
 
-    def kindPluralCaseInsensitive: String = {
+    def kindPluralCaseInsensitive[T: ClassTag]: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
     }.toLowerCase
 

@@ -13,14 +13,14 @@ object Controller {
 }
 
 abstract class Controller[F[_], T, U](implicit val F: Sync[F]) {
-  type NoStatus = NewStatus[Unit]
+  type Unused = NewStatus[Unit]
 
-  implicit def unitToNoStatus(unit: F[Unit]): F[NoStatus] =
+  implicit def unitToNoStatus(unit: F[Unit]): F[Unused] =
     unit *> noStatus
 
   def onAdd(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
 
-  def onDelete(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
+  def onDelete(@unused resource: CustomResource[T, U]): F[Unit] = F.unit
 
   def onModify(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
 

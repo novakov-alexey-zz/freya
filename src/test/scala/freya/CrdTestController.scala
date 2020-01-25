@@ -21,8 +21,8 @@ class CrdTestController[F[_]](implicit override val F: ConcurrentEffect[F])
   override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(events += ((Action.ADDED, krb.spec, krb.metadata))) *> getStatus(krb.spec.failInTest)
 
-  override def onDelete(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    F.delay(events += ((Action.DELETED, krb.spec, krb.metadata))) *> getStatus(krb.spec.failInTest)
+  override def onDelete(krb: CustomResource[Kerb, Status]): F[Unit] =
+    F.delay(events += ((Action.DELETED, krb.spec, krb.metadata)))
 
   override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(events += ((Action.MODIFIED, krb.spec, krb.metadata))) *> getStatus(krb.spec.failInTest)

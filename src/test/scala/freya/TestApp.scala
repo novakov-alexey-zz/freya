@@ -19,8 +19,8 @@ class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F,
   override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"new Kerb added: ${krb.spec}, ${krb.metadata}")) *> noStatus
 
-  override def onDelete(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}")) *> noStatus
+  override def onDelete(krb: CustomResource[Kerb, Status]): F[Unit] =
+    F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}"))
 
   override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}")) *> noStatus

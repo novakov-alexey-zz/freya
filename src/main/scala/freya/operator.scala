@@ -47,14 +47,15 @@ object ConfigMapWatchMaker {
     (context: ConfigMapWatcherContext[F, T]) => new ConfigMapWatcher(context)
 }
 
-trait CrdDeployer[F[_], T] {
-  def deployCrd(client: KubernetesClient, cfg: CrdConfig, isOpenShift: Option[Boolean]): F[CustomResourceDefinition]
+trait CrdDeployer[F[_]] {
+  def deployCrd[T: ClassTag](client: KubernetesClient, cfg: CrdConfig, isOpenShift: Option[Boolean]): F[CustomResourceDefinition]
 }
 
 object CrdDeployer {
-  implicit def deployer[F[_]: Sync, T]: CrdDeployer[F, T] =
-    (client: KubernetesClient, cfg: CrdConfig, isOpenShift: Option[Boolean]) =>
-      Deployer.deployCrd(client, cfg, isOpenShift)
+  implicit def deployer[F[_]: Sync]: CrdDeployer[F] = new CrdDeployer[F] {
+    override def deployCrd[T: ClassTag](client: KubernetesClient, cfg: CrdConfig, isOpenShift: Option[Boolean]): F[CustomResourceDefinition] =
+      Deployer.deployCrd[F, T](client, cfg, isOpenShift)
+  }
 }
 
 trait FeedbackConsumerMaker[F[_], T, U] {
@@ -87,7 +88,7 @@ object Operator extends LazyLogging {
   )(
     implicit watch: CrdWatchMaker[F, T, U],
     helper: CrdHelperMaker[F, T, U],
-    deployer: CrdDeployer[F, T],
+    deployer: CrdDeployer[F],
     consumer: FeedbackConsumerMaker[F, T, U]
   ): Operator[F, T, U] =
     ofCrd[F, T, U](cfg, client)((_: CrdHelper[F, T, U]) => controller)
@@ -99,14 +100,14 @@ object Operator extends LazyLogging {
     T: Timer[F],
     watch: CrdWatchMaker[F, T, U],
     helperMaker: CrdHelperMaker[F, T, U],
-    deployer: CrdDeployer[F, T],
+    deployer: CrdDeployer[F],
     consumer: FeedbackConsumerMaker[F, T, U]
   ): Operator[F, T, U] = {
 
     val pipeline = for {
       c <- client
       isOpenShift <- checkEnvAndConfig[F, T](c, cfg)
-      crd <- deployer.deployCrd(c, cfg, isOpenShift)
+      crd <- deployer.deployCrd[T](c, cfg, isOpenShift)
       channel <- newActionChannel[F, T, U]
       feedback <- newFeedbackChannel[F, T, U]
       parser <- CrdParser()
@@ -218,7 +219,7 @@ private case class OperatorPipeline[F[_], T, U](
   onInit: F[Unit]
 )
 
-class Operator[F[_], T, U] private (
+class Operator[F[_], T: ClassTag, U] private (
   pipeline: F[OperatorPipeline[F, T, U]],
   reconcilerInterval: Option[FiniteDuration] = None
 )(implicit F: ConcurrentEffect[F], T: Timer[F])
