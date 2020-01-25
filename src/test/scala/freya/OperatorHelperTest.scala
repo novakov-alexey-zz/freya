@@ -52,7 +52,7 @@ class OperatorHelperTest
 
   private def testCmHelper(ns: K8sNamespace) = {
     //given
-    val cfg = Configuration.ConfigMapConfig[Kerb](ns, prefix)
+    val cfg = Configuration.ConfigMapConfig(ns, prefix)
     val client = server.getClient
     val parser = new ConfigMapParser()
     val context = ConfigMapHelperContext(cfg, client, None, parser)
@@ -81,13 +81,13 @@ class OperatorHelperTest
 
   ignore("Crd helper should return current CRDs") {
     //given
-    val cfg = CrdConfig[Kerb](testNs, prefix, checkK8sOnStartup = false)
+    val cfg = CrdConfig(testNs, prefix, checkK8sOnStartup = false)
     val client = new DefaultKubernetesClient() // mock server does not work properly with CRDs
     Serialization.jsonMapper().registerModule(DefaultScalaModule)
 
     val parser = new CrdParser()
     val crd = Deployer.deployCrd[IO](client, cfg, None).unsafeRunSync()
-    val context = new CrdHelperContext[Kerb](cfg, client, None, crd, parser)
+    val context = CrdHelperContext(cfg, client, None, crd, parser)
     val helper = new CrdHelper[IO, Kerb, Status](context)
     val krbClient = client
       .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])

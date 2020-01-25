@@ -21,7 +21,7 @@ private[freya] object Deployer extends LazyLogging {
 
   def deployCrd[F[_]: Sync](
     client: KubernetesClient,
-    cfg: CrdConfig[_],
+    cfg: CrdConfig,
     isOpenShift: Option[Boolean]
   ): F[CustomResourceDefinition] =
     for {
@@ -65,7 +65,7 @@ private[freya] object Deployer extends LazyLogging {
 
   private def createCrd[F[_]: Sync](
     client: KubernetesClient,
-    cfg: CrdConfig[_],
+    cfg: CrdConfig,
     isOpenshift: Option[Boolean]
   ) =
     for {

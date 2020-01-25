@@ -53,8 +53,8 @@ object TestCrdOperator extends IOApp with TestParams {
 
 trait TestParams {
   val client = IO(new DefaultKubernetesClient)
-  val crdCfg = CrdConfig[Kerb](Namespace("test"), prefix)
-  val cmCfg = Configuration.ConfigMapConfig[Kerb](Namespace("test"), prefix)
+  val crdCfg = CrdConfig(Namespace("test"), prefix)
+  val cmCfg = Configuration.ConfigMapConfig(Namespace("test"), prefix)
 }
 
 object HelperCrdOperator extends IOApp with LazyLogging with TestParams {

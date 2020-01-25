@@ -15,32 +15,32 @@ import scala.reflect.ClassTag
 import scala.util.Try
 
 trait CrdHelperMaker[F[_], T, U] {
-  def make(context: CrdHelperContext[T]): CrdHelper[F, T, U]
+  def make(context: CrdHelperContext): CrdHelper[F, T, U]
 }
 
 object CrdHelperMaker {
-  implicit def helper[F[_], T, U: ClassTag]: CrdHelperMaker[F, T, U] =
-    (context: CrdHelperContext[T]) => new CrdHelper[F, T, U](context)
+  implicit def helper[F[_], T: ClassTag, U: ClassTag]: CrdHelperMaker[F, T, U] =
+    (context: CrdHelperContext) => new CrdHelper[F, T, U](context)
 }
 
 trait ConfigMapHelperMaker[F[_], T] {
-  def make(context: ConfigMapHelperContext[T]): ConfigMapHelper[F, T]
+  def make(context: ConfigMapHelperContext): ConfigMapHelper[F, T]
 }
 
 object ConfigMapHelperMaker {
-  implicit def helper[F[_], T]: ConfigMapHelperMaker[F, T] =
-    (context: ConfigMapHelperContext[T]) => new ConfigMapHelper[F, T](context)
+  implicit def helper[F[_], T: ClassTag]: ConfigMapHelperMaker[F, T] =
+    (context: ConfigMapHelperContext) => new ConfigMapHelper[F, T](context)
 }
 
-sealed abstract class AbstractHelper[F[_], T, U](val client: KubernetesClient, val cfg: Configuration[T]) {
+sealed abstract class AbstractHelper[F[_], T, U](val client: KubernetesClient, val cfg: Configuration) {
   val kind: String = cfg.getKind
   val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(client.getNamespace, cfg.namespace)
 
   def currentResources: Either[Throwable, ResourcesList[T, U]]
 }
 
-final case class ConfigMapHelperContext[T](
-  cfg: Configuration.ConfigMapConfig[T],
+final case class ConfigMapHelperContext(
+  cfg: Configuration.ConfigMapConfig,
   client: KubernetesClient,
   isOpenShift: Option[Boolean],
   parser: ConfigMapParser
@@ -53,7 +53,7 @@ object ConfigMapHelper {
     }
 }
 
-class ConfigMapHelper[F[_], T](val context: ConfigMapHelperContext[T])
+class ConfigMapHelper[F[_], T: ClassTag](val context: ConfigMapHelperContext)
     extends AbstractHelper[F, T, Unit](context.client, context.cfg) {
 
   val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
@@ -64,13 +64,13 @@ class ConfigMapHelper[F[_], T](val context: ConfigMapHelperContext[T])
     maps.map { m =>
       cmApi
         .list(m, selector)
-        .map(ConfigMapHelper.convertCm(cfg.forKind, context.parser)(_))
+        .map(ConfigMapHelper.convertCm(cfg.kindClass[T], context.parser)(_))
     }
   }
 }
 
-final case class CrdHelperContext[T](
-  cfg: CrdConfig[T],
+final case class CrdHelperContext(
+  cfg: CrdConfig,
   client: KubernetesClient,
   isOpenShift: Option[Boolean],
   crd: CustomResourceDefinition,
@@ -96,7 +96,7 @@ object CrdHelper {
     implicitly[ClassTag[U]].runtimeClass.asInstanceOf[Class[U]]
 }
 
-class CrdHelper[F[_], T, U: ClassTag](val context: CrdHelperContext[T])
+class CrdHelper[F[_], T: ClassTag, U: ClassTag](val context: CrdHelperContext)
     extends AbstractHelper[F, T, U](context.client, context.cfg) {
   private val crdApi = new CrdApi(client)
 
@@ -106,7 +106,7 @@ class CrdHelper[F[_], T, U: ClassTag](val context: CrdHelperContext[T])
     crs.map { c =>
       crdApi
         .list(c)
-        .map(CrdHelper.convertCr(cfg.forKind, context.parser)(_))
+        .map(CrdHelper.convertCr(cfg.kindClass[T], context.parser)(_))
     }
   }
 }

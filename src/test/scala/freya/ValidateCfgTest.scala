@@ -9,7 +9,7 @@ class ValidateCfgTest extends AnyFlatSpec with Matchers {
 
   it should "validate Config" in {
       //given
-      val cfg = CrdConfig[Kerb](AllNamespaces, prefix)
+      val cfg = CrdConfig(AllNamespaces, prefix)
       //when
       val v = cfg.validate
       //then
@@ -18,7 +18,7 @@ class ValidateCfgTest extends AnyFlatSpec with Matchers {
 
   it should "validate kind" in {
       //given
-      val cfg = CrdConfig[Kerb](AllNamespaces, "")
+      val cfg = CrdConfig(AllNamespaces, "")
       //when
       val v = cfg.validate
       //then
@@ -27,14 +27,14 @@ class ValidateCfgTest extends AnyFlatSpec with Matchers {
 
   it should "validate prefix" in {
       //given
-      val cfg = CrdConfig[Kerb]( AllNamespaces, "")
+      val cfg = CrdConfig(AllNamespaces, "")
       //when
       val v = cfg.validate
       //then
       v.isLeft should ===(true)
 
       //given
-      val cfg2 = CrdConfig[Kerb](AllNamespaces, null)
+      val cfg2 = CrdConfig(AllNamespaces, null)
       //when
       val v2 = cfg2.validate
       //then

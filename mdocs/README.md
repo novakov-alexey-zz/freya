@@ -176,7 +176,7 @@ object KerbCrdOperator extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
-    val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+    val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 
     Operator
       .ofCrd[IO, Kerb, Status](cfg, client, new KerbController[IO])
@@ -201,7 +201,7 @@ object KerbCmOperator extends IOApp {
     val client = IO(new DefaultKubernetesClient)
     
     // ... the same API as for Crd Operator, but with own configuration and constructor
-    val cfg = ConfigMapConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+    val cfg = ConfigMapConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 
     Operator
       .ofConfigMap[IO, Kerb](cfg, client, new KrbCmController[IO])
@@ -283,7 +283,7 @@ import cats.effect.{IO, Timer}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
@@ -325,7 +325,7 @@ import scala.concurrent.ExecutionContext
 
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 Operator
@@ -346,7 +346,7 @@ import scala.concurrent.ExecutionContext
 
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 Operator
@@ -441,7 +441,7 @@ import scala.concurrent.ExecutionContext
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
-val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 val controller = (helper: CrdHelper[IO, Kerb, Unit]) =>
   new Controller[IO, Kerb, Unit] {

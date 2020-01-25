@@ -48,12 +48,12 @@ object ConfigMapWatchMaker {
 }
 
 trait CrdDeployer[F[_], T] {
-  def deployCrd(client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]): F[CustomResourceDefinition]
+  def deployCrd(client: KubernetesClient, cfg: CrdConfig, isOpenShift: Option[Boolean]): F[CustomResourceDefinition]
 }
 
 object CrdDeployer {
   implicit def deployer[F[_]: Sync, T]: CrdDeployer[F, T] =
-    (client: KubernetesClient, cfg: CrdConfig[T], isOpenShift: Option[Boolean]) =>
+    (client: KubernetesClient, cfg: CrdConfig, isOpenShift: Option[Boolean]) =>
       Deployer.deployCrd(client, cfg, isOpenShift)
 }
 
@@ -80,8 +80,8 @@ object FeedbackConsumerMaker {
 
 object Operator extends LazyLogging {
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer, T, U: ClassTag](
-    cfg: CrdConfig[T],
+  def ofCrd[F[_]: ConcurrentEffect: Timer, T: ClassTag, U: ClassTag](
+    cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: Controller[F, T, U]
   )(
@@ -92,7 +92,7 @@ object Operator extends LazyLogging {
   ): Operator[F, T, U] =
     ofCrd[F, T, U](cfg, client)((_: CrdHelper[F, T, U]) => controller)
 
-  def ofCrd[F[_], T, U: ClassTag](cfg: CrdConfig[T], client: F[KubernetesClient])(
+  def ofCrd[F[_], T: ClassTag, U: ClassTag](cfg: CrdConfig, client: F[KubernetesClient])(
     controller: CrdHelper[F, T, U] => Controller[F, T, U]
   )(
     implicit F: ConcurrentEffect[F],
@@ -105,7 +105,7 @@ object Operator extends LazyLogging {
 
     val pipeline = for {
       c <- client
-      isOpenShift <- checkEnvAndConfig(c, cfg)
+      isOpenShift <- checkEnvAndConfig[F, T](c, cfg)
       crd <- deployer.deployCrd(c, cfg, isOpenShift)
       channel <- newActionChannel[F, T, U]
       feedback <- newFeedbackChannel[F, T, U]
@@ -119,10 +119,10 @@ object Operator extends LazyLogging {
 
       context = CrdWatcherContext(
         cfg.namespace,
-        cfg.getKind,
-        new ActionConsumer[F, T, U](ctl, cfg.getKind, feedback),
-        consumer.make(c, crd, feedback, cfg.getKind, cfg.apiVersion),
-        CrdHelper.convertCr[T, U](cfg.forKind, parser),
+        cfg.getKind[T],
+        new ActionConsumer[F, T, U](ctl, cfg.getKind[T], feedback),
+        consumer.make(c, crd, feedback, cfg.getKind[T], cfg.apiVersion),
+        CrdHelper.convertCr[T, U](cfg.kindClass[T], parser),
         channel,
         c,
         crd
@@ -137,14 +137,14 @@ object Operator extends LazyLogging {
   private def newFeedbackChannel[F[_]: ConcurrentEffect, T, U: ClassTag] =
     MVar[F].empty[Either[Unit, CustomResource[T, U]]]
 
-  def ofConfigMap[F[_]: ConcurrentEffect: Timer, T](
-    cfg: ConfigMapConfig[T],
+  def ofConfigMap[F[_]: ConcurrentEffect: Timer, T: ClassTag](
+    cfg: ConfigMapConfig,
     client: F[KubernetesClient],
     controller: CmController[F, T]
   )(implicit watchMaker: ConfigMapWatchMaker[F, T], helper: ConfigMapHelperMaker[F, T]): Operator[F, T, Unit] =
     ofConfigMap[F, T](cfg, client)((_: ConfigMapHelper[F, T]) => controller)
 
-  def ofConfigMap[F[_], T](cfg: ConfigMapConfig[T], client: F[KubernetesClient])(
+  def ofConfigMap[F[_], T: ClassTag](cfg: ConfigMapConfig, client: F[KubernetesClient])(
     controller: ConfigMapHelper[F, T] => CmController[F, T]
   )(
     implicit F: ConcurrentEffect[F],
@@ -169,8 +169,8 @@ object Operator extends LazyLogging {
         cfg.namespace,
         cfg.getKind,
         ctl,
-        new ActionConsumer[F, T, Unit](ctl, cfg.getKind, feedback),
-        ConfigMapHelper.convertCm(cfg.forKind, parser),
+        new ActionConsumer[F, T, Unit](ctl, cfg.getKind[T], feedback),
+        ConfigMapHelper.convertCm(cfg.kindClass, parser),
         channel,
         k8sClient,
         Labels.forKind(cfg.getKind, cfg.prefix)
@@ -193,7 +193,10 @@ object Operator extends LazyLogging {
   ) =
     OperatorPipeline[F, T, U](helper, watcher, channel, controller.onInit())
 
-  private def checkEnvAndConfig[F[_]: Sync, T](client: KubernetesClient, cfg: Configuration[T]): F[Option[Boolean]] =
+  private def checkEnvAndConfig[F[_]: Sync, T: ClassTag](
+    client: KubernetesClient,
+    cfg: Configuration
+  ): F[Option[Boolean]] =
     for {
       _ <- Sync[F].fromEither(cfg.validate.leftMap(new RuntimeException(_)))
       check <- if (cfg.checkK8sOnStartup) checkKubeEnv(client) else Option.empty[Boolean].pure[F]

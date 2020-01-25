@@ -44,8 +44,8 @@ class OperatorsTest
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
 
-  val crdCfg = CrdConfig[Kerb](Namespace("test"), prefix, checkK8sOnStartup = false)
-  val configMapcfg = ConfigMapConfig[Kerb](AllNamespaces, prefix, checkK8sOnStartup = false)
+  val crdCfg = CrdConfig(Namespace("test"), prefix, checkK8sOnStartup = false)
+  val configMapcfg = ConfigMapConfig(AllNamespaces, prefix, checkK8sOnStartup = false)
   val server = new KubernetesServer(false, false)
   val cmParser = ConfigMapParser[IO]().unsafeRunSync()
 
@@ -96,7 +96,7 @@ class OperatorsTest
       }
 
   implicit def crdDeployer[F[_]: Sync, T]: CrdDeployer[F, T] =
-    (_, _: CrdConfig[T], _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
+    (_, _: CrdConfig, _: Option[Boolean]) => Sync[F].pure(new CustomResourceDefinition())
 
   def configMapOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
     controller: CmController[F, Kerb]
@@ -158,7 +158,7 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind)) { (action, crd) =>
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) { (action, crd) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
@@ -187,7 +187,7 @@ class OperatorsTest
     implicit val (fakeWatchable, _) = makeWatchable[Kerb, AnyCustomResource]
 
     val testResources = new mutable.ArrayBuffer[Resource[Kerb, Status]]()
-    implicit val helper: CrdHelperMaker[IO, Kerb, Status] = (context: CrdHelperContext[Kerb]) =>
+    implicit val helper: CrdHelperMaker[IO, Kerb, Status] = (context: CrdHelperContext) =>
       new CrdHelper[IO, Kerb, Status](context) {
         override def currentResources: Either[Throwable, ResourcesList[Kerb, Status]] =
           Right(testResources.toList)
@@ -221,7 +221,7 @@ class OperatorsTest
     implicit val (fakeWatchable, _) = makeWatchable[Kerb, ConfigMap]
 
     val testResources = new mutable.ArrayBuffer[Resource[Kerb, Unit]]()
-    implicit val helper: ConfigMapHelperMaker[IO, Kerb] = (context: ConfigMapHelperContext[Kerb]) =>
+    implicit val helper: ConfigMapHelperMaker[IO, Kerb] = (context: ConfigMapHelperContext) =>
       new ConfigMapHelper[IO, Kerb](context) {
         override def currentResources: Either[Throwable, ResourcesList[Kerb, Unit]] =
           Right(testResources.toList)

@@ -1,8 +1,8 @@
 package freya
 
 import cats.effect.IO
-import freya.K8sNamespace.Namespace
 import freya.Configuration.CrdConfig
+import freya.K8sNamespace.Namespace
 import freya.internal.crd.Deployer
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import org.scalatest.BeforeAndAfterAll
@@ -13,11 +13,11 @@ class CrdDeployerTest extends AsyncFlatSpec with Matchers with BeforeAndAfterAll
   val server = new KubernetesServer(false, true)
 
   it should "deploy CRD" in {
-      val client = server.getClient
-      val cfg = CrdConfig[Kerb](Namespace("test"), prefix)
-      val crd = Deployer.deployCrd[IO](client, cfg, None)
-      crd.map(_.getMetadata.getName should ===(s"${cfg.kindPluralCaseInsensitive}.$prefix")).unsafeToFuture()
-    }
+    val client = server.getClient
+    val cfg = CrdConfig(Namespace("test"), prefix)
+    val crd = Deployer.deployCrd[IO](client, cfg, None)
+    crd.map(_.getMetadata.getName should ===(s"${cfg.kindPluralCaseInsensitive}.$prefix")).unsafeToFuture()
+  }
 
   override protected def beforeAll(): Unit = server.before()
 

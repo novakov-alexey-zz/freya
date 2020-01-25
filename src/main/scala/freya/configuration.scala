@@ -18,29 +18,30 @@ object Retry {
 final case class Metadata(name: String, namespace: String, resourceVersion: String)
 final case class AdditionalPrinterColumn(name: String, columnType: String, jsonPath: String)
 
-sealed abstract class Configuration[T: ClassTag](
+sealed abstract class Configuration(
   val prefix: String,
   val namespace: K8sNamespace = AllNamespaces,
   val customKind: Option[String] = None,
   val checkK8sOnStartup: Boolean = false
 ) {
-  def validate: Either[String, Unit] =
-    (Option(forKind), Option(prefix)) match {
+  def validate[T: ClassTag]: Either[String, Unit] =
+    (Option(kindClass), Option(prefix)) match {
       case (None, _) => Left("forKind must not be null")
       case (_, None) => Left("prefix must not be null")
       case (_, _) if prefix.isEmpty => Left("prefix must not be empty")
       case _ => Right(())
     }
 
-  def getKind: String =
-    customKind.getOrElse(forKind.getSimpleName)
+  def getKind[T: ClassTag]: String =
+    customKind.getOrElse(kindClass.getSimpleName)
 
-  val forKind: Class[T] = implicitly[ClassTag[T]].runtimeClass.asInstanceOf[Class[T]]
+  def kindClass[T: ClassTag]: Class[T] =
+    implicitly[ClassTag[T]].runtimeClass.asInstanceOf[Class[T]]
 }
 
 object Configuration {
 
-  final case class CrdConfig[T: ClassTag](
+  final case class CrdConfig(
     override val namespace: K8sNamespace,
     override val prefix: String,
     version: String = "v1",
@@ -59,7 +60,7 @@ object Configuration {
     val apiVersion: String = s"$prefix/$version"
   }
 
-  final case class ConfigMapConfig[T: ClassTag](
+  final case class ConfigMapConfig(
     override val namespace: K8sNamespace,
     override val prefix: String,
     override val checkK8sOnStartup: Boolean = true,

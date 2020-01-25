@@ -96,7 +96,7 @@ There are 3 steps to implement CRD or ConfigMap Operator:
 1 . Define resource specification as a hierarchy of case classes. Above Kerberos spec can be designed as two 
 case classes `Kerb` and `Principal`
 
-```scala
+```scala mdoc:reset-object
 final case class Principal(name: String, password: String, value: String = "")
 final case class Kerb(realm: String, principals: List[Principal])
 final case class Status(ready: Boolean = false)
@@ -107,7 +107,7 @@ final case class Status(ready: Boolean = false)
 
 Crd Controller option:
 
-```scala
+```scala mdoc
 import com.typesafe.scalalogging.LazyLogging
 import cats.effect.ConcurrentEffect
 import cats.syntax.apply._
@@ -135,7 +135,7 @@ where ```type NewStatus[U] = Option[U]```
 
 ConfigMap Controller option:
 
-```scala
+```scala mdoc
 import cats.effect.ConcurrentEffect
 import io.fabric8.kubernetes.api.model.ConfigMap
 import freya.{Controller, CmController}
@@ -164,7 +164,7 @@ is started to watch for custom resources or config map resources.
 
 Crd Operator option: 
 
-```scala
+```scala mdoc
 import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
@@ -176,7 +176,7 @@ object KerbCrdOperator extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
-    val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+    val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 
     Operator
       .ofCrd[IO, Kerb, Status](cfg, client, new KerbController[IO])
@@ -187,7 +187,7 @@ object KerbCrdOperator extends IOApp {
 
 ConfigMap Operator option:
 
-```scala
+```scala mdoc:compile-only
 import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
@@ -201,7 +201,7 @@ object KerbCmOperator extends IOApp {
     val client = IO(new DefaultKubernetesClient)
     
     // ... the same API as for Crd Operator, but with own configuration and constructor
-    val cfg = ConfigMapConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+    val cfg = ConfigMapConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 
     Operator
       .ofConfigMap[IO, Kerb](cfg, client, new KrbCmController[IO])
@@ -219,7 +219,7 @@ native ConfigMap kind with label `io.myorg.kerboperator/kind=Kerb` in case of Co
 
 Crd Operator:
 
-```scala
+```scala mdoc:compile-only
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.AdditionalPrinterColumn
@@ -248,7 +248,7 @@ CrdConfig(
 
 ConfigMap Operator:
 
-```scala
+```scala mdoc:compile-only
 import freya.Configuration.ConfigMapConfig
 import freya.K8sNamespace.AllNamespaces
 
@@ -274,7 +274,7 @@ once reconcile process is getting desired resources and pushes them to controlle
 events second or n-th time. Reconciler always returns all resources regardless they were already handled
 by your operator or not. Thus it is important that your operators works in `idempotent` manner. 
 
-```scala
+```scala mdoc:compile-only
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.models.CustomResource
@@ -283,11 +283,11 @@ import cats.effect.{IO, Timer}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
 // override reconcile method
@@ -316,16 +316,16 @@ listening process, it will be restarted with the same parameters. There are few 
 
 ### Retry infinitely with random delay
 
-```scala
+```scala mdoc:compile-only
 import cats.effect.{IO, Timer}
 import freya.Retry.Infinite
 import freya.Operator
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 Operator
@@ -337,16 +337,16 @@ Operator
 
 ### Retry with fixed number of restarts
 
-```scala
+```scala mdoc:compile-only
 import cats.effect.{IO, Timer}
 import freya.Retry.Times
 import freya.Operator
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 Operator
@@ -433,15 +433,15 @@ within Operator code manually.
 
 ### CRD Helper
 
-```scala
+```scala mdoc:compile-only
 import cats.effect.{IO, Timer}
-import freya.CrdHelper  
+import freya.CrdHelper 
 import scala.concurrent.ExecutionContext
 
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
-val cfg = CrdConfig[Kerb](Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 val controller = (helper: CrdHelper[IO, Kerb, Unit]) =>
   new Controller[IO, Kerb, Unit] {
