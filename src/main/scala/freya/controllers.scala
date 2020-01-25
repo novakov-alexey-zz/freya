@@ -13,6 +13,11 @@ object Controller {
 }
 
 abstract class Controller[F[_], T, U](implicit val F: Sync[F]) {
+  type NoStatus = NewStatus[Unit]
+
+  implicit def unitToNoStatus(unit: F[Unit]): F[NoStatus] =
+    unit *> noStatus
+
   def onAdd(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
 
   def onDelete(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
@@ -25,10 +30,5 @@ abstract class Controller[F[_], T, U](implicit val F: Sync[F]) {
 }
 
 abstract class CmController[F[_], T](implicit override val F: Sync[F]) extends Controller[F, T, Unit] {
-  type NoStatus = NewStatus[Unit]
-
-  implicit def unitToNoStatus(unit: F[Unit]): F[NoStatus] =
-    unit *> noStatus
-
   def isSupported(@unused cm: ConfigMap): Boolean = true
 }
