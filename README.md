@@ -99,7 +99,14 @@ case classes `Kerb` and `Principal`
 ```scala
 final case class Principal(name: String, password: String, value: String = "")
 final case class Kerb(realm: String, principals: List[Principal])
-final case class Status(ready: Boolean = false)
+```
+
+According to Kubernetes API, every CustomResource may have optional property `status`. In order to model
+status, we will define one more case class. Name and properties of this class can be anything. Basically, 
+it can define its own hierarchy of case classes.
+
+```scala
+final case class Status(ready: Boolean)
 ```
 
 2 . Implement your actions for Add, Modify, Delete events by extending
@@ -150,15 +157,18 @@ class KrbCmController[F[_]](implicit F: ConcurrentEffect[F])
 }
 ```
 
-`CmController` trait adds `isSupported` method, which allows to skip particular ConfigMaps if they do not 
+`CmController` class adds `isSupported` method, which allows to skip particular ConfigMaps if they do not 
 satisfy to logical condition.
 
-All methods have default implementation as  `F.unit`, so override only necessary methods for your custom controller.
+All methods have default implementation as `F.pure(None)` or `F.unit`, so override only necessary methods for your custom controller.
 
 `onInit` - is called before controller is started. In terms **fabric8** client, **onInit** is called before watcher 
 is started to watch for custom resources or config map resources.
 
 `onAdd`, `onDelete`, `onModify` - are called whenever corresponding event is triggered by Kubernetes api-server.
+
+`onAdd` and `onModify` - allows to set new custom resource status by returning a value of `F[Option[U]]` in these methods.
+`U` is a type of status case class.
 
 3 . Start your operator
 
@@ -277,7 +287,7 @@ by your operator or not. Thus it is important that your operators works in `idem
 ```scala
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
-import freya.models.CustomResource
+import freya.models.{CustomResource, NoStatus}
 import cats.syntax.functor._
 import cats.effect.{IO, Timer}
 import scala.concurrent.ExecutionContext
@@ -295,12 +305,12 @@ implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
   extends Controller[F, Kerb, Unit] with LazyLogging {
 
-  override def reconcile(krb: CustomResource[Kerb, Unit]): F[Unused] =
+  override def reconcile(krb: CustomResource[Kerb, Unit]): F[NoStatus] =
     F.delay(logger.info(s"Kerb to reconcile: ${krb.spec}, ${krb.metadata}")).void 
 }
 
 Operator
-  .ofCrd[IO, Kerb, Unit](cfg, client, new KerbController[IO])
+  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
   .withReconciler(1.minute)
   .withRestart()
 ``` 
@@ -435,7 +445,8 @@ within Operator code manually.
 
 ```scala
 import cats.effect.{IO, Timer}
-import freya.CrdHelper  
+import freya.CrdHelper
+import freya.models.NoStatus  
 import scala.concurrent.ExecutionContext
 
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
@@ -443,8 +454,8 @@ implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
-val controller = (helper: CrdHelper[IO, Kerb, Unit]) =>
-  new Controller[IO, Kerb, Unit] {
+val controller = (helper: CrdHelper[IO, Kerb, NoStatus]) =>
+  new Controller[IO, Kerb, NoStatus] {
 
     override def onInit(): IO[Unit] =
       helper.currentResources.fold(
@@ -458,7 +469,7 @@ val controller = (helper: CrdHelper[IO, Kerb, Unit]) =>
   }
 
 Operator
-  .ofCrd[IO, Kerb, Unit](cfg, client)(controller)
+  .ofCrd[IO, Kerb, NoStatus](cfg, client)(controller)
   .withRestart()
 ```
 

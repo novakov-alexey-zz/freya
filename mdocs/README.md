@@ -105,7 +105,7 @@ According to Kubernetes API, every CustomResource may have optional property `st
 status, we will define one more case class. Name and properties of this class can be anything. Basically, 
 it can define its own hierarchy of case classes.
 
-```scala
+```scala mdoc
 final case class Status(ready: Boolean)
 ```
 
@@ -310,7 +310,7 @@ class KerbController[F[_]](implicit F: ConcurrentEffect[F])
 }
 
 Operator
-  .ofCrd[IO, Kerb, Unit](cfg, client, new KerbController[IO])
+  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
   .withReconciler(1.minute)
   .withRestart()
 ``` 
@@ -445,7 +445,8 @@ within Operator code manually.
 
 ```scala mdoc:compile-only
 import cats.effect.{IO, Timer}
-import freya.CrdHelper 
+import freya.CrdHelper
+import freya.models.NoStatus 
 import scala.concurrent.ExecutionContext
 
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
@@ -453,8 +454,8 @@ implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
-val controller = (helper: CrdHelper[IO, Kerb, Unit]) =>
-  new Controller[IO, Kerb, Unit] {
+val controller = (helper: CrdHelper[IO, Kerb, NoStatus]) =>
+  new Controller[IO, Kerb, NoStatus] {
 
     override def onInit(): IO[Unit] =
       helper.currentResources.fold(
@@ -468,7 +469,7 @@ val controller = (helper: CrdHelper[IO, Kerb, Unit]) =>
   }
 
 Operator
-  .ofCrd[IO, Kerb, Unit](cfg, client)(controller)
+  .ofCrd[IO, Kerb, NoStatus](cfg, client)(controller)
   .withRestart()
 ```
 

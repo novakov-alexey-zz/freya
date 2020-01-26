@@ -15,7 +15,7 @@ import freya.internal.AnsiColors._
 import freya.internal.OperatorUtils._
 import freya.internal.Reconciler
 import freya.internal.crd.Deployer
-import freya.models.{CustomResource, NoStatus}
+import freya.models.CustomResource
 import freya.resource.{ConfigMapParser, CrdParser, Labels}
 import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
 import freya.watcher.FeedbackConsumer.FeedbackChannel
@@ -85,13 +85,13 @@ object Operator extends LazyLogging {
   def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer, T: ClassTag](
     cfg: CrdConfig,
     client: F[KubernetesClient],
-    controller: Controller[F, T, NoStatus]
+    controller: Controller[F, T, Unit]
   )(
-                                                                      implicit watch: CrdWatchMaker[F, T, NoStatus],
-                                                                      helper: CrdHelperMaker[F, T, NoStatus],
-                                                                      consumer: FeedbackConsumerMaker[F, T, NoStatus]
-  ): Operator[F, T, NoStatus] =
-    ofCrd[F, T, NoStatus](cfg, client)((_: CrdHelper[F, T, NoStatus]) => controller)
+    implicit watch: CrdWatchMaker[F, T, Unit],
+    helper: CrdHelperMaker[F, T, Unit],
+    consumer: FeedbackConsumerMaker[F, T, Unit]
+  ): Operator[F, T, Unit] =
+    ofCrd[F, T, Unit](cfg, client)((_: CrdHelper[F, T, Unit]) => controller)
 
   def ofCrd[F[_]: ConcurrentEffect: Timer, T: ClassTag, U: ClassTag](
     cfg: CrdConfig,
