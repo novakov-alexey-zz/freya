@@ -96,7 +96,7 @@ There are 3 steps to implement CRD or ConfigMap Operator:
 1 . Define resource specification as a hierarchy of case classes. Above Kerberos spec can be designed as two 
 case classes `Kerb` and `Principal`
 
-```scala mdoc:reset-object
+```scala
 final case class Principal(name: String, password: String, value: String = "")
 final case class Kerb(realm: String, principals: List[Principal])
 final case class Status(ready: Boolean = false)
@@ -107,7 +107,7 @@ final case class Status(ready: Boolean = false)
 
 Crd Controller option:
 
-```scala mdoc
+```scala
 import com.typesafe.scalalogging.LazyLogging
 import cats.effect.ConcurrentEffect
 import cats.syntax.apply._
@@ -120,8 +120,8 @@ class KerbController[F[_]](implicit F: ConcurrentEffect[F])
   override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"new Krb added: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
 
-  override def onDelete(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    F.delay(logger.info(s"Krb deleted: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
+  override def onDelete(krb: CustomResource[Kerb, Status]): F[Unit] =
+    F.delay(logger.info(s"Krb deleted: ${krb.spec}, ${krb.metadata}"))
 
   override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"Krb modified: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
@@ -135,7 +135,7 @@ where ```type NewStatus[U] = Option[U]```
 
 ConfigMap Controller option:
 
-```scala mdoc
+```scala
 import cats.effect.ConcurrentEffect
 import io.fabric8.kubernetes.api.model.ConfigMap
 import freya.{Controller, CmController}
@@ -164,7 +164,7 @@ is started to watch for custom resources or config map resources.
 
 Crd Operator option: 
 
-```scala mdoc
+```scala
 import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
@@ -187,7 +187,7 @@ object KerbCrdOperator extends IOApp {
 
 ConfigMap Operator option:
 
-```scala mdoc:compile-only
+```scala
 import cats.effect.{ContextShift, ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
@@ -219,7 +219,7 @@ native ConfigMap kind with label `io.myorg.kerboperator/kind=Kerb` in case of Co
 
 Crd Operator:
 
-```scala mdoc:compile-only
+```scala
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.AdditionalPrinterColumn
@@ -248,7 +248,7 @@ CrdConfig(
 
 ConfigMap Operator:
 
-```scala mdoc:compile-only
+```scala
 import freya.Configuration.ConfigMapConfig
 import freya.K8sNamespace.AllNamespaces
 
@@ -274,7 +274,7 @@ once reconcile process is getting desired resources and pushes them to controlle
 events second or n-th time. Reconciler always returns all resources regardless they were already handled
 by your operator or not. Thus it is important that your operators works in `idempotent` manner. 
 
-```scala mdoc:compile-only
+```scala
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.models.CustomResource
@@ -287,7 +287,7 @@ val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
 // override reconcile method
@@ -295,7 +295,7 @@ implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
   extends Controller[F, Kerb, Unit] with LazyLogging {
 
-  override def reconcile(krb: CustomResource[Kerb, Unit]): F[NoStatus] =
+  override def reconcile(krb: CustomResource[Kerb, Unit]): F[Unused] =
     F.delay(logger.info(s"Kerb to reconcile: ${krb.spec}, ${krb.metadata}")).void 
 }
 
@@ -316,14 +316,14 @@ listening process, it will be restarted with the same parameters. There are few 
 
 ### Retry infinitely with random delay
 
-```scala mdoc:compile-only
+```scala
 import cats.effect.{IO, Timer}
 import freya.Retry.Infinite
 import freya.Operator
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
@@ -337,14 +337,14 @@ Operator
 
 ### Retry with fixed number of restarts
 
-```scala mdoc:compile-only
+```scala
 import cats.effect.{IO, Timer}
 import freya.Retry.Times
 import freya.Operator
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
@@ -418,7 +418,7 @@ At resources/schema/kerb.json:
 ## Deploy CRD manually
 
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
-set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
+set false in `freya.Configuration.CrdConfig.deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
 won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd`
 is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work without CRD being
 retrieved from K8s api-server. 
@@ -433,12 +433,12 @@ within Operator code manually.
 
 ### CRD Helper
 
-```scala mdoc:compile-only
+```scala
 import cats.effect.{IO, Timer}
-import freya.CrdHelper 
+import freya.CrdHelper  
 import scala.concurrent.ExecutionContext
 
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
+implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)  
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")

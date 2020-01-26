@@ -120,8 +120,8 @@ class KerbController[F[_]](implicit F: ConcurrentEffect[F])
   override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"new Krb added: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
 
-  override def onDelete(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    F.delay(logger.info(s"Krb deleted: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
+  override def onDelete(krb: CustomResource[Kerb, Status]): F[Unit] =
+    F.delay(logger.info(s"Krb deleted: ${krb.spec}, ${krb.metadata}"))
 
   override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     F.delay(logger.info(s"Krb modified: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
@@ -295,7 +295,7 @@ implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
   extends Controller[F, Kerb, Unit] with LazyLogging {
 
-  override def reconcile(krb: CustomResource[Kerb, Unit]): F[NoStatus] =
+  override def reconcile(krb: CustomResource[Kerb, Unit]): F[Unused] =
     F.delay(logger.info(s"Kerb to reconcile: ${krb.spec}, ${krb.metadata}")).void 
 }
 
