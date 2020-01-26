@@ -15,7 +15,7 @@ import freya.internal.AnsiColors._
 import freya.internal.OperatorUtils._
 import freya.internal.Reconciler
 import freya.internal.crd.Deployer
-import freya.models.CustomResource
+import freya.models.{CustomResource, NoStatus}
 import freya.resource.{ConfigMapParser, CrdParser, Labels}
 import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
 import freya.watcher.FeedbackConsumer.FeedbackChannel
@@ -48,12 +48,20 @@ object ConfigMapWatchMaker {
 }
 
 trait CrdDeployer[F[_]] {
-  def deployCrd[T: ClassTag](client: KubernetesClient, cfg: CrdConfig, isOpenShift: Option[Boolean]): F[CustomResourceDefinition]
+  def deployCrd[T: ClassTag](
+    client: KubernetesClient,
+    cfg: CrdConfig,
+    isOpenShift: Option[Boolean]
+  ): F[CustomResourceDefinition]
 }
 
 object CrdDeployer {
   implicit def deployer[F[_]: Sync]: CrdDeployer[F] = new CrdDeployer[F] {
-    override def deployCrd[T: ClassTag](client: KubernetesClient, cfg: CrdConfig, isOpenShift: Option[Boolean]): F[CustomResourceDefinition] =
+    override def deployCrd[T: ClassTag](
+      client: KubernetesClient,
+      cfg: CrdConfig,
+      isOpenShift: Option[Boolean]
+    ): F[CustomResourceDefinition] =
       Deployer.deployCrd[F, T](client, cfg, isOpenShift)
   }
 }
@@ -68,14 +76,22 @@ trait FeedbackConsumerMaker[F[_], T, U] {
 
 object FeedbackConsumerMaker {
   implicit def consumer[F[_]: ConcurrentEffect, T, U]: FeedbackConsumerMaker[F, T, U] =
-    (
-      client: KubernetesClient,
-      crd: CustomResourceDefinition,
-      channel: FeedbackChannel[F, T, U]
-    ) => new FeedbackConsumer[F, T, U](client, crd, channel)
+    (client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, T, U]) =>
+      new FeedbackConsumer[F, T, U](client, crd, channel)
 }
 
 object Operator extends LazyLogging {
+
+  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer, T: ClassTag](
+    cfg: CrdConfig,
+    client: F[KubernetesClient],
+    controller: Controller[F, T, NoStatus]
+  )(
+                                                                      implicit watch: CrdWatchMaker[F, T, NoStatus],
+                                                                      helper: CrdHelperMaker[F, T, NoStatus],
+                                                                      consumer: FeedbackConsumerMaker[F, T, NoStatus]
+  ): Operator[F, T, NoStatus] =
+    ofCrd[F, T, NoStatus](cfg, client)((_: CrdHelper[F, T, NoStatus]) => controller)
 
   def ofCrd[F[_]: ConcurrentEffect: Timer, T: ClassTag, U: ClassTag](
     cfg: CrdConfig,

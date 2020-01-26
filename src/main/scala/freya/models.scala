@@ -8,6 +8,8 @@ object models {
   type Resource[T, U] = Either[(Throwable, HasMetadata), CustomResource[T, U]]
   type ResourcesList[T, U] = List[Resource[T, U]]
   type NewStatus[U] = Option[U]
+  type NoStatus = NewStatus[Unit]
+
   final case class CustomResource[T, U](spec: T, metadata: Metadata, status: Option[U])
 }
 
