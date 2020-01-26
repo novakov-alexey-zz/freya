@@ -23,9 +23,7 @@ object FeedbackConsumer {
 class FeedbackConsumer[F[_], T, U](
   client: KubernetesClient,
   crd: CustomResourceDefinition,
-  channel: FeedbackChannel[F, T, U],
-  kind: String,
-  apiVersion: String
+  channel: FeedbackChannel[F, T, U]
 )(implicit F: ConcurrentEffect[F])
     extends FeedbackConsumerAlg[F] {
   private val crdApi = new CrdApi(client)
@@ -43,8 +41,8 @@ class FeedbackConsumer[F[_], T, U](
 
   private def updatedCr(cr: CustomResource[T, U]) = {
     val anyCr = new AnyCustomResource
-    anyCr.setKind(kind)
-    anyCr.setApiVersion(apiVersion)
+    anyCr.setKind(crd.getSpec.getNames.getKind)
+    anyCr.setApiVersion(crd.getSpec.getVersion)
     anyCr.setSpec(cr.spec.asInstanceOf[AnyRef])
     anyCr.setStatus(cr.status.asInstanceOf[AnyRef])
     anyCr.setMetadata(

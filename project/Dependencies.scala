@@ -9,7 +9,7 @@ object Dependencies extends AutoPlugin {
     object DependenciesVersion {
       val betterMonadicVersion             = "0.3.1"
       val catsVersion                      = "2.0.0"
-      val fabric8K8sVersion                = "4.7.0"
+      val fabric8K8sVersion                = "4.7.1"
       val jacksonScalaVersion              = "2.10.2"
       val jacksonJsonSchemaV               = "1.0.36"
       val logbackClassicVersion            = "1.3.0-alpha4"
@@ -34,6 +34,6 @@ object Dependencies extends AutoPlugin {
     val scalaTest                = "org.scalatest"             %%  "scalatest"                 % scalaTestVersion
     val scalaTestCheck           = "org.scalatestplus"         %% "scalatestplus-scalacheck"   % scalaTestCheckVersion
     val scalaCheck               = "org.scalacheck"            %% "scalacheck"                 % scalaCheckVersion
-    val scalaJsonSchema          = "com.github.andyglow" %% "scala-jsonschema-api"             % scalaJsonSchemaV
+    val scalaJsonSchema          = "com.github.andyglow"       %% "scala-jsonschema-api"       % scalaJsonSchemaV
   }
 }

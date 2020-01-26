@@ -137,10 +137,8 @@ class OperatorsTest
       override def make(
         client: KubernetesClient,
         crd: CustomResourceDefinition,
-        channel: FeedbackChannel[F, Kerb, Status],
-        kind: String,
-        apiVersion: String
-      ): FeedbackConsumerAlg[F] = new FeedbackConsumer(client, crd, channel, kind, apiVersion) {
+        channel: FeedbackChannel[F, Kerb, Status]
+      ): FeedbackConsumerAlg[F] = new FeedbackConsumer(client, crd, channel) {
         override def consume: F[ConsumerExitCode] =
           for {
             cr <- channel.take
