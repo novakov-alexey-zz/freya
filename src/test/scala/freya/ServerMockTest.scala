@@ -59,7 +59,7 @@ class ServerMockTest
         .inNamespace(ic.getMetadata.getNamespace)
         .create(ic)
 
-      val meta = MetadataApi.getMetadata(ic.getMetadata)
+      val meta = MetadataApi.translate(ic.getMetadata)
 
       eventually {
         controller.events should contain((action, ic.getSpec, meta))
@@ -83,7 +83,7 @@ class ServerMockTest
       client.namespaces().create(ns)
       client.configMaps().inNamespace(cm.getMetadata.getNamespace).create(cm)
 
-      val meta = MetadataApi.getMetadata(cm.getMetadata)
+      val meta = MetadataApi.translate(cm.getMetadata)
       val spec = parseCM(parser, cm)
       //then
       eventually {

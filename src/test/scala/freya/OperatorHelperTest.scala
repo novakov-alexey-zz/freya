@@ -70,7 +70,7 @@ class OperatorHelperTest
       cm.getMetadata.setNamespace(ns.value)
       client.configMaps().inNamespace(cm.getMetadata.getNamespace).create(cm)
 
-      val meta = MetadataApi.getMetadata(cm.getMetadata)
+      val meta = MetadataApi.translate(cm.getMetadata)
       val spec = parseCM(parser, cm)
 
       currentCms += Right(CustomResource(spec, meta, None))
@@ -110,7 +110,7 @@ class OperatorHelperTest
         .inNamespace(ic.getMetadata.getNamespace)
         .createOrReplace(ic)
 
-      val meta = MetadataApi.getMetadata(ic.getMetadata)
+      val meta = MetadataApi.translate(ic.getMetadata)
       currentCrds += (meta -> ic.getSpec.asInstanceOf[Kerb])
       //then
       eventually {

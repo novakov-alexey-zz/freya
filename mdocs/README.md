@@ -418,7 +418,7 @@ At resources/schema/kerb.json:
 ## Deploy CRD manually
 
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
-set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
+set false in `freya.Configuration.CrdConfig.deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
 won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd`
 is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work without CRD being
 retrieved from K8s api-server. 

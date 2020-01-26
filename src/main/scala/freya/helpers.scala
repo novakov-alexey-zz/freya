@@ -3,7 +3,7 @@ package freya
 import cats.syntax.either._
 import freya.Configuration.CrdConfig
 import freya.internal.OperatorUtils
-import freya.internal.api.{ConfigMapApi, CrdApi}
+import freya.internal.api.{ConfigMapApi, CrdApi, MetadataApi}
 import freya.models.{CustomResource, Resource, ResourcesList}
 import freya.resource.{ConfigMapParser, Labels}
 import freya.watcher.AnyCustomResource
@@ -89,8 +89,8 @@ object CrdHelper {
       meta <- Right(getMetadata(resource))
     } yield CustomResource(spec, meta, status)
 
-  private def getMetadata(resource: AnyCustomResource) =
-    Metadata(resource.getMetadata.getName, resource.getMetadata.getNamespace, resource.getMetadata.getResourceVersion)
+  private def getMetadata(r: AnyCustomResource) =
+    MetadataApi.translate(r.getMetadata)
 
   private def getStatusClass[U: ClassTag, T]: Class[U] =
     implicitly[ClassTag[U]].runtimeClass.asInstanceOf[Class[U]]
@@ -104,7 +104,7 @@ class CrdHelper[F[_], T: ClassTag, U: ClassTag](val context: CrdHelperContext)
     val crs = Try(crdApi.in[T](targetNamespace, context.crd)).toEither
 
     crs.map { c =>
-      crdApi
+      CrdApi
         .list(c)
         .map(CrdHelper.convertCr(cfg.kindClass[T], context.parser)(_))
     }

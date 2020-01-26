@@ -167,7 +167,7 @@ class OperatorsTest
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
-      val meta = MetadataApi.getMetadata(crd.getMetadata)
+      val meta = MetadataApi.translate(crd.getMetadata)
       //then
       eventually {
         controller.events should contain((action, crd.getSpec, meta))
@@ -206,7 +206,7 @@ class OperatorsTest
     val cancelable = startOperator(operator.run)
 
     forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { crd =>
-      val meta = MetadataApi.getMetadata(crd.getMetadata)
+      val meta = MetadataApi.translate(crd.getMetadata)
       testResources += Right(CustomResource(crd.getSpec.asInstanceOf[Kerb], meta, Status().some))
       //then
       eventually {
@@ -278,7 +278,7 @@ class OperatorsTest
       //when
       singleWatcher.foreach(_.eventReceived(action, crd))
 
-      val meta = MetadataApi.getMetadata(crd.getMetadata)
+      val meta = MetadataApi.translate(crd.getMetadata)
 
       //then
       eventually {

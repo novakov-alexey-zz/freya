@@ -13,17 +13,17 @@ import scala.concurrent.duration._
 
 class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb, Status] with LazyLogging {
 
-  private def noStatus: F[NewStatus[Status]] =
-    F.pure(Some(Status()))
+  private def getStatus: F[NewStatus[Status]] =
+    F.pure(Some(Status(true)))
 
   override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    F.delay(logger.info(s"new Kerb added: ${krb.spec}, ${krb.metadata}")) *> noStatus
+    F.delay(logger.info(s"Kerb added event: ${krb.spec}, ${krb.metadata}")) *> getStatus
 
   override def onDelete(krb: CustomResource[Kerb, Status]): F[Unit] =
-    F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}"))
+    F.delay(logger.info(s"Kerb deleted event: ${krb.spec}, ${krb.metadata}"))
 
   override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    F.delay(logger.info(s"new Kerb deleted: ${krb.spec}, ${krb.metadata}")) *> noStatus
+    F.delay(logger.info(s"Kerb modify event: ${krb.spec}, ${krb.metadata}")) *> getStatus
 }
 
 class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) extends CmController[F, Kerb] {

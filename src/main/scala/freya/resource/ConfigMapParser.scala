@@ -6,6 +6,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
 import com.typesafe.scalalogging.LazyLogging
 import freya.Metadata
+import freya.internal.api.MetadataApi
 import freya.resource.ConfigMapParser.SpecificationKey
 import io.fabric8.kubernetes.api.model.ConfigMap
 
@@ -61,7 +62,7 @@ private[freya] class ConfigMapParser extends LazyLogging {
       yaml <- cm.getData.asScala
         .get(SpecificationKey)
         .toRight(new RuntimeException(s"ConfigMap is missing '$SpecificationKey' key"))
-      meta = Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace, cm.getMetadata.getResourceVersion)
+      meta = MetadataApi.translate(cm.getMetadata)
       parsed <- parseYaml(clazz, yaml).map(_ -> meta)
     } yield parsed
 }
