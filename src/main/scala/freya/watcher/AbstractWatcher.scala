@@ -8,19 +8,19 @@ import com.typesafe.scalalogging.LazyLogging
 import freya._
 import freya.errors.{OperatorError, WatcherClosedError}
 import freya.internal.OperatorUtils
+import freya.models.CustomResource
 import freya.watcher.AbstractWatcher.Channel
 import freya.watcher.actions._
-import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 
 object AbstractWatcher {
   type CloseableWatcher = Closeable
-  type Channel[F[_], T] = MVar[F, Either[OperatorError[T], OperatorAction[T]]]
+  type Channel[F[_], T, U] = MVar[F, Either[OperatorError, OperatorAction[T, U]]]
 }
 
-abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
+abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
   namespace: K8sNamespace,
-  channel: Channel[F, T],
+  channel: Channel[F, T, U],
   clientNamespace: String
 )(implicit F: ConcurrentEffect[F])
     extends LazyLogging
@@ -30,12 +30,9 @@ abstract class AbstractWatcher[F[_], T, C <: Controller[F, T]] protected (
 
   protected def enqueueAction(
     wAction: Watcher.Action,
-    errorOrResource: Either[OperatorError[T], (T, Metadata)],
-    resource: HasMetadata
+    errorOrResource: Either[OperatorError, CustomResource[T, U]]
   ): Unit = {
-    val action = errorOrResource.map {
-      case (entity, meta) => ServerAction[T](wAction, entity, meta, resource.getMetadata.getNamespace)
-    }
+    val action = errorOrResource.map(r => ServerAction[T, U](wAction, r))
     unsafeRun(channel.put(action))
   }
 

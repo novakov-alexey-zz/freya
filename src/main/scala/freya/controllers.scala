@@ -1,26 +1,33 @@
 package freya
 
 import cats.effect.Sync
+import cats.syntax.apply._
+import freya.Controller.noStatus
+import freya.models.{CustomResource, NewStatus, NoStatus}
 import io.fabric8.kubernetes.api.model.ConfigMap
 
 import scala.annotation.unused
 
-abstract class Controller[F[_], T](implicit val F: Sync[F]) {
-  def onAdd(@unused resource: T, @unused metadata: Metadata): F[Unit] = F.unit
+object Controller {
+  def noStatus[F[_], U](implicit F: Sync[F]): F[Option[U]] = F.pure(None)
+}
 
-  def onDelete(@unused resource: T, @unused metadata: Metadata): F[Unit] = F.unit
+abstract class Controller[F[_], T, U](implicit val F: Sync[F]) {
 
-  def onModify(@unused resource: T, @unused metadata: Metadata): F[Unit] = F.unit
+  implicit def unitToNoStatus(unit: F[Unit]): F[NoStatus] =
+    unit *> noStatus
 
-  def reconcile(@unused resource: T, @unused metadata: Metadata): F[Unit] = F.unit
+  def onAdd(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
+
+  def onDelete(@unused resource: CustomResource[T, U]): F[Unit] = F.unit
+
+  def onModify(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
+
+  def reconcile(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
 
   def onInit(): F[Unit] = F.unit
 }
 
-object Controller {
-  type ConfigMapController[F[_], T] = Controller[F, T] with CmController
-}
-
-trait CmController  {
+abstract class CmController[F[_], T](implicit override val F: Sync[F]) extends Controller[F, T, Unit] {
   def isSupported(@unused cm: ConfigMap): Boolean = true
 }

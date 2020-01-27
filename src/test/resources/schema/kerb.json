@@ -37,6 +37,14 @@
         "principals",
         "failInTest"
       ]
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        }
+      }
     }
   }
 }

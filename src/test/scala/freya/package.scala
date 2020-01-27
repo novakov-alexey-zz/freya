@@ -1,4 +1,5 @@
 import cats.effect.{CancelToken, ContextShift, ExitCode, IO, Timer}
+import freya.internal.api.MetadataApi
 import freya.resource.ConfigMapParser
 import io.fabric8.kubernetes.api.model.ConfigMap
 import org.scalacheck.{Arbitrary, Gen}
@@ -23,10 +24,10 @@ package object freya {
     }
 
   def parseCM(parser: ConfigMapParser, cm: ConfigMap): Kerb = {
-    val (kerb, _) = parser.parseCM(classOf[Kerb], cm).getOrElse(sys.error("Error when transforming ConfigMap to Krb2"))
+    val (kerb, _) = parser.parseCM(classOf[Kerb], cm).getOrElse(sys.error("Error when transforming ConfigMap to Kerb"))
     kerb
   }
 
   def toMetadata(cm: ConfigMap): Metadata =
-    Metadata(cm.getMetadata.getName, cm.getMetadata.getNamespace)
+    MetadataApi.translate(cm.getMetadata)
 }

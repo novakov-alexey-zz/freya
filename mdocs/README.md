@@ -101,6 +101,14 @@ final case class Principal(name: String, password: String, value: String = "")
 final case class Kerb(realm: String, principals: List[Principal])
 ```
 
+According to Kubernetes API, every CustomResource may have optional property `status`. In order to model
+status, we will define one more case class. Name and properties of this class can be anything. Basically, 
+it can define its own hierarchy of case classes.
+
+```scala mdoc
+final case class Status(ready: Boolean)
+```
+
 2 . Implement your actions for Add, Modify, Delete events by extending
 `freya.Controller` abstract class:
 
@@ -109,24 +117,28 @@ Crd Controller option:
 ```scala mdoc
 import com.typesafe.scalalogging.LazyLogging
 import cats.effect.ConcurrentEffect
-import freya.{Controller, Metadata}
+import cats.syntax.apply._
+import freya.Controller
+import freya.models.{CustomResource, NewStatus}
 
 class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
-  extends Controller[F, Kerb] with LazyLogging {
+  extends Controller[F, Kerb, Status] with LazyLogging {
 
-  override def onAdd(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"new Kerb added: $krb, $meta"))
+  override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
+    F.delay(logger.info(s"new Krb added: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
 
-  override def onDelete(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"Kerb deleted: $krb, $meta"))
+  override def onDelete(krb: CustomResource[Kerb, Status]): F[Unit] =
+    F.delay(logger.info(s"Krb deleted: ${krb.spec}, ${krb.metadata}"))
 
-  override def onModify(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"Kerb modified: $krb, $meta"))
+  override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
+    F.delay(logger.info(s"Krb modified: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
   
   override def onInit(): F[Unit] =
     F.delay(logger.info(s"init completed"))
 }
 ```
+
+where ```type NewStatus[U] = Option[U]```
 
 ConfigMap Controller option:
 
@@ -136,7 +148,7 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import freya.{Controller, CmController}
 
 class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) 
-  extends Controller[F, Kerb] with CmController {
+  extends CmController[F, Kerb] {
 
   // override onAdd, onDelete, onModify like in Crd Controller 
 
@@ -145,15 +157,18 @@ class KrbCmController[F[_]](implicit F: ConcurrentEffect[F])
 }
 ```
 
-`CmController` trait adds `isSupported` method, which allows to skip particular ConfigMaps if they do not 
+`CmController` class adds `isSupported` method, which allows to skip particular ConfigMaps if they do not 
 satisfy to logical condition.
 
-All methods have default implementation as  `F.unit`, so override only necessary methods for your custom controller.
+All methods have default implementation as `F.pure(None)` or `F.unit`, so override only necessary methods for your custom controller.
 
 `onInit` - is called before controller is started. In terms **fabric8** client, **onInit** is called before watcher 
 is started to watch for custom resources or config map resources.
 
 `onAdd`, `onDelete`, `onModify` - are called whenever corresponding event is triggered by Kubernetes api-server.
+
+`onAdd` and `onModify` - allows to set new custom resource status by returning a value of `F[Option[U]]` in these methods.
+`U` is a type of status case class.
 
 3 . Start your operator
 
@@ -171,10 +186,10 @@ object KerbCrdOperator extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
-    val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+    val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 
     Operator
-      .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
+      .ofCrd[IO, Kerb, Status](cfg, client, new KerbController[IO])
       .run
   }
 }
@@ -196,7 +211,7 @@ object KerbCmOperator extends IOApp {
     val client = IO(new DefaultKubernetesClient)
     
     // ... the same API as for Crd Operator, but with own configuration and constructor
-    val cfg = ConfigMapConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+    val cfg = ConfigMapConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 
     Operator
       .ofConfigMap[IO, Kerb](cfg, client, new KrbCmController[IO])
@@ -219,9 +234,7 @@ import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.AdditionalPrinterColumn
 
-CrdConfig(
-  // CRD kind to register and watch
-  forKind = classOf[Kerb], 
+CrdConfig(  
   // namespace to watch for events in
   namespace = Namespace("test"), 
   // CRD api prefix 
@@ -249,9 +262,7 @@ ConfigMap Operator:
 import freya.Configuration.ConfigMapConfig
 import freya.K8sNamespace.AllNamespaces
 
-ConfigMapConfig(
-  // ConfigMap label value to watch for event
-  forKind = classOf[Kerb], 
+ConfigMapConfig(  
   // namespace to watch for events in
   namespace = AllNamespaces, 
   // CRD api prefix 
@@ -276,11 +287,13 @@ by your operator or not. Thus it is important that your operators works in `idem
 ```scala mdoc:compile-only
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
+import freya.models.{CustomResource, NoStatus}
+import cats.syntax.functor._
 import cats.effect.{IO, Timer}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 // p.s. use IOApp as in previous examples instead of below timer and cs values
@@ -290,10 +303,10 @@ implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 // override reconcile method
 
 class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
-  extends Controller[F, Kerb] with LazyLogging {
+  extends Controller[F, Kerb, Unit] with LazyLogging {
 
-  override def reconcile(krb: Kerb, meta: Metadata): F[Unit] =
-    F.delay(logger.info(s"Kerb to reconcile: $krb, $meta")) 
+  override def reconcile(krb: CustomResource[Kerb, Unit]): F[NoStatus] =
+    F.delay(logger.info(s"Kerb to reconcile: ${krb.spec}, ${krb.metadata}")).void 
 }
 
 Operator
@@ -322,11 +335,11 @@ import scala.concurrent.ExecutionContext
 
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 Operator
-  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
+  .ofCrd[IO, Kerb, Status](cfg, client, new KerbController[IO])
    .withRestart(Infinite(minDelay = 1.second, maxDelay = 10.seconds))
 ```
 
@@ -343,11 +356,11 @@ import scala.concurrent.ExecutionContext
 
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
 Operator
-  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
+  .ofCrd[IO, Kerb, Status](cfg, client, new KerbController[IO])
    .withRestart(Times(maxRetries = 3, delay = 2.seconds, multiplier = 2))
 ```
 
@@ -399,6 +412,14 @@ At resources/schema/kerb.json:
         "realm",
         "principals"        
       ]
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        }
+      }
     }
   }
 }
@@ -407,7 +428,7 @@ At resources/schema/kerb.json:
 ## Deploy CRD manually
 
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
-set false in `OperatorCfg.Crd#deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
+set false in `freya.Configuration.CrdConfig.deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
 won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd`
 is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work without CRD being
 retrieved from K8s api-server. 
@@ -424,32 +445,31 @@ within Operator code manually.
 
 ```scala mdoc:compile-only
 import cats.effect.{IO, Timer}
-import freya.CrdHelper 
+import freya.CrdHelper
+import freya.models.NoStatus 
 import scala.concurrent.ExecutionContext
 
 implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
 implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
-val cfg = CrdConfig(classOf[Kerb], Namespace("test"), prefix = "io.myorg.kerboperator")
+val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
-val controller = (helper: CrdHelper[IO, Kerb]) =>
-  new Controller[IO, Kerb] {
+val controller = (helper: CrdHelper[IO, Kerb, NoStatus]) =>
+  new Controller[IO, Kerb, NoStatus] {
 
     override def onInit(): IO[Unit] =
       helper.currentResources.fold(
         IO.raiseError, // refusing to process
         r =>
-            IO(r.foreach { resource =>
-              resource.fold(
-                error => println("Failed to get current CRD instances" + error._1),
-                resource => println(s"current ${cfg.getKind} CRDs: ${resource._2}")
-              )
+            IO(r.foreach {
+                case Left((error, r)) => println(s"Failed to parse CRD instances $r, error = $error")
+                case Right(resource) => println(s"current ${cfg.getKind} CRDs: ${resource.spec}")
             })
       )
   }
 
 Operator
-  .ofCrd[IO, Kerb](cfg, client)(controller)
+  .ofCrd[IO, Kerb, NoStatus](cfg, client)(controller)
   .withRestart()
 ```
 

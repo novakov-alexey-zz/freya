@@ -34,6 +34,6 @@ object Dependencies extends AutoPlugin {
     val scalaTest                = "org.scalatest"             %%  "scalatest"                 % scalaTestVersion
     val scalaTestCheck           = "org.scalatestplus"         %% "scalatestplus-scalacheck"   % scalaTestCheckVersion
     val scalaCheck               = "org.scalacheck"            %% "scalacheck"                 % scalaCheckVersion
-    val scalaJsonSchema          = "com.github.andyglow" %% "scala-jsonschema-api"             % scalaJsonSchemaV
+    val scalaJsonSchema          = "com.github.andyglow"       %% "scala-jsonschema-api"       % scalaJsonSchemaV
   }
 }
