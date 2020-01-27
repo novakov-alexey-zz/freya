@@ -93,23 +93,21 @@ object Operator extends LazyLogging {
   ): Operator[F, T, Unit] =
     ofCrd[F, T, Unit](cfg, client)((_: CrdHelper[F, T, Unit]) => controller)
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer, T: ClassTag, U: ClassTag](
+  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer, T: ClassTag, U: ClassTag](
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: Controller[F, T, U]
   )(
     implicit watch: CrdWatchMaker[F, T, U],
     helper: CrdHelperMaker[F, T, U],
-    deployer: CrdDeployer[F],
     consumer: FeedbackConsumerMaker[F, T, U]
   ): Operator[F, T, U] =
     ofCrd[F, T, U](cfg, client)((_: CrdHelper[F, T, U]) => controller)
 
-  def ofCrd[F[_], T: ClassTag, U: ClassTag](cfg: CrdConfig, client: F[KubernetesClient])(
+  def ofCrd[F[_]: Timer, T: ClassTag, U: ClassTag](cfg: CrdConfig, client: F[KubernetesClient])(
     controller: CrdHelper[F, T, U] => Controller[F, T, U]
   )(
     implicit F: ConcurrentEffect[F],
-    T: Timer[F],
     watch: CrdWatchMaker[F, T, U],
     helperMaker: CrdHelperMaker[F, T, U],
     deployer: CrdDeployer[F],
@@ -157,11 +155,10 @@ object Operator extends LazyLogging {
   )(implicit watchMaker: ConfigMapWatchMaker[F, T], helper: ConfigMapHelperMaker[F, T]): Operator[F, T, Unit] =
     ofConfigMap[F, T](cfg, client)((_: ConfigMapHelper[F, T]) => controller)
 
-  def ofConfigMap[F[_], T: ClassTag](cfg: ConfigMapConfig, client: F[KubernetesClient])(
+  def ofConfigMap[F[_]: Timer, T: ClassTag](cfg: ConfigMapConfig, client: F[KubernetesClient])(
     controller: ConfigMapHelper[F, T] => CmController[F, T]
   )(
     implicit F: ConcurrentEffect[F],
-    T: Timer[F],
     watchMaker: ConfigMapWatchMaker[F, T],
     helperMaker: ConfigMapHelperMaker[F, T]
   ): Operator[F, T, Unit] = {
