@@ -1,19 +1,15 @@
 package freya
 
-import cats.syntax.apply._
 import cats.effect.ConcurrentEffect
+import cats.syntax.apply._
 import com.typesafe.scalalogging.LazyLogging
 import freya.models.{CustomResource, NewStatus}
 import io.fabric8.kubernetes.client.Watcher.Action
 
-import scala.collection.mutable
-
 class CrdTestController[F[_]](implicit override val F: ConcurrentEffect[F])
     extends Controller[F, Kerb, Status]
-    with LazyLogging {
-  val events: mutable.Set[(Action, Kerb, Metadata)] = mutable.Set.empty
-  val reconciledEvents: mutable.Set[(Kerb, Metadata)] = mutable.Set.empty
-  var initialized: Boolean = false
+    with LazyLogging
+    with ControllerState {
 
   private def getStatus(ready: Boolean): F[NewStatus[Status]] =
     F.pure(Some(Status(ready)))

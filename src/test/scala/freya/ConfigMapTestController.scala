@@ -6,13 +6,7 @@ import freya.models.{CustomResource, NoStatus}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.Watcher.Action
 
-import scala.collection.mutable
-
-class ConfigMapTestController[F[_]: ConcurrentEffect] extends CmController[F, Kerb] {
-  val events: mutable.Set[(Action, Kerb, Metadata)] = mutable.Set.empty
-  val reconciledEvents: mutable.Set[(Kerb, Metadata)] = mutable.Set.empty
-  var initialized: Boolean = false
-
+class ConfigMapTestController[F[_]: ConcurrentEffect] extends CmController[F, Kerb] with ControllerState {
   override def isSupported(cm: ConfigMap): Boolean = true
 
   override def onAdd(krb: CustomResource[Kerb, Unit]): F[NoStatus] =
