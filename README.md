@@ -479,7 +479,7 @@ Operator
 -   `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
 -   `Option[Boolean]` - isOpenShift property
 -   `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
--   `freya.resource.CrdParser` - CRD parser to parse `SpecClass#spec` to target `T` kind.
+-   `freya.resource.CrdParser` - CRD parser to parse `freya.watcher.AnyCustomResource#spec` to target `T` kind.
 
 ### ConfigMap Helper
 
@@ -490,7 +490,7 @@ configuration
 
 Properties:
 
--   `freya.Operator.ConfigMap` - configuration that which is passed on operator construction 
+-   `freya.Configuration.ConfigMapConfig` - configuration which is passed on operator construction 
 -   `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
 -   `Option[Boolean]` - isOpenShift property
 -   `freya.resource.ConfigMapParser` - ConfigMap parser to parse `config` key of data map to target `T` kind
