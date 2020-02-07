@@ -8,7 +8,7 @@ object Dependencies extends AutoPlugin {
 
     object DependenciesVersion {
       val betterMonadicVersion             = "0.3.1"
-      val catsVersion                      = "2.1.0"
+      val catsVersion                      = "2.1.1"
       val fabric8K8sVersion                = "4.7.1"
       val jacksonScalaVersion              = "2.10.2"
       val jacksonJsonSchemaV               = "1.0.36"
