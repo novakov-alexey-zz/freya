@@ -1,12 +1,15 @@
+import microsites.{ExtraMdFileConfig, MicrositeFavicon}
 import sbt.url
 import sbtrelease.ReleaseStateTransformations._
+
+Global / onChangedBuildSource := ReloadOnSourceChanges
 
 ThisBuild / name := "freya"
 ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / organization := "io.github.novakov-alexey"
 
 // Publishing config //////////////////////////////////////////////////////
-ThisBuild /  publishTo := {
+ThisBuild / publishTo := {
   val nexus = "https://oss.sonatype.org/"
   Some("releases".at(nexus + "service/local/staging/deploy/maven2"))
 }
@@ -15,13 +18,15 @@ publishTo := sonatypePublishToBundle.value
 
 ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credential")
 ThisBuild / scmInfo := Some(
-  ScmInfo(
-    url("https://github.com/novakov-alexey/freya"),
-    "scm:git:git@github.com:novakov-alexey/freya.git"
-  )
+  ScmInfo(url("https://github.com/novakov-alexey/freya"), "scm:git:git@github.com:novakov-alexey/freya.git")
 )
 ThisBuild / developers := List(
-  Developer(id = "novakov-alexey", name = "Alexey Novakov", email = "novakov.alex@gmail.com", url = url("https://github.com/novakov-alexey"))
+  Developer(
+    id = "novakov-alexey",
+    name = "Alexey Novakov",
+    email = "novakov.alex@gmail.com",
+    url = url("https://github.com/novakov-alexey")
+  )
 )
 ThisBuild / description := "Kubernetes Operator library for Scala"
 ThisBuild / licenses := List("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
@@ -43,47 +48,84 @@ Test / fork := true
 
 releaseProcess := Seq.empty[ReleaseStep]
 releaseProcess ++= (if (sys.env.contains("RELEASE_VERSION_BUMP"))
-  Seq[ReleaseStep](
-    checkSnapshotDependencies,
-    inquireVersions,
-    setReleaseVersion,
-    commitReleaseVersion,
-    tagRelease,
-    releaseStepCommandAndRemaining("publishSigned"),
-    releaseStepCommand("sonatypeBundleRelease")
-  )
-else Seq.empty[ReleaseStep])
+                      Seq[ReleaseStep](
+                        checkSnapshotDependencies,
+                        inquireVersions,
+                        setReleaseVersion,
+                        commitReleaseVersion,
+                        tagRelease,
+                        releaseStepCommandAndRemaining("publishSigned"),
+                        releaseStepCommand("sonatypeBundleRelease")
+                      )
+                    else Seq.empty[ReleaseStep])
 releaseProcess ++= (if (sys.env.contains("RELEASE_PUBLISH"))
-  Seq[ReleaseStep](inquireVersions, setNextVersion, commitNextVersion, pushChanges)
-else Seq.empty[ReleaseStep])
+                      Seq[ReleaseStep](inquireVersions, setNextVersion, commitNextVersion, pushChanges)
+                    else Seq.empty[ReleaseStep])
 
-lazy val `freya` = (project in file(".")).settings(
-  addCompilerPlugin(betterMonadicFor),
-  publishArtifact in Test := false,
-  libraryDependencies ++= Seq(
-        k8sClient,
-        k8sModel,
-        k8sServerMock % Test,
-        catsEffect,
-        scalaLogging,
-        jacksonScala,
-        scalaTest % Test,
-        scalaCheck % Test,
-        scalaTestCheck % Test,
-        logbackClassic % Test,
-        jacksonJsonSchema % Test,
-        scalaJsonSchema % Test
-      ),
-  git.useGitDescribe := true
-).enablePlugins(GitVersioning)
+lazy val `freya` = (project in file("."))
+  .settings(
+    addCompilerPlugin(betterMonadicFor),
+    publishArtifact in Test := false,
+    libraryDependencies ++= Seq(
+          k8sClient,
+          k8sModel,
+          k8sServerMock % Test,
+          catsEffect,
+          scalaLogging,
+          jacksonScala,
+          scalaTest % Test,
+          scalaCheck % Test,
+          scalaTestCheck % Test,
+          logbackClassic % Test,
+          jacksonJsonSchema % Test,
+          scalaJsonSchema % Test
+        ),
+    git.useGitDescribe := true
+  )
+  .enablePlugins(GitVersioning)
 
-lazy val `mdocs` = project.in(file("mdocs")).settings(
-    mdocIn := new File("mdocs/README.md"),
-    mdocOut := new File("README.md"),
-    mdocVariables := Map("VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>"))
+lazy val docs = (project in file("docs"))
+  .settings(moduleName := "docs")
+  .settings(
+    mdocIn := new File("docs/docs"),
+    mdocVariables := Map(
+          "VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>")
+        ),
+    micrositeExtraMdFilesOutput := new File("./docs/docs"),
+    micrositeExtraMdFiles := Map(
+          file("README.md") -> ExtraMdFileConfig(
+                "index.md",
+                "home",
+                Map("title" -> "Home", "section" -> "home", "position" -> "1")
+              )
+        ),
+    micrositeName := "Freya",
+    micrositeAuthor := "Alexey Novakov",
+    micrositeTwitterCreator := "@alexey_novakov",
+    micrositeGithubOwner := "novakov-alexey",
+    micrositeGithubRepo := "freya",
+    micrositeHighlightLanguages ++= Seq("yaml", "json", "yml"),
+    micrositeBaseUrl := "/freya",
+    micrositeDocumentationUrl := "/freya/docs",
+    micrositeDataDirectory := (resourceDirectory in Compile).value / "microsite" / "data",
+    micrositePalette := Map(
+          "brand-primary" -> "#E05236",
+          "brand-secondary" -> "#3F3242",
+          "brand-tertiary" -> "#2D232F",
+          "gray-dark" -> "#453E46",
+          "gray" -> "#837F84",
+          "gray-light" -> "#E3E2E3",
+          "gray-lighter" -> "#F4F3F4",
+          "white-color" -> "#FFFFFF"
+        ),
+    micrositeFavicons := Seq(
+          MicrositeFavicon("favicon16x16.png", "16x16"),
+          MicrositeFavicon("favicon32x32.png", "32x32")
+        )
   )
   .dependsOn(`freya`)
+  .enablePlugins(MicrositesPlugin)
   .enablePlugins(MdocPlugin)
 
-lazy val generate = taskKey[Unit]("Generate JSON Schema")
-generate := (runMain in Test).toTask("freya.ScalaJsonSchema").value
+lazy val generateSchema = taskKey[Unit]("Generate JSON Schema")
+generateSchema := (runMain in Test).toTask("freya.ScalaJsonSchema").value

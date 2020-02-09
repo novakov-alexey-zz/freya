@@ -1,0 +1,15 @@
+options:
+  - title: CRD Operator
+    url: docs/
+  - title: ConfigMap Operator
+    url: docs/configmap-operator
+  - title: Configuration
+    url: docs/configuration
+  - title: Reconcile Events
+    url: docs/reconcile-events
+  - title: Structural Schema
+    url: docs/structural-schema
+  - title: Dependencies
+    url: docs/dependencies
+  - title: Future Work
+    url: docs/future

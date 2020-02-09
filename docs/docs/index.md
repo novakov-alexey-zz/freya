@@ -1,3 +1,9 @@
+---
+layout: home
+title: Home
+section: home
+position: 1
+---
 # Freya
 
 ![](https://github.com/novakov-alexey/freya/workflows/Scala%20CI/badge.svg?branch=master)
@@ -32,4 +38,5 @@ Freya main features:
 ```scala
 "io.github.novakov-alexey" %% "freya" % "@VERSION@" // for Scala 2.13 only at the moment
 ```
+
 
