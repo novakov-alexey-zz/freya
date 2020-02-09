@@ -1,6 +1,0 @@
-options:
-  - title: Getting Started
-    url: docs/index
-
-  - title: ConfigMap Operator
-    url: docs/configmap-operator

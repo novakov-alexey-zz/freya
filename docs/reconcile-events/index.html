@@ -1,0 +1,70 @@
+<html><head><title>Freya: Reconcile events</title><meta charset="utf-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Alexey Novakov" /><meta name="description" content="Kubernetes Operator library for Scala" /><meta name="og:image" content="/freya/img/poster.png" /><meta name="image" property="og:image" content="/freya/img/poster.png" /><meta name="og:title" content="Freya: Reconcile events" /><meta name="title" property="og:title" content="Freya: Reconcile events" /><meta name="og:site_name" content="Freya" /><meta name="og:url" content="https://github.com/novakov-alexey/freya" /><meta name="og:type" content="website" /><meta name="og:description" content="Kubernetes Operator library for Scala" /><link rel="icon" type="image/png" href="/freya/img/favicon.png" /><meta name="twitter:title" content="Freya: Reconcile events" /><meta name="twitter:image" content="/freya/img/poster.png" /><meta name="twitter:description" content="Kubernetes Operator library for Scala" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:creator" content="@alexey_novakov" /><link rel="icon" type="image/png" sizes="16x16" href="/freya/img/favicon16x16.png" /><link rel="icon" type="image/png" sizes="32x32" href="/freya/img/favicon32x32.png" /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" /><link rel="stylesheet" href="/freya/highlight/styles/vs.css" /><link rel="stylesheet" href="/freya/css/light-style.css" /></head><body class="docs"><div id="wrapper"><div id="sidebar-wrapper"><div id="sidebar-brand"><a href="/freya/" class="brand"><div class="brand-wrapper"></div><span>Freya</span></a><button id="main-toggle" class="sidebar-toggle"><span class="close"></span></button></div><div class="sidebar-nav"> <div class="sidebar-nav-item  "><a href="/freya/docs/" title="CRD Operator" class="">CRD Operator</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/configmap-operator" title="ConfigMap Operator" class="">ConfigMap Operator</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/configuration" title="Configuration" class="">Configuration</a></div> <div class="sidebar-nav-item active "><a href="/freya/docs/reconcile-events" title="Reconcile Events" class="active">Reconcile Events</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/structural-schema" title="Structural Schema" class="">Structural Schema</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/dependencies" title="Dependencies" class="">Dependencies</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/future" title="Future Work" class="">Future Work</a></div></div></div><div id="page-content-wrapper"><div class="nav"><div class="container-fluid"><div class="row"><div class="col-lg-12"><div class="action-menu pull-left clearfix"><a href="#menu-toggle" id="menu-toggle"><i class="fa fa-bars" aria-hidden="true"></i></a></div><ul class="pull-right"><li id="gh-eyes-item" class="hidden-xs"><a href="https://github.com/novakov-alexey/freya" target="_blank" rel="noopener noreferrer"><i class="fa fa-eye"></i><span>Watchers<span id="eyes" class="label label-default">--</span></span></a></li><li id="gh-stars-item" class="hidden-xs"><a href="https://github.com/novakov-alexey/freya" target="_blank" rel="noopener noreferrer"><i class="fa fa-star-o"></i><span>Stars<span id="stars" class="label label-default">--</span></span></a></li></ul></div></div></div></div><div id="content" data-github-owner="novakov-alexey" data-github-repo="freya"><div class="content-wrapper"><section><h1 id="reconcile-events">Reconcile events</h1>
+
+<p>Freya can start your operator with parallel reconciler thread, which is puling current 
+resources (CRs or ConfigMaps) at specified time interval. This feature allows to pro-actively check
+existing resources and make sure that desired configuration is reflected in terms of Kubernetes objects.
+It is also useful, when your controller failed to handle real-time event. It can process such event later,
+once reconcile process is getting desired resources and pushes them to controller, so that controller can process those 
+events second or n-th time. Reconciler always returns all resources regardless they were already handled
+by your operator or not. Thus, it is important that your operators works in <code class="highlighter-rouge">idempotent</code> manner.</p>
+
+<p>Using <code class="highlighter-rouge">Kerb</code> example:</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">final</span> <span class="k">case</span> <span class="k">class</span> <span class="nc">Principal</span><span class="o">(</span><span class="n">name</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">password</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">value</span><span class="k">:</span> <span class="kt">String</span> <span class="o">=</span> <span class="s">""</span><span class="o">)</span>
+<span class="k">final</span> <span class="k">case</span> <span class="k">class</span> <span class="nc">Kerb</span><span class="o">(</span><span class="n">realm</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">principals</span><span class="k">:</span> <span class="kt">List</span><span class="o">[</span><span class="kt">Principal</span><span class="o">])</span>
+</code></pre></div></div>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="nn">freya.Configuration.CrdConfig</span>
+<span class="k">import</span> <span class="nn">freya.K8sNamespace.Namespace</span>
+<span class="k">import</span> <span class="nn">freya.models._</span>
+<span class="k">import</span> <span class="nn">freya._</span>
+<span class="k">import</span> <span class="nn">cats.syntax.functor._</span>
+<span class="k">import</span> <span class="nn">cats.effect._</span>
+<span class="k">import</span> <span class="nn">scala.concurrent.ExecutionContext</span>
+<span class="k">import</span> <span class="nn">scala.concurrent.duration._</span>
+<span class="k">import</span> <span class="nn">com.typesafe.scalalogging.LazyLogging</span>
+<span class="k">import</span> <span class="nn">io.fabric8.kubernetes.client.DefaultKubernetesClient</span>
+
+<span class="k">val</span> <span class="nv">cfg</span> <span class="k">=</span> <span class="nc">CrdConfig</span><span class="o">(</span><span class="nc">Namespace</span><span class="o">(</span><span class="s">"test"</span><span class="o">),</span> <span class="n">prefix</span> <span class="k">=</span> <span class="s">"io.myorg.kerboperator"</span><span class="o">)</span>
+<span class="k">val</span> <span class="nv">client</span> <span class="k">=</span> <span class="nc">IO</span><span class="o">(</span><span class="k">new</span> <span class="nc">DefaultKubernetesClient</span><span class="o">)</span>
+
+<span class="c1">// p.s. use IOApp as in previous examples instead of below timer and cs values</span>
+<span class="k">implicit</span> <span class="k">val</span> <span class="nv">timer</span><span class="k">:</span> <span class="kt">Timer</span><span class="o">[</span><span class="kt">IO</span><span class="o">]</span> <span class="k">=</span> <span class="nv">IO</span><span class="o">.</span><span class="py">timer</span><span class="o">(</span><span class="nv">ExecutionContext</span><span class="o">.</span><span class="py">global</span><span class="o">)</span>  
+<span class="k">implicit</span> <span class="k">val</span> <span class="nv">cs</span><span class="k">:</span> <span class="kt">ContextShift</span><span class="o">[</span><span class="kt">IO</span><span class="o">]</span> <span class="k">=</span> <span class="nv">IO</span><span class="o">.</span><span class="py">contextShift</span><span class="o">(</span><span class="nv">ExecutionContext</span><span class="o">.</span><span class="py">global</span><span class="o">)</span>
+
+<span class="c1">// override reconcile method</span>
+
+<span class="k">class</span> <span class="nc">KerbController</span><span class="o">[</span><span class="kt">F</span><span class="o">[</span><span class="k">_</span><span class="o">]](</span><span class="k">implicit</span> <span class="n">F</span><span class="k">:</span> <span class="kt">ConcurrentEffect</span><span class="o">[</span><span class="kt">F</span><span class="o">])</span> 
+  <span class="k">extends</span> <span class="nc">Controller</span><span class="o">[</span><span class="kt">F</span>, <span class="kt">Kerb</span>, <span class="kt">Unit</span><span class="o">]</span> <span class="k">with</span> <span class="nc">LazyLogging</span> <span class="o">{</span>
+
+  <span class="k">override</span> <span class="k">def</span> <span class="nf">reconcile</span><span class="o">(</span><span class="n">krb</span><span class="k">:</span> <span class="kt">CustomResource</span><span class="o">[</span><span class="kt">Kerb</span>, <span class="kt">Unit</span><span class="o">])</span><span class="k">:</span> <span class="kt">F</span><span class="o">[</span><span class="kt">NoStatus</span><span class="o">]</span> <span class="k">=</span>
+    <span class="nv">F</span><span class="o">.</span><span class="py">delay</span><span class="o">(</span><span class="nv">logger</span><span class="o">.</span><span class="py">info</span><span class="o">(</span><span class="n">s</span><span class="s">"Kerb to reconcile: ${krb.spec}, ${krb.metadata}"</span><span class="o">)).</span><span class="py">void</span> 
+<span class="o">}</span>
+
+<span class="nc">Operator</span>
+  <span class="o">.</span><span class="py">ofCrd</span><span class="o">[</span><span class="kt">IO</span>, <span class="kt">Kerb</span><span class="o">](</span><span class="n">cfg</span><span class="o">,</span> <span class="n">client</span><span class="o">,</span> <span class="k">new</span> <span class="nc">KerbController</span><span class="o">[</span><span class="kt">IO</span><span class="o">])</span>
+  <span class="o">.</span><span class="py">withReconciler</span><span class="o">(</span><span class="mf">1.</span><span class="n">minute</span><span class="o">)</span>
+  <span class="o">.</span><span class="py">withRestart</span><span class="o">()</span>
+</code></pre></div></div>
+
+<p>Above configuration will call controller’s <code class="highlighter-rouge">reconcile</code> method every minute, since operator start, in case at least
+one CR/ConfigMap resource is found.</p>
+</section></div></div></div></div><script src="/freya/highlight/highlight.pack.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/yaml.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/json.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/yml.min.js"></script><script>
+// For all code blocks, copy the language from the containing div
+// to the inner code tag (where hljs expects it to be)
+const langPrefix = 'language-';
+document.querySelectorAll(`div[class^='${langPrefix}']`).forEach(function(div) {
+  div.classList.forEach(function(cssClass) {
+    if (cssClass.startsWith(langPrefix)) {
+      const lang = cssClass.substring(langPrefix.length);
+      div.querySelectorAll('pre code').forEach(function(code) {
+        code.classList.add(lang);
+      });
+    }
+  });
+});
+
+hljs.configure({languages:['scala','java','bash','yaml','json','yml']});
+hljs.initHighlightingOnLoad();
+      </script><script>console.info('\x57\x65\x62\x73\x69\x74\x65\x20\x62\x75\x69\x6c\x74\x20\x77\x69\x74\x68\x3a\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x5f\x5f\x20\x20\x20\x20\x5f\x5f\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x5f\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x5f\x20\x5f\x5f\x0a\x20\x20\x20\x5f\x5f\x5f\x5f\x5f\x2f\x20\x2f\x5f\x20\x20\x2f\x20\x2f\x5f\x20\x20\x20\x20\x20\x20\x5f\x5f\x5f\x5f\x20\x5f\x5f\x5f\x20\x20\x28\x5f\x29\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x5f\x20\x20\x5f\x5f\x5f\x5f\x5f\x28\x5f\x29\x20\x2f\x5f\x5f\x5f\x5f\x20\x20\x5f\x5f\x5f\x5f\x5f\x0a\x20\x20\x2f\x20\x5f\x5f\x5f\x2f\x20\x5f\x5f\x20\x5c\x2f\x20\x5f\x5f\x2f\x5f\x5f\x5f\x5f\x5f\x2f\x20\x5f\x5f\x20\x60\x5f\x5f\x20\x5c\x2f\x20\x2f\x20\x5f\x5f\x5f\x2f\x20\x5f\x5f\x5f\x2f\x20\x5f\x5f\x20\x5c\x2f\x20\x5f\x5f\x5f\x2f\x20\x2f\x20\x5f\x5f\x2f\x20\x5f\x20\x5c\x2f\x20\x5f\x5f\x5f\x2f\x0a\x20\x28\x5f\x5f\x20\x20\x29\x20\x2f\x5f\x2f\x20\x2f\x20\x2f\x5f\x2f\x5f\x5f\x5f\x5f\x5f\x2f\x20\x2f\x20\x2f\x20\x2f\x20\x2f\x20\x2f\x20\x2f\x20\x2f\x5f\x5f\x2f\x20\x2f\x20\x20\x2f\x20\x2f\x5f\x2f\x20\x28\x5f\x5f\x20\x20\x29\x20\x2f\x20\x2f\x5f\x2f\x20\x20\x5f\x5f\x28\x5f\x5f\x20\x20\x29\x0a\x2f\x5f\x5f\x5f\x5f\x2f\x5f\x2e\x5f\x5f\x5f\x2f\x5c\x5f\x5f\x2f\x20\x20\x20\x20\x20\x2f\x5f\x2f\x20\x2f\x5f\x2f\x20\x2f\x5f\x2f\x5f\x2f\x5c\x5f\x5f\x5f\x2f\x5f\x2f\x20\x20\x20\x5c\x5f\x5f\x5f\x5f\x2f\x5f\x5f\x5f\x5f\x2f\x5f\x2f\x5c\x5f\x5f\x2f\x5c\x5f\x5f\x5f\x2f\x5f\x5f\x5f\x5f\x2f\x0a\x0a\x68\x74\x74\x70\x73\x3a\x2f\x2f\x34\x37\x64\x65\x67\x2e\x67\x69\x74\x68\x75\x62\x2e\x69\x6f\x2f\x73\x62\x74\x2d\x6d\x69\x63\x72\x6f\x73\x69\x74\x65\x73')</script><script>((window.gitter = {}).chat = {}).options = {
+room: 'novakov-alexey/freya'};</script><script src="https://sidecar.gitter.im/dist/sidecar.v1.js"></script><script src="/freya/js/docs.js"></script></body></html>

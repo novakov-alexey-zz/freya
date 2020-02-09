@@ -1,4 +1,103 @@
-<html><head><title>freya: ConfigMap Operator</title><meta charset="utf-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Alexey Novakov" /><meta name="description" content="Kubernetes Operator library for Scala" /><meta name="og:image" content="/freya/img/poster.png" /><meta name="image" property="og:image" content="/freya/img/poster.png" /><meta name="og:title" content="freya: ConfigMap Operator" /><meta name="title" property="og:title" content="freya: ConfigMap Operator" /><meta name="og:site_name" content="freya" /><meta name="og:url" content="https://github.com/novakov-alexey/freya" /><meta name="og:type" content="website" /><meta name="og:description" content="Kubernetes Operator library for Scala" /><link rel="icon" type="image/png" href="/freya/img/favicon.png" /><meta name="twitter:title" content="freya: ConfigMap Operator" /><meta name="twitter:image" content="/freya/img/poster.png" /><meta name="twitter:description" content="Kubernetes Operator library for Scala" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:creator" content="@alexey_novakov" /><link rel="icon" type="image/png" sizes="16x16" href="/freya/img/favicon16x16.png" /><link rel="icon" type="image/png" sizes="24x24" href="/freya/img/favicon24x24.png" /><link rel="icon" type="image/png" sizes="32x32" href="/freya/img/favicon32x32.png" /><link rel="icon" type="image/png" sizes="48x48" href="/freya/img/favicon48x48.png" /><link rel="icon" type="image/png" sizes="57x57" href="/freya/img/favicon57x57.png" /><link rel="icon" type="image/png" sizes="60x60" href="/freya/img/favicon60x60.png" /><link rel="icon" type="image/png" sizes="64x64" href="/freya/img/favicon64x64.png" /><link rel="icon" type="image/png" sizes="70x70" href="/freya/img/favicon70x70.png" /><link rel="icon" type="image/png" sizes="72x72" href="/freya/img/favicon72x72.png" /><link rel="icon" type="image/png" sizes="76x76" href="/freya/img/favicon76x76.png" /><link rel="icon" type="image/png" sizes="96x96" href="/freya/img/favicon96x96.png" /><link rel="icon" type="image/png" sizes="114x114" href="/freya/img/favicon114x114.png" /><link rel="icon" type="image/png" sizes="120x120" href="/freya/img/favicon120x120.png" /><link rel="icon" type="image/png" sizes="128x128" href="/freya/img/favicon128x128.png" /><link rel="icon" type="image/png" sizes="144x144" href="/freya/img/favicon144x144.png" /><link rel="icon" type="image/png" sizes="150x150" href="/freya/img/favicon150x150.png" /><link rel="icon" type="image/png" sizes="152x152" href="/freya/img/favicon152x152.png" /><link rel="icon" type="image/png" sizes="196x196" href="/freya/img/favicon196x196.png" /><link rel="icon" type="image/png" sizes="310x310" href="/freya/img/favicon310x310.png" /><link rel="icon" type="image/png" sizes="310x150" href="/freya/img/favicon310x150.png" /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" /><link rel="stylesheet" href="/freya/highlight/styles/vs.css" /><link rel="stylesheet" href="/freya/css/light-style.css" /></head><body class="docs"><div id="wrapper"><div id="sidebar-wrapper"><div id="sidebar-brand"><a href="/freya/" class="brand"><div class="brand-wrapper"></div><span>freya</span></a><button id="main-toggle" class="sidebar-toggle"><span class="close"></span></button></div><div class="sidebar-nav"><li><a href="/freya/docs/configmap-operator/" class="active">ConfigMap Operator</a></li><li><a href="/freya/docs/" class="">Getting Started</a></li><li><a href="/freya/target/scala-2.13/resource_managed/main/jekyll/css/light-style.css" class=""></a></li><li><a href="/freya/css/light-style.css" class=""></a></li><li><a href="/freya/target/scala-2.13/resource_managed/main/jekyll/css/pattern-style.css" class=""></a></li></div></div><div id="page-content-wrapper"><div class="nav"><div class="container-fluid"><div class="row"><div class="col-lg-12"><div class="action-menu pull-left clearfix"><a href="#menu-toggle" id="menu-toggle"><i class="fa fa-bars" aria-hidden="true"></i></a></div><ul class="pull-right"><li id="gh-eyes-item" class="hidden-xs"><a href="https://github.com/novakov-alexey/freya" target="_blank" rel="noopener noreferrer"><i class="fa fa-eye"></i><span>Watchers<span id="eyes" class="label label-default">--</span></span></a></li><li id="gh-stars-item" class="hidden-xs"><a href="https://github.com/novakov-alexey/freya" target="_blank" rel="noopener noreferrer"><i class="fa fa-star-o"></i><span>Stars<span id="stars" class="label label-default">--</span></span></a></li></ul></div></div></div></div><div id="content" data-github-owner="novakov-alexey" data-github-repo="freya"><div class="content-wrapper"><section><h1 id="configmap-operator">ConfigMap Operator</h1>
+<html><head><title>Freya: ConfigMap Operator</title><meta charset="utf-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="Alexey Novakov" /><meta name="description" content="Kubernetes Operator library for Scala" /><meta name="og:image" content="/freya/img/poster.png" /><meta name="image" property="og:image" content="/freya/img/poster.png" /><meta name="og:title" content="Freya: ConfigMap Operator" /><meta name="title" property="og:title" content="Freya: ConfigMap Operator" /><meta name="og:site_name" content="Freya" /><meta name="og:url" content="https://github.com/novakov-alexey/freya" /><meta name="og:type" content="website" /><meta name="og:description" content="Kubernetes Operator library for Scala" /><link rel="icon" type="image/png" href="/freya/img/favicon.png" /><meta name="twitter:title" content="Freya: ConfigMap Operator" /><meta name="twitter:image" content="/freya/img/poster.png" /><meta name="twitter:description" content="Kubernetes Operator library for Scala" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:creator" content="@alexey_novakov" /><link rel="icon" type="image/png" sizes="16x16" href="/freya/img/favicon16x16.png" /><link rel="icon" type="image/png" sizes="32x32" href="/freya/img/favicon32x32.png" /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" /><link rel="stylesheet" href="/freya/highlight/styles/vs.css" /><link rel="stylesheet" href="/freya/css/light-style.css" /></head><body class="docs"><div id="wrapper"><div id="sidebar-wrapper"><div id="sidebar-brand"><a href="/freya/" class="brand"><div class="brand-wrapper"></div><span>Freya</span></a><button id="main-toggle" class="sidebar-toggle"><span class="close"></span></button></div><div class="sidebar-nav"> <div class="sidebar-nav-item  "><a href="/freya/docs/" title="CRD Operator" class="">CRD Operator</a></div> <div class="sidebar-nav-item active "><a href="/freya/docs/configmap-operator" title="ConfigMap Operator" class="active">ConfigMap Operator</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/configuration" title="Configuration" class="">Configuration</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/reconcile-events" title="Reconcile Events" class="">Reconcile Events</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/structural-schema" title="Structural Schema" class="">Structural Schema</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/dependencies" title="Dependencies" class="">Dependencies</a></div> <div class="sidebar-nav-item  "><a href="/freya/docs/future" title="Future Work" class="">Future Work</a></div></div></div><div id="page-content-wrapper"><div class="nav"><div class="container-fluid"><div class="row"><div class="col-lg-12"><div class="action-menu pull-left clearfix"><a href="#menu-toggle" id="menu-toggle"><i class="fa fa-bars" aria-hidden="true"></i></a></div><ul class="pull-right"><li id="gh-eyes-item" class="hidden-xs"><a href="https://github.com/novakov-alexey/freya" target="_blank" rel="noopener noreferrer"><i class="fa fa-eye"></i><span>Watchers<span id="eyes" class="label label-default">--</span></span></a></li><li id="gh-stars-item" class="hidden-xs"><a href="https://github.com/novakov-alexey/freya" target="_blank" rel="noopener noreferrer"><i class="fa fa-star-o"></i><span>Stars<span id="stars" class="label label-default">--</span></span></a></li></ul></div></div></div></div><div id="content" data-github-owner="novakov-alexey" data-github-repo="freya"><div class="content-wrapper"><section><h1 id="configmap-operator">ConfigMap Operator</h1>
+
+<p>Please first look at CRD Operator documentation. It contains more common informaton, which is applicable to ConfigMap
+operator too.</p>
+
+<p><code class="highlighter-rouge">ConfigMap</code> is a native resource, so that no custom definition needs to be created in Kubernetes before we start creating
+custom resources.</p>
+
+<p>Using <code class="highlighter-rouge">ConfigMap</code> option, our target custom resource will look like this:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">ConfigMap</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">my-krb1</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">test</span>
+  <span class="na">labels</span><span class="pi">:</span>
+    <span class="s">io.myorg.kerboperator/kind</span><span class="pi">:</span> <span class="s">Kerb</span>
+<span class="na">data</span><span class="pi">:</span>
+  <span class="na">config</span><span class="pi">:</span> <span class="pi">|</span>
+    <span class="s">realm: EXAMPLE.COM</span>
+    <span class="s">principals:</span>
+      <span class="s">- name: client1</span>
+        <span class="s">password: static</span>
+        <span class="s">value: mypass</span>
+      <span class="s">- name: user2</span>
+        <span class="s">password: static</span>
+        <span class="s">value: mypass2</span>
+</code></pre></div></div>
+
+<p>Please note, above <code class="highlighter-rouge">data.config</code> section does not define any Custom Resources in terms of Kubernetes, we just leverage 
+a plain <code class="highlighter-rouge">ConfigMap</code> to emulate custom resource.</p>
+
+<h2 id="implementation-steps-with-freya">Implementation Steps with Freya</h2>
+
+<p>There are 3 steps to implement ConfigMap Operator:</p>
+
+<h3 id="1--define-resource-specification-as-a-hierarchy-of-case-classes">1 . Define resource specification as a hierarchy of case classes.</h3>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">final</span> <span class="k">case</span> <span class="k">class</span> <span class="nc">Principal</span><span class="o">(</span><span class="n">name</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">password</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">value</span><span class="k">:</span> <span class="kt">String</span> <span class="o">=</span> <span class="s">""</span><span class="o">)</span>
+<span class="k">final</span> <span class="k">case</span> <span class="k">class</span> <span class="nc">Kerb</span><span class="o">(</span><span class="n">realm</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">principals</span><span class="k">:</span> <span class="kt">List</span><span class="o">[</span><span class="kt">Principal</span><span class="o">])</span>
+</code></pre></div></div>
+
+<h3 id="2--implement-your-actions-for-add-modify-delete-events">2 . Implement your actions for Add, Modify, Delete events</h3>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="nn">freya.CmController</span>
+<span class="k">import</span> <span class="nn">cats.effect.ConcurrentEffect</span>
+<span class="k">import</span> <span class="nn">io.fabric8.kubernetes.api.model.ConfigMap</span>
+
+<span class="k">class</span> <span class="nc">KrbCmController</span><span class="o">[</span><span class="kt">F</span><span class="o">[</span><span class="k">_</span><span class="o">]](</span><span class="k">implicit</span> <span class="n">F</span><span class="k">:</span> <span class="kt">ConcurrentEffect</span><span class="o">[</span><span class="kt">F</span><span class="o">])</span> 
+  <span class="k">extends</span> <span class="nc">CmController</span><span class="o">[</span><span class="kt">F</span>, <span class="kt">Kerb</span><span class="o">]</span> <span class="o">{</span>
+
+  <span class="c1">// override onAdd, onDelete, onModify like in Crd Controller </span>
+
+  <span class="k">override</span> <span class="k">def</span> <span class="nf">isSupported</span><span class="o">(</span><span class="n">cm</span><span class="k">:</span> <span class="kt">ConfigMap</span><span class="o">)</span><span class="k">:</span> <span class="kt">Boolean</span> <span class="o">=</span>
+    <span class="nv">cm</span><span class="o">.</span><span class="py">getMetadata</span><span class="o">.</span><span class="py">getName</span><span class="o">.</span><span class="py">startsWith</span><span class="o">(</span><span class="s">"krb"</span><span class="o">)</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p><code class="highlighter-rouge">CmController</code> class adds <code class="highlighter-rouge">isSupported</code> method, which allows to skip particular ConfigMaps if they do not 
+satisfy to logical condition.</p>
+
+<h3 id="3--start-your-operator">3 . Start your operator</h3>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="nn">cats.effect.</span><span class="o">{</span><span class="nc">ContextShift</span><span class="o">,</span> <span class="nc">ExitCode</span><span class="o">,</span> <span class="nc">IO</span><span class="o">,</span> <span class="nc">IOApp</span><span class="o">}</span>
+<span class="k">import</span> <span class="nn">io.fabric8.kubernetes.client.DefaultKubernetesClient</span>
+<span class="k">import</span> <span class="nn">freya.K8sNamespace.Namespace</span>
+<span class="k">import</span> <span class="nn">freya.Configuration.ConfigMapConfig</span>
+<span class="k">import</span> <span class="nn">freya.Operator</span>
+
+<span class="k">object</span> <span class="nc">KerbCmOperator</span> <span class="k">extends</span> <span class="nc">IOApp</span> <span class="o">{</span>
+  <span class="k">implicit</span> <span class="k">val</span> <span class="nv">cs</span><span class="k">:</span> <span class="kt">ContextShift</span><span class="o">[</span><span class="kt">IO</span><span class="o">]</span> <span class="k">=</span> <span class="n">contextShift</span>
+
+  <span class="k">override</span> <span class="k">def</span> <span class="nf">run</span><span class="o">(</span><span class="n">args</span><span class="k">:</span> <span class="kt">List</span><span class="o">[</span><span class="kt">String</span><span class="o">])</span><span class="k">:</span> <span class="kt">IO</span><span class="o">[</span><span class="kt">ExitCode</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="k">val</span> <span class="nv">client</span> <span class="k">=</span> <span class="nc">IO</span><span class="o">(</span><span class="k">new</span> <span class="nc">DefaultKubernetesClient</span><span class="o">)</span>
+    
+    <span class="c1">// ... the same API as for Crd Operator, but with own configuration and constructor</span>
+    <span class="k">val</span> <span class="nv">cfg</span> <span class="k">=</span> <span class="nc">ConfigMapConfig</span><span class="o">(</span><span class="nc">Namespace</span><span class="o">(</span><span class="s">"test"</span><span class="o">),</span> <span class="n">prefix</span> <span class="k">=</span> <span class="s">"io.myorg.kerboperator"</span><span class="o">)</span>
+
+    <span class="nc">Operator</span>
+      <span class="o">.</span><span class="py">ofConfigMap</span><span class="o">[</span><span class="kt">IO</span>, <span class="kt">Kerb</span><span class="o">](</span><span class="n">cfg</span><span class="o">,</span> <span class="n">client</span><span class="o">,</span> <span class="k">new</span> <span class="nc">KrbCmController</span><span class="o">[</span><span class="kt">IO</span><span class="o">])</span>
+      <span class="o">.</span><span class="py">run</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h3 id="configmap-helper">ConfigMap Helper</h3>
+
+<p><code class="highlighter-rouge">ConfigMapHelper</code> provides the same functionality as <code class="highlighter-rouge">CrdHelper</code>, but with respect to ConfigMap kind:</p>
+
+<p><code class="highlighter-rouge">currentConfigMaps</code> - a method to return current current ConfigMap resources based on passed earlier Operator 
+configuration</p>
+
+<p>Properties:</p>
+
+<ul>
+  <li><code class="highlighter-rouge">freya.Configuration.ConfigMapConfig</code> - configuration which is passed on operator construction</li>
+  <li><code class="highlighter-rouge">io.fabric8.kubernetes.client.KubernetesClient</code> - K8s client</li>
+  <li><code class="highlighter-rouge">Option[Boolean]</code> - isOpenShift property</li>
+  <li><code class="highlighter-rouge">freya.resource.ConfigMapParser</code> - ConfigMap parser to parse <code class="highlighter-rouge">config</code> key of data map to target <code class="highlighter-rouge">T</code> kind</li>
+</ul>
 </section></div></div></div></div><script src="/freya/highlight/highlight.pack.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/yaml.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/json.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/yml.min.js"></script><script>
 // For all code blocks, copy the language from the containing div
 // to the inner code tag (where hljs expects it to be)
