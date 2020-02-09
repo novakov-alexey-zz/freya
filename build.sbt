@@ -1,4 +1,4 @@
-import microsites.MicrositeFavicon
+import microsites.{ExtraMdFileConfig, MicrositeFavicon}
 import sbt.url
 import sbtrelease.ReleaseStateTransformations._
 
@@ -67,19 +67,19 @@ lazy val `freya` = (project in file("."))
     addCompilerPlugin(betterMonadicFor),
     publishArtifact in Test := false,
     libraryDependencies ++= Seq(
-      k8sClient,
-      k8sModel,
-      k8sServerMock % Test,
-      catsEffect,
-      scalaLogging,
-      jacksonScala,
-      scalaTest % Test,
-      scalaCheck % Test,
-      scalaTestCheck % Test,
-      logbackClassic % Test,
-      jacksonJsonSchema % Test,
-      scalaJsonSchema % Test
-    ),
+          k8sClient,
+          k8sModel,
+          k8sServerMock % Test,
+          catsEffect,
+          scalaLogging,
+          jacksonScala,
+          scalaTest % Test,
+          scalaCheck % Test,
+          scalaTestCheck % Test,
+          logbackClassic % Test,
+          jacksonJsonSchema % Test,
+          scalaJsonSchema % Test
+        ),
     git.useGitDescribe := true
   )
   .enablePlugins(GitVersioning)
@@ -88,10 +88,17 @@ lazy val docs = (project in file("docs"))
   .settings(moduleName := "docs")
   .settings(
     mdocIn := new File("docs/docs"),
-//    mdocOut := new File("README.md"),
     mdocVariables := Map(
-      "VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>")
-    ),
+          "VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>")
+        ),
+    micrositeExtraMdFilesOutput := new File("./docs/docs"),
+    micrositeExtraMdFiles := Map(
+          file("README.md") -> ExtraMdFileConfig(
+                "index.md",
+                "home",
+                Map("title" -> "Home", "section" -> "home", "position" -> "1")
+              )
+        ),
     micrositeName := "Freya",
     micrositeAuthor := "Alexey Novakov",
     micrositeTwitterCreator := "@alexey_novakov",
@@ -102,19 +109,19 @@ lazy val docs = (project in file("docs"))
     micrositeDocumentationUrl := "/freya/docs",
     micrositeDataDirectory := (resourceDirectory in Compile).value / "microsite" / "data",
     micrositePalette := Map(
-      "brand-primary" -> "#E05236",
-      "brand-secondary" -> "#3F3242",
-      "brand-tertiary" -> "#2D232F",
-      "gray-dark" -> "#453E46",
-      "gray" -> "#837F84",
-      "gray-light" -> "#E3E2E3",
-      "gray-lighter" -> "#F4F3F4",
-      "white-color" -> "#FFFFFF"
-    ),
+          "brand-primary" -> "#E05236",
+          "brand-secondary" -> "#3F3242",
+          "brand-tertiary" -> "#2D232F",
+          "gray-dark" -> "#453E46",
+          "gray" -> "#837F84",
+          "gray-light" -> "#E3E2E3",
+          "gray-lighter" -> "#F4F3F4",
+          "white-color" -> "#FFFFFF"
+        ),
     micrositeFavicons := Seq(
-      MicrositeFavicon("favicon16x16.png", "16x16"),
-      MicrositeFavicon("favicon32x32.png", "32x32")
-    )
+          MicrositeFavicon("favicon16x16.png", "16x16"),
+          MicrositeFavicon("favicon32x32.png", "32x32")
+        )
   )
   .dependsOn(`freya`)
   .enablePlugins(MicrositesPlugin)

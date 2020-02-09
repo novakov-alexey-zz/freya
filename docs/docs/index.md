@@ -4,7 +4,6 @@ title: Home
 section: home
 position: 1
 ---
-
 # Freya
 
 ![](https://github.com/novakov-alexey/freya/workflows/Scala%20CI/badge.svg?branch=master)
@@ -27,7 +26,7 @@ Freya main features:
     Jackson Scala Module library.
 1. Auto-restart of custom controller upon k8s api-server disconnect.
 1. Auto-deployment of CRDs, no YAML files to be written.
-1. Auto-deployment of Json Schema for CRD validation.
+1. Auto-deployment of JSON Schema for CRD validation.
 1. Effect management and Functional Programming is powered by Cats-Effect.    
 
 ## Examples	
@@ -39,3 +38,5 @@ Freya main features:
 ```scala
 "io.github.novakov-alexey" %% "freya" % "@VERSION@" // for Scala 2.13 only at the moment
 ```
+
+
