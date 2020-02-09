@@ -37,5 +37,5 @@ Freya main features:
 ## SBT dependency
 
 ```scala
-"io.github.novakov-alexey" %% "freya" % "VERSION" // for Scala 2.13 only at the moment
+"io.github.novakov-alexey" %% "freya" % "@VERSION@" // for Scala 2.13 only at the moment
 ```
