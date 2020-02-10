@@ -119,10 +119,6 @@ lazy val docs = (project in file("docs"))
           "gray-light" -> "#E5E5E6",
           "gray-lighter" -> "#F4F3F4",
           "white-color" -> "#FFFFFF"
-        ),
-    micrositeFavicons := Seq(
-          MicrositeFavicon("favicon16x16.png", "16x16"),
-          MicrositeFavicon("favicon32x32.png", "32x32")
         )
   )
   .dependsOn(`freya`)
