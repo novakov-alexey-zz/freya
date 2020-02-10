@@ -12,6 +12,8 @@ position: 1
 
 <a href="https://typelevel.org/cats/"><img src="https://typelevel.org/cats/img/cats-badge-tiny.png" alt="Cats friendly" /></a> 
 
+<img src="./img/freya_logo.png" alt="freya_logo" style="width:200px;"/>
+
 Freya is a Scala library to implement custom controllers for Kubernetes (K8s) easily. 
 An implementation of custom controller is also known as [Operator Pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/). 
 Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client) and 
