@@ -39,4 +39,6 @@ Freya main features:
 "io.github.novakov-alexey" %% "freya" % "@VERSION@" // for Scala 2.13 only at the moment
 ```
 
+## Documentation
 
+Microsite: [https://novakov-alexey.github.io/freya/docs/](https://novakov-alexey.github.io/freya/docs/)

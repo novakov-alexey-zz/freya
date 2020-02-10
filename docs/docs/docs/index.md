@@ -221,8 +221,8 @@ val controller = (helper: CrdHelper[IO, Kerb, NoStatus]) =>
         IO.raiseError, // refusing to process
         r =>
             IO(r.foreach {
-                case Left((error, r)) => println(s"Failed to parse CRD instances $r, error = $error")
-                case Right(resource) => println(s"current ${cfg.getKind} CRDs: ${resource.spec}")
+                case Left((error, r)) => println(s"Failed to parse CR instances $r, error = $error")
+                case Right(resource) => println(s"current ${cfg.getKind} CRs: ${resource.spec}")
             })
       )
   }
@@ -237,5 +237,5 @@ Operator
 -   `freya.Configuration.CrdConfig` - configuration which is passed on operator construction
 -   `io.fabric8.kubernetes.client.KubernetesClient` - K8s client
 -   `Option[Boolean]` - isOpenShift property
--   `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - CR definition object
--   `freya.resource.CrdParser` - CRD parser to parse `freya.watcher.AnyCustomResource#spec` to target `T` kind.
+-   `io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition` - custom resource definition object
+-   `freya.resource.CrdParser` - CR parser to parse `freya.watcher.AnyCustomResource#spec` to target `T` kind.
