@@ -1,4 +1,4 @@
-import microsites.{ExtraMdFileConfig, MicrositeFavicon}
+import microsites.ExtraMdFileConfig
 import sbt.url
 import sbtrelease.ReleaseStateTransformations._
 
@@ -7,6 +7,7 @@ Global / onChangedBuildSource := ReloadOnSourceChanges
 ThisBuild / name := "freya"
 ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / organization := "io.github.novakov-alexey"
+ThisBuild / watchBeforeCommand := Watch.clearScreen
 
 // Publishing config //////////////////////////////////////////////////////
 ThisBuild / publishTo := {
@@ -62,7 +63,13 @@ releaseProcess ++= (if (sys.env.contains("RELEASE_PUBLISH"))
                       Seq[ReleaseStep](inquireVersions, setNextVersion, commitNextVersion, pushChanges)
                     else Seq.empty[ReleaseStep])
 
-lazy val `freya` = (project in file("."))
+lazy val freya = (project in file(".")).aggregate(`core`, `api`, `jackson`, `circe`).settings(skip in publish := true)
+
+lazy val `api` = (project in file("api"))
+  .settings(moduleName := "freya-api")
+
+lazy val `core` = (project in file("core"))
+  .settings(moduleName := "freya-core")
   .settings(
     addCompilerPlugin(betterMonadicFor),
     publishArtifact in Test := false,
@@ -72,7 +79,7 @@ lazy val `freya` = (project in file("."))
           k8sServerMock % Test,
           catsEffect,
           scalaLogging,
-          jacksonScala,
+          circeGeneric % Test,
           scalaTest % Test,
           scalaCheck % Test,
           scalaTestCheck % Test,
@@ -82,11 +89,21 @@ lazy val `freya` = (project in file("."))
         ),
     git.useGitDescribe := true
   )
+  .dependsOn(`api`, `jackson` % "test", `circe` % "test")
   .enablePlugins(GitVersioning)
+
+lazy val `jackson` = (project in file("jackson"))
+  .settings(moduleName := "freya-jackson", libraryDependencies ++= Seq(jacksonScala, jacksonDataFormat))
+  .dependsOn(`api`)
+
+lazy val `circe` = (project in file("circe"))
+  .settings(moduleName := "freya-circe", libraryDependencies ++= Seq(circeCore, circeParser, circeYaml))
+  .dependsOn(`api`)
 
 lazy val docs = (project in file("docs"))
   .settings(moduleName := "docs")
   .settings(
+    publishArtifact := false,
     mdocIn := new File("docs/docs"),
     mdocVariables := Map(
           "VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>")
@@ -122,7 +139,7 @@ lazy val docs = (project in file("docs"))
           "white-color" -> "#FFFFFF"
         )
   )
-  .dependsOn(`freya`)
+  .dependsOn(`core`)
   .enablePlugins(MicrositesPlugin)
   .enablePlugins(MdocPlugin)
 

@@ -8,8 +8,10 @@ object Dependencies extends AutoPlugin {
 
     object DependenciesVersion {
       val betterMonadicVersion             = "0.3.1"
-      val catsVersion                      = "2.0.0"
-      val fabric8K8sVersion                = "4.7.1"
+      val catsVersion                      = "2.1.0"
+      val circeVersion                     = "0.13.0"
+      val circeYamlVersion                 = "0.12.0"
+      val fabric8K8sVersion                = "4.8.0"
       val jacksonScalaVersion              = "2.10.2"
       val jacksonJsonSchemaV               = "1.0.36"
       val logbackClassicVersion            = "1.3.0-alpha4"
@@ -23,6 +25,10 @@ object Dependencies extends AutoPlugin {
     import DependenciesVersion._
 
     val catsEffect               = "org.typelevel"             %% "cats-effect"                % catsVersion
+    val circeCore                = "io.circe"                  %% "circe-core"                 % circeVersion
+    val circeParser              = "io.circe"                  %% "circe-parser"               % circeVersion
+    val circeYaml                = "io.circe"                  %% "circe-yaml"                 % circeYamlVersion
+    val circeGeneric             = "io.circe"                  %% "circe-generic"              % circeVersion
     val k8sClient                = "io.fabric8"                % "kubernetes-client"           % fabric8K8sVersion
     val k8sModel                 = "io.fabric8"                % "kubernetes-model"            % fabric8K8sVersion
     val k8sServerMock            = "io.fabric8"                % "kubernetes-server-mock"      % fabric8K8sVersion
@@ -30,6 +36,7 @@ object Dependencies extends AutoPlugin {
     val scalaLogging             = "com.typesafe.scala-logging" %% "scala-logging"             % scalaLoggingVersion
     val betterMonadicFor         = "com.olegpy"                 %% "better-monadic-for"        % betterMonadicVersion
     val jacksonScala             = "com.fasterxml.jackson.module" %% "jackson-module-scala"    % jacksonScalaVersion
+    val jacksonDataFormat        = "com.fasterxml.jackson.dataformat" % "jackson-dataformat-yaml" % jacksonScalaVersion
     val jacksonJsonSchema        = "com.kjetland"               %% "mbknor-jackson-jsonschema" % jacksonJsonSchemaV
     val scalaTest                = "org.scalatest"             %%  "scalatest"                 % scalaTestVersion
     val scalaTestCheck           = "org.scalatestplus"         %% "scalatestplus-scalacheck"   % scalaTestCheckVersion
