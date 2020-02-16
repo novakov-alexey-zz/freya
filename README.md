@@ -30,8 +30,24 @@ Freya main features:
 
 ## SBT dependency
 
+Freya supports Scala 2.13 only at the moment.
+Main dependecny:
+
 ```scala
-"io.github.novakov-alexey" %% "freya" % "@VERSION@" // for Scala 2.13 only at the moment
+"io.github.novakov-alexey" %% "freya-core" % "@VERSION@" 
+```
+
+Second module has two options: circe or jackson. One of them needs to be added into your
+dependencies to be able to read custom resource JSON/YAML text or write resource status as JSON
+
+Circe:
+```scala
+"io.github.novakov-alexey" %% "freya-circe" % "@VERSION@" 
+```
+
+Jackson:
+```scala
+"io.github.novakov-alexey" %% "freya-jackson" % "@VERSION@"
 ```
 
 ## Documentation
