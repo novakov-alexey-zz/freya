@@ -3,6 +3,8 @@ options:
     url: docs/
   - title: ConfigMap Operator
     url: docs/configmap-operator
+  - title: Resource parsing
+    url: docs/resource-parsing
   - title: Configuration
     url: docs/configuration
   - title: Reconcile Events
