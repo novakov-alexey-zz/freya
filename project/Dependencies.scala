@@ -11,6 +11,7 @@ object Dependencies extends AutoPlugin {
       val catsVersion                      = "2.1.0"
       val circeVersion                     = "0.13.0"
       val circeYamlVersion                 = "0.12.0"
+      val circeExtrasVersion               = "0.12.2"
       val fabric8K8sVersion                = "4.8.0"
       val jacksonScalaVersion              = "2.10.2"
       val jacksonJsonSchemaV               = "1.0.36"
@@ -29,6 +30,7 @@ object Dependencies extends AutoPlugin {
     val circeParser              = "io.circe"                  %% "circe-parser"               % circeVersion
     val circeYaml                = "io.circe"                  %% "circe-yaml"                 % circeYamlVersion
     val circeGeneric             = "io.circe"                  %% "circe-generic"              % circeVersion
+    val circeExtra               = "io.circe"                  %% "circe-generic-extras"       % circeExtrasVersion
     val k8sClient                = "io.fabric8"                % "kubernetes-client"           % fabric8K8sVersion
     val k8sModel                 = "io.fabric8"                % "kubernetes-model"            % fabric8K8sVersion
     val k8sServerMock            = "io.fabric8"                % "kubernetes-server-mock"      % fabric8K8sVersion

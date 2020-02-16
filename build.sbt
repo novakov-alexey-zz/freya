@@ -102,7 +102,9 @@ lazy val `circe` = (project in file("circe"))
 
 lazy val docs = (project in file("docs"))
   .settings(moduleName := "docs")
+  .settings(libraryDependencies += circeExtra)
   .settings(
+    Compile / scalacOptions  -= "-Wunused:imports",
     publishArtifact := false,
     mdocIn := new File("docs/docs"),
     mdocVariables := Map(
