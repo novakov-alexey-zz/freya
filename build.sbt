@@ -126,6 +126,7 @@ lazy val docs = (project in file("docs"))
     micrositeHighlightLanguages ++= Seq("yaml", "json", "yml"),
     micrositeBaseUrl := "/freya",
     micrositeUrl := "https://novakov-alexey.github.io/freya/",
+    micrositeGitterChannelUrl := "freya-scala/community",
     micrositeDocumentationUrl := "/freya/docs",
     micrositeHighlightTheme := "atelier-sulphurpool-light",
     micrositeTheme := "pattern",
