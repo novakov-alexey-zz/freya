@@ -1,13 +1,12 @@
 package freya.resource
 
+import freya.{Kerb, Status}
+import freya.json.circe._
 import freya.watcher.AnyCustomResource
+import io.circe.syntax._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import freya.Kerb
-import freya.Status
-import io.circe.syntax._
-import freya.json.circe._
 
 class CrdParserCirceTest extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers with CirceCodecs {
 
