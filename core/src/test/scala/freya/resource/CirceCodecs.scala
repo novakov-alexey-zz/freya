@@ -14,5 +14,4 @@ trait CirceCodecs {
   implicit lazy val kerbEncoder: Encoder[Kerb] = deriveEncoder[Kerb]
   implicit lazy val statusDecoder: Decoder[Status] = deriveDecoder[Status]
   implicit lazy val statusEncoder: Encoder[Status] = deriveEncoder[Status]
-
 }
