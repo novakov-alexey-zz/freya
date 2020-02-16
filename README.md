@@ -31,7 +31,7 @@ Freya main features:
 ## SBT dependency
 
 Freya supports Scala 2.13 only at the moment.
-Main dependecny:
+Main dependency:
 
 ```scala
 "io.github.novakov-alexey" %% "freya-core" % "@VERSION@" 
