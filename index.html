@@ -37,13 +37,26 @@ inspired by <a href="https://github.com/jvm-operators/abstract-operator">abstrac
 
 <h2 id="sbt-dependency">SBT dependency</h2>
 
-<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">"io.github.novakov-alexey"</span> <span class="o">%%</span> <span class="s">"freya"</span> <span class="o">%</span> <span class="s">"0.2.0"</span> <span class="c1">// for Scala 2.13 only at the moment</span>
+<p>Freya supports Scala 2.13 only at the moment.
+Main dependency:</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">"io.github.novakov-alexey"</span> <span class="o">%%</span> <span class="s">"freya-core"</span> <span class="o">%</span> <span class="s">"0.2.0"</span> 
+</code></pre></div></div>
+
+<p>Second module has two options: circe or jackson. One of them needs to be added into your
+dependencies to be able to read custom resource JSON/YAML text or write resource status as JSON</p>
+
+<p>Circe:</p>
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">"io.github.novakov-alexey"</span> <span class="o">%%</span> <span class="s">"freya-circe"</span> <span class="o">%</span> <span class="s">"0.2.0"</span> 
+</code></pre></div></div>
+
+<p>Jackson:</p>
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">"io.github.novakov-alexey"</span> <span class="o">%%</span> <span class="s">"freya-jackson"</span> <span class="o">%</span> <span class="s">"0.2.0"</span>
 </code></pre></div></div>
 
 <h2 id="documentation">Documentation</h2>
 
 <p>Microsite: <a href="https://novakov-alexey.github.io/freya/docs/">https://novakov-alexey.github.io/freya/docs/</a></p>
-
 </div></div></section><section class="technologies"><div class="container"><div class="row"></div></div></section></main><footer id="site-footer"><div class="container"><div class="row"><div class="col-xs-6"><p>Freya is designed and developed by <a href="https://github.com/novakov-alexey/freya" target="_blank" rel="noopener noreferrer">Alexey Novakov</a></p></div><div class="col-xs-6"><p class="text-right"><a href="https://github.com/novakov-alexey/freya" target="_blank" rel="noopener noreferrer"><span class="fa fa-github"></span>View on GitHub</a></p></div></div><div class="row"><div class="col-xs-6"><p>Website built with <a href="https://47deg.github.io/sbt-microsites/" target="_blank" rel="noopener noreferrer">sbt-microsites</a> - © 2019 <a href="https://www.47deg.com/" target="_blank" rel="noopener noreferrer">47 Degrees</a></p></div></div></div></footer><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script><script src="/freya/highlight/highlight.pack.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/yaml.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/json.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.10/languages/yml.min.js"></script><script>
 // For all code blocks, copy the language from the containing div
 // to the inner code tag (where hljs expects it to be)
