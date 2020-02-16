@@ -26,7 +26,8 @@ final case class Kerb(realm: String, principals: List[Principal])
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.Namespace
 import freya.models._
-import freya._
+import freya.json.jackson._
+import freya.{Controller, Operator}
 import cats.syntax.functor._
 import cats.effect._
 import scala.concurrent.ExecutionContext

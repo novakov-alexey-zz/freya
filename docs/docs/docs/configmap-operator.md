@@ -79,6 +79,7 @@ import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
 import freya.Configuration.ConfigMapConfig
 import freya.Operator
+import freya.yaml.jackson._
 
 object KerbCmOperator extends IOApp {
   implicit val cs: ContextShift[IO] = contextShift

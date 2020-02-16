@@ -139,7 +139,7 @@ lazy val docs = (project in file("docs"))
           "white-color" -> "#FFFFFF"
         )
   )
-  .dependsOn(`core`)
+  .dependsOn(`core` % "compile->test")
   .enablePlugins(MicrositesPlugin)
   .enablePlugins(MdocPlugin)
 
