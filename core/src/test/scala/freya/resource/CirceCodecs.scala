@@ -1,10 +1,7 @@
 package freya.resource
 
-import io.circe.Decoder
-import io.circe.Encoder
-import freya.Kerb
-import freya.Status
-import freya.Principal
+import freya.{Kerb, Principal, Status}
+import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 
 trait CirceCodecs {
