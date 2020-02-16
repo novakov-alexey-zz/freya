@@ -14,7 +14,7 @@ trait JsonReader[T] extends Reader[T] {
 
 object JsonReader {
   implicit val unitRead: JsonReader[Unit] = new JsonReader[Unit] {
-    override def fromString(json: String): Either[Throwable, Unit] = Left(new RuntimeException("impossible"))
+    override def fromString(json: String): Either[Throwable, Unit] = Right(())
 
     override def targetClass: Class[Unit] = classOf[Unit]
   }
