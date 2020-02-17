@@ -17,8 +17,8 @@ Freya main features:
     - Custom Resource Definition (CRD) based
     - ConfigMap based
 1. Scala Case Classes as Kubernetes resource specification. 
-    Serialization and deserialization of case classes is done automatically by Freya and it is powered by
-    Jackson Scala Module library.
+    Serialization and deserialization of case classes is done by Freya using
+    Circe or Jackson Scala Module library.
 1. Auto-restart of custom controller upon k8s api-server disconnect.
 1. Auto-deployment of CRDs, no YAML files to be written.
 1. Auto-deployment of JSON Schema for CRD validation.
