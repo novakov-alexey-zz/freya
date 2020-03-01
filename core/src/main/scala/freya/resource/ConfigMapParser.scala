@@ -45,7 +45,7 @@ private[freya] class ConfigMapParser extends LazyLogging {
           Right(s)
       case Left(t) =>
         val msg =
-          s"""Unable to parse yaml definition of ConfigMap, check if you don't have typo:
+          s"""Unable to parse yaml definition of ConfigMap, check if you don't have a typo:
              |'
              |$yamlDoc
              |'

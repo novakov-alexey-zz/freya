@@ -3,7 +3,7 @@ package freya
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
 import cats.syntax.apply._
 import com.typesafe.scalalogging.LazyLogging
-import freya.Configuration.CrdConfig
+import freya.Configuration.{ConfigMapConfig, CrdConfig}
 import freya.K8sNamespace.Namespace
 import freya.models.{CustomResource, NewStatus}
 import io.fabric8.kubernetes.api.model.ConfigMap
@@ -54,9 +54,9 @@ object TestCrdOperator extends IOApp with TestParams {
 }
 
 trait TestParams {
-  val client = IO(new DefaultKubernetesClient)
-  val crdCfg = CrdConfig(Namespace("test"), prefix)
-  val cmCfg = Configuration.ConfigMapConfig(Namespace("test"), prefix)
+  val client: IO[DefaultKubernetesClient] = IO(new DefaultKubernetesClient)
+  val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix)
+  val cmCfg: ConfigMapConfig = ConfigMapConfig(Namespace("test"), prefix)
 }
 
 object HelperCrdOperator extends IOApp with LazyLogging with TestParams {

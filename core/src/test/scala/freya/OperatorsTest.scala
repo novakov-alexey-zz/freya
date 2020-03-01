@@ -141,25 +141,19 @@ class OperatorsTest
     status: mutable.Set[StatusUpdate[Status]]
   ): FeedbackConsumerMaker[F, Status] = {
     import freya.json.jackson._
-    new FeedbackConsumerMaker[F, Status] {
-      override def make(
-        client: KubernetesClient,
-        crd: CustomResourceDefinition,
-        channel: FeedbackChannel[F, Status]
-      ): FeedbackConsumerAlg[F] =
-        new FeedbackConsumer(client, crd, channel) {
-          override def consume: F[ConsumerExitCode] =
-            for {
-              cr <- channel.take
-              _ <- cr match {
-                case Right(s) =>
-                  status += s
-                  consume
-                case Left(()) => ExitCodes.FeedbackExitCode.pure[F]
-              }
-            } yield ExitCodes.FeedbackExitCode
-        }
-    }
+    (client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, Status]) =>
+      new FeedbackConsumer(client, crd, channel) {
+        override def consume: F[ConsumerExitCode] =
+          for {
+            cr <- channel.take
+            _ <- cr match {
+              case Right(s) =>
+                status += s
+                consume
+              case Left(()) => ExitCodes.FeedbackExitCode.pure[F]
+            }
+          } yield ExitCodes.FeedbackExitCode
+      }
   }
 
   property("Crd Operator handles different events") {
@@ -392,9 +386,7 @@ class OperatorsTest
       override def onInit(): IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
     }
     val (operator, _) = configMapOperator[IO](controller)
-    forAll(Gen.alphaLowerStr) { _ =>
-      operator.run.unsafeRunSync() should ===(ExitCode.Error)
-    }
+    forAll(Gen.alphaLowerStr) { _ => operator.run.unsafeRunSync() should ===(ExitCode.Error) }
   }
 
   private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T]) = {
@@ -406,7 +398,9 @@ class OperatorsTest
     eventually {
       //then
       singleWatcher.size should ===(1)
-      currentWatcher should !==(getWatcherOrFail(singleWatcher)) // waiting until the Set with single watcher is updated with new watcher after Operator restart
+      currentWatcher should !==(
+        getWatcherOrFail(singleWatcher)
+      ) // waiting until the Set with single watcher is updated with new watcher after Operator restart
     }
   }
 
@@ -480,7 +474,8 @@ class OperatorsTest
       if (!spec.failInTest)
         eventually {
           controller.events should contain((action, spec, meta))
-        } else
+        }
+      else
         controller.events should not contain ((action, spec, meta))
 
       controller.failed should ===(0)
@@ -558,7 +553,8 @@ class OperatorsTest
       if (!spec.failInTest)
         eventually {
           controller.events should contain((action, spec, meta))
-        } else
+        }
+      else
         controller.events should not contain ((action, spec, meta))
 
       controller.failed should ===(0)

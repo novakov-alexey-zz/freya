@@ -25,7 +25,7 @@ sealed abstract class Configuration(
 ) {
   def validate[T: JsonReader]: Either[String, Unit] =
     (Option(kindClass[T]), Option(prefix)) match {
-      case (None, _) => Left("forKind must not be null")
+      case (None, _) => Left("kind must not be null")
       case (_, None) => Left("prefix must not be null")
       case (_, _) if prefix.isEmpty => Left("prefix must not be empty")
       case _ => Right(())

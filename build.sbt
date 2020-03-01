@@ -121,6 +121,7 @@ lazy val docs = (project in file("docs"))
     micrositeName := "Freya",
     micrositeAuthor := "Alexey Novakov",
     micrositeTwitterCreator := "@alexey_novakov",
+    micrositeTwitter := "@freya-scala",
     micrositeGithubOwner := "novakov-alexey",
     micrositeGithubRepo := "freya",
     micrositeHighlightLanguages ++= Seq("yaml", "json", "yml"),

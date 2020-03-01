@@ -279,29 +279,29 @@ class Operator[F[_], T: Reader, U] private (
     (for {
       pipe <- pipeline
 
-      name = pipe.helper.cfg.getKind
+      kind = pipe.helper.cfg.getKind
       namespace = pipe.helper.targetNamespace
 
-      _ <- F.delay(logger.info(s"Starting operator $ye$name$xx for namespace $namespace"))
+      _ <- F.delay(logger.info(s"Starting operator $ye$kind$xx in namespace '$namespace''"))
       _ <- pipe.onInit
       (closableWatcher, consumer) <- pipe.consumer
       _ <- F
         .delay(
           logger
-            .info(s"${gr}Operator $name was started$xx in namespace '$namespace'")
+            .info(s"${gr}Operator $kind was started$xx in namespace '$namespace'")
         )
-      reconciler = runReconciler(pipe, name, namespace)
+      reconciler = runReconciler(pipe, kind, namespace)
     } yield (F.race(consumer, reconciler), closableWatcher)).onError {
       case ex: Throwable =>
-        F.delay(logger.error(s"Unable to start operator", ex))
+        F.delay(logger.error(s"Could not to start operator", ex))
     }
 
-  private def runReconciler(pipe: OperatorPipeline[F, T, U], name: String, namespace: K8sNamespace) =
+  private def runReconciler(pipe: OperatorPipeline[F, T, U], kind: String, namespace: K8sNamespace) =
     reconcilerInterval match {
       case None => F.never[ReconcilerExitCode]
       case Some(i) =>
         val r = new Reconciler[F, T, U](i, pipe.channel, F.delay(pipe.helper.currentResources))
-        F.delay(logger.info(s"${gr}Starting reconciler $name$xx in namespace '$namespace' with $i interval")) *>
+        F.delay(logger.info(s"${gr}Starting reconciler $kind$xx in namespace '$namespace' with $i interval")) *>
           r.run.guaranteeCase {
             case Canceled => F.delay(logger.debug("Reconciler was canceled!"))
             case _ => F.unit
