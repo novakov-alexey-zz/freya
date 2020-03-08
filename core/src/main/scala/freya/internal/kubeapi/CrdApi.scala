@@ -22,7 +22,7 @@ object CrdApi {
 
   final case class StatusUpdate[T](meta: Metadata, status: T)
 
-  val ApiVersion = "apiextensions.k8s.io/v1beta1" //later: replace v1beta1 with v1
+  val ApiExtensionGroup = "apiextensions.k8s.io"
 
   def list(client: KubernetesClient): List[CustomResourceDefinition] =
     client.customResourceDefinitions.list.getItems.asScala.toList
@@ -35,13 +35,14 @@ object CrdApi {
     kind: String,
     shortNames: List[String],
     pluralName: String,
-    version: String
+    version: String,
+    crdApiVersion: String
   ): CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder] = {
 
     val shortNamesLower = shortNames.map(_.toLowerCase())
 
     new CustomResourceDefinitionBuilder()
-      .withApiVersion(ApiVersion)
+      .withApiVersion(s"$ApiExtensionGroup/$crdApiVersion")
       .withNewMetadata
       .withName(s"$pluralName.$prefix")
       .endMetadata
@@ -53,8 +54,8 @@ object CrdApi {
       .endNames
       .withGroup(prefix)
       .withVersion(version)
-      .withScope("Namespaced")
-      .withPreserveUnknownFields(false)
+      .withScope("Namespaced") //TODO: extract scope to config
+      .withPreserveUnknownFields(false) //TODO: extract to config
   }
 
   def list[T, U](crs: Filtered): List[AnyCustomResource] =
@@ -73,15 +74,14 @@ object CrdApi {
     s"""{"kind":"$kind","apiVersion":"$apiVersion","metadata":{"name":"$name","resourceVersion":"$resourceVersion"},"status":$status}"""
   }
 
-  def toCrdContext(crd: CustomResourceDefinition): CustomResourceDefinitionContext = {
+  def toCrdContext(crd: CustomResourceDefinition): CustomResourceDefinitionContext =
     new CustomResourceDefinitionContext.Builder()
       .withGroup(crd.getSpec.getGroup)
       .withName(crd.getMetadata.getName)
       .withPlural(crd.getSpec.getNames.getPlural)
       .withScope(crd.getSpec.getScope)
       .withVersion(crd.getSpec.getVersion)
-      .build()
-  }
+      .build()  
 }
 
 class CrdApi(client: KubernetesClient, crd: CustomResourceDefinition) extends LazyLogging {
@@ -113,6 +113,8 @@ class CrdApi(client: KubernetesClient, crd: CustomResourceDefinition) extends La
     val maybeMetadata = properties
       .getOrElse(Map.empty[String, AnyRef])
       .get("metadata")
+
+    logger.debug(s"custom resource metadata: $maybeMetadata")
 
     maybeMetadata.collect {
       case m: java.util.LinkedHashMap[_, _] => m.asScala.toMap.asInstanceOf[Map[String, AnyRef]]

@@ -40,11 +40,7 @@ private[freya] object Deployer extends LazyLogging {
           ) *>
               h.pure[F]
         case Nil if cfg.deployCrd =>
-          createCrd[F, T](
-            client,
-            cfg,
-            isOpenShift
-          )
+          createCrd[F, T](client, cfg, isOpenShift)
         case _ =>
           Sync[F].raiseError[CustomResourceDefinition](
             new RuntimeException(s"CustomResourceDefinition for $kind no found. Auto-deploy is disabled.")
@@ -73,7 +69,14 @@ private[freya] object Deployer extends LazyLogging {
       jsonSchema <- Sync[F].delay(JSONSchemaReader.readSchema(cfg.getKind))
 
       baseBuilder = CrdApi
-        .getCrdBuilder(cfg.prefix, cfg.getKind[T], cfg.shortNames, cfg.kindPluralCaseInsensitive[T], cfg.version)
+        .getCrdBuilder(
+          cfg.prefix,
+          cfg.getKind[T],
+          cfg.shortNames,
+          cfg.kindPluralCaseInsensitive[T],
+          cfg.version,
+          cfg.apiVersion
+        )
         .withNewSubresources()
         .withStatus(new CustomResourceSubresourceStatusBuilder().build())
         .endSubresources()

@@ -49,7 +49,8 @@ object Configuration {
     deployCrd: Boolean = true,
     shortNames: List[String] = List.empty[String],
     pluralName: String = "",
-    additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
+    additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty,
+    crdApiVersion: String = "v1beta1"
   ) extends Configuration(prefix, namespace, customKind) {
 
     def kindPluralCaseInsensitive[T: JsonReader]: String = {
