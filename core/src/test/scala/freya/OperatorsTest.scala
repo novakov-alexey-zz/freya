@@ -220,7 +220,7 @@ class OperatorsTest
       anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
-      testResources += Right(CustomResource(kerb, meta, Status().some))
+      testResources += Right(CustomResource(meta, kerb, Status().some))
       //then
       eventually {
         controller.reconciledEvents should contain((kerb, meta))
@@ -254,7 +254,7 @@ class OperatorsTest
       val meta = toMetadata(cm)
       val spec = parseCM(cmParser, cm)
 
-      testResources += Right(CustomResource(spec, meta, None))
+      testResources += Right(CustomResource(meta, spec, None))
       //then
       eventually {
         controller.reconciledEvents should contain((spec, meta))

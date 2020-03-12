@@ -19,11 +19,11 @@ abstract class Controller[F[_], T, U](implicit val F: Sync[F]) {
 
   def onAdd(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
 
-  def onDelete(@unused resource: CustomResource[T, U]): F[Unit] = F.unit
-
   def onModify(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
 
   def reconcile(@unused resource: CustomResource[T, U]): F[NewStatus[U]] = noStatus
+
+  def onDelete(@unused resource: CustomResource[T, U]): F[Unit] = F.unit
 
   def onInit(): F[Unit] = F.unit
 }

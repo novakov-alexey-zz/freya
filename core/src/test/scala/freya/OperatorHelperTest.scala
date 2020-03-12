@@ -74,7 +74,7 @@ class OperatorHelperTest
       val meta = MetadataApi.translate(cm.getMetadata)
       val spec = parseCM(parser, cm)
 
-      currentCms += Right(CustomResource(spec, meta, None))
+      currentCms += Right(CustomResource(meta, spec, None))
       //then
       helper.currentResources.map(_.toSet) should ===(Right(currentCms.toSet))
     }

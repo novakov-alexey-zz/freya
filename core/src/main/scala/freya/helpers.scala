@@ -48,7 +48,7 @@ final case class ConfigMapHelperContext(
 object ConfigMapHelper {
   def convertCm[T: YamlReader](parser: ConfigMapParser)(cm: ConfigMap): Resource[T, Unit] =
     parser.parseCM(cm).leftMap(_ -> cm).map {
-      case (resource, meta) => CustomResource(resource, meta, None)
+      case (resource, meta) => CustomResource(meta, resource, None)
     }
 }
 
@@ -84,7 +84,7 @@ object CrdHelper {
         .parse[T, U](resource)
         .leftMap(_ -> resource)
       meta <- Right(getMetadata(resource))
-    } yield CustomResource(spec, meta, status)
+    } yield CustomResource(meta, spec, status)
 
   private def getMetadata(r: AnyCustomResource) =
     MetadataApi.translate(r.getMetadata)

@@ -10,7 +10,7 @@ object models {
   type NewStatus[U] = Option[U]
   type NoStatus = NewStatus[Unit]
 
-  final case class CustomResource[T, U](spec: T, metadata: Metadata, status: Option[U])
+  final case class CustomResource[T, U](metadata: Metadata, spec: T, status: NewStatus[U])
 }
 
 object ExitCodes {

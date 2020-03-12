@@ -10,7 +10,7 @@ import io.fabric8.kubernetes.client.{KubernetesClient, Watch, Watcher}
 
 import scala.jdk.CollectionConverters._
 
-class ConfigMapApi(client: KubernetesClient) {
+private[freya] class ConfigMapApi(client: KubernetesClient) {
   type FilteredN = FilterWatchListMultiDeletable[ConfigMap, ConfigMapList, lang.Boolean, Watch, Watcher[ConfigMap]]
   type Filtered = FilterWatchListDeletable[ConfigMap, ConfigMapList, lang.Boolean, Watch, Watcher[ConfigMap]]
 

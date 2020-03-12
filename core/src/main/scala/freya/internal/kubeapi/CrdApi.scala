@@ -84,7 +84,7 @@ object CrdApi {
       .build()  
 }
 
-class CrdApi(client: KubernetesClient, crd: CustomResourceDefinition) extends LazyLogging {
+private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinition) extends LazyLogging {
   private lazy val context = CrdApi.toCrdContext(crd)
 
   def resourcesIn[T](ns: K8sNamespace): Filtered = {
