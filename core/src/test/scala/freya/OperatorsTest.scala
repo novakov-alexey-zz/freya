@@ -2,6 +2,7 @@ package freya
 
 import java.util.concurrent.ConcurrentHashMap
 
+import cats.Parallel
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
 import cats.implicits._
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -45,7 +46,7 @@ class OperatorsTest
     with ScalaCheckPropertyChecks
     with BeforeAndAfter {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
-  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
+  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkK8sOnStartup = false)
   val configMapcfg = ConfigMapConfig(AllNamespaces, prefix, checkK8sOnStartup = false)
@@ -83,7 +84,7 @@ class OperatorsTest
     (watchable, singleWatcher)
   }
 
-  implicit def cmWatch[F[_]: ConcurrentEffect, T](
+  implicit def cmWatch[F[_]: ConcurrentEffect: Timer: Parallel, T](
     implicit watchable: Watchable[Watch, Watcher[ConfigMap]]
   ): ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) =>
@@ -92,7 +93,7 @@ class OperatorsTest
           registerWatcher(watchable)
       }
 
-  implicit def crdWatch[F[_]: ConcurrentEffect, T, U](
+  implicit def crdWatch[F[_]: ConcurrentEffect: Timer: Parallel, T, U](
     implicit watchable: Watchable[Watch, Watcher[AnyCustomResource]]
   ): CrdWatchMaker[F, T, U] =
     (context: CrdWatcherContext[F, T, U]) =>
@@ -110,7 +111,7 @@ class OperatorsTest
       Sync[F].pure(new CustomResourceDefinition())
   }
 
-  def configMapOperator[F[_]: ConcurrentEffect: Timer: ContextShift](
+  def configMapOperator[F[_]: ConcurrentEffect: Timer: ContextShift: Parallel](
     controller: CmController[F, Kerb]
   ): (Operator[F, Kerb, Unit], mutable.Set[Watcher[ConfigMap]]) = {
     import freya.yaml.jackson._
@@ -123,7 +124,7 @@ class OperatorsTest
   private def concurrentHashSet[T]: mutable.Set[T] =
     java.util.Collections.newSetFromMap(new ConcurrentHashMap[T, java.lang.Boolean]).asScala
 
-  def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift, T: JsonReader](
+  def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift: Parallel, T: JsonReader](
     controller: Controller[F, T, Status]
   ): (Operator[F, T, Status], mutable.Set[Watcher[AnyCustomResource]], mutable.Set[StatusUpdate[Status]]) = {
     import freya.json.jackson._
@@ -377,7 +378,7 @@ class OperatorsTest
     eventually {
       exitCode.isCompleted should ===(true)
       val ec = Await.result(exitCode, 0.second)
-      ec should ===(ExitCodes.WatcherClosedExitCode)
+      ec should ===(ExitCodes.ActionConsumerExitCode)
     }
   }
 

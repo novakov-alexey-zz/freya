@@ -21,6 +21,7 @@ sealed abstract class Configuration(
   val prefix: String,
   val namespace: K8sNamespace = AllNamespaces,
   val customKind: Option[String] = None,
+  val parallelism: Int,
   val checkK8sOnStartup: Boolean = false
 ) {
   def validate[T: JsonReader]: Either[String, Unit] =
@@ -43,6 +44,7 @@ object Configuration {
   final case class CrdConfig(
     override val namespace: K8sNamespace,
     override val prefix: String,
+    override val parallelism: Int = 10,
     version: String = "v1",
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None,
@@ -51,7 +53,7 @@ object Configuration {
     pluralName: String = "",
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty,
     crdApiVersion: String = "v1beta1"
-  ) extends Configuration(prefix, namespace, customKind) {
+  ) extends Configuration(prefix, namespace, customKind, parallelism) {
 
     def kindPluralCaseInsensitive[T: JsonReader]: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
@@ -63,9 +65,10 @@ object Configuration {
   final case class ConfigMapConfig(
     override val namespace: K8sNamespace,
     override val prefix: String,
+    override val parallelism: Int = 10,
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None
-  ) extends Configuration(prefix, namespace, customKind)
+  ) extends Configuration(prefix, namespace, customKind, parallelism)
 
 }
 sealed trait K8sNamespace {

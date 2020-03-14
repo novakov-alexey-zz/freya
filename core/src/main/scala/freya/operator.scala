@@ -1,5 +1,6 @@
 package freya
 
+import cats.Parallel
 import cats.effect.ExitCase.Canceled
 import cats.effect.concurrent.MVar
 import cats.effect.syntax.all._
@@ -31,7 +32,7 @@ trait CrdWatchMaker[F[_], T, U] {
 }
 
 object CrdWatchMaker {
-  implicit def crd[F[_]: ConcurrentEffect, T, U]: CrdWatchMaker[F, T, U] =
+  implicit def crd[F[_]: ConcurrentEffect: Parallel: Timer, T, U]: CrdWatchMaker[F, T, U] =
     (context: CrdWatcherContext[F, T, U]) => new CustomResourceWatcher(context)
 }
 
@@ -40,7 +41,7 @@ trait ConfigMapWatchMaker[F[_], T] {
 }
 
 object ConfigMapWatchMaker {
-  implicit def cm[F[_]: ConcurrentEffect, T]: ConfigMapWatchMaker[F, T] =
+  implicit def cm[F[_]: ConcurrentEffect: Parallel: Timer, T]: ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) => new ConfigMapWatcher(context)
 }
 
@@ -79,7 +80,7 @@ object FeedbackConsumerMaker {
 
 object Operator extends LazyLogging {
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer, T: JsonReader](
+  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: Controller[F, T, Unit]
@@ -90,7 +91,7 @@ object Operator extends LazyLogging {
   ): Operator[F, T, Unit] =
     ofCrd[F, T, Unit](cfg, client)((_: CrdHelper[F, T, Unit]) => controller)
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer, T: JsonReader, U: JsonReader: JsonWriter](
+  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: Controller[F, T, U]
@@ -101,58 +102,67 @@ object Operator extends LazyLogging {
   ): Operator[F, T, U] =
     ofCrd[F, T, U](cfg, client)((_: CrdHelper[F, T, U]) => controller)
 
-  def ofCrd[F[_]: Timer, T: JsonReader, U: JsonReader: JsonWriter](cfg: CrdConfig, client: F[KubernetesClient])(
-    controller: CrdHelper[F, T, U] => Controller[F, T, U]
-  )(
+  def ofCrd[F[_]: Timer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
+    cfg: CrdConfig,
+    client: F[KubernetesClient]
+  )(controller: CrdHelper[F, T, U] => Controller[F, T, U])(
     implicit F: ConcurrentEffect[F],
     watch: CrdWatchMaker[F, T, U],
-    helperMaker: CrdHelperMaker[F, T, U],
+    crdHelper: CrdHelperMaker[F, T, U],
     deployer: CrdDeployer[F],
-    consumer: FeedbackConsumerMaker[F, U]
+    feedbackConsumer: FeedbackConsumerMaker[F, U]
   ): Operator[F, T, U] = {
 
     val pipeline = for {
       c <- client
       isOpenShift <- checkEnvAndConfig[F, T](c, cfg)
       crd <- deployer.deployCrd[T](c, cfg, isOpenShift)
-      channel <- newActionChannel[F, T, U]
-      feedback <- newFeedbackChannel[F, U]
+      channelPair <- createChannels[F, T, U](cfg.parallelism)
       parser <- CrdParser()
 
       helper = {
         val context = CrdHelperContext(cfg, c, isOpenShift, crd, parser)
-        helperMaker.make(context)
+        crdHelper.make(context)
       }
       ctl = controller(helper)
-
-      context = CrdWatcherContext(
-        cfg.namespace,
-        cfg.getKind[T],
-        new ActionConsumer[F, T, U](ctl, cfg.getKind[T], feedback),
-        consumer.make(c, crd, feedback),
-        CrdHelper.convertCr[T, U](parser),
-        channel,
-        c,
-        crd
-      )
+      channels = createChannels[F, T, U](channelPair, c, crd, ctl, cfg.getKind[T])
+      context = CrdWatcherContext(cfg.namespace, cfg.getKind[T], channels, CrdHelper.convertCr[T, U](parser), c, crd)
 
       w <- F.delay(watch.make(context).watch)
-    } yield createPipeline(helper, ctl, w, channel)
+    } yield createPipeline(helper, ctl, w, channels)
 
     new Operator[F, T, U](pipeline)
+  }
+
+  private def createChannels[F[_]: Timer: Parallel: ConcurrentEffect, T: JsonReader, U: JsonReader: JsonWriter](
+    channelPair: List[(Channel[F, T, U], MVar[F, Either[Unit, StatusUpdate[U]]])],
+    client: KubernetesClient,
+    crd: CustomResourceDefinition,
+    ctl: Controller[F, T, U],
+    kind: String
+  )(implicit feedbackConsumer: FeedbackConsumerMaker[F, U]) = {
+    val (actionConsumers, feedbackConsumers) =
+      channelPair.zipWithIndex.foldLeft((List.empty[ActionConsumer[F, T, U]], List.empty[FeedbackConsumerAlg[F]])) {
+        case ((ac, fc), ((action, feedback), i)) =>
+          (
+            ac :+ new ActionConsumer[F, T, U](i, ctl, kind, action, feedback),
+            fc :+ feedbackConsumer.make(client, crd, feedback)
+          )
+      }
+    new Channels(actionConsumers, feedbackConsumers)
   }
 
   private def newFeedbackChannel[F[_]: ConcurrentEffect, U] =
     MVar[F].empty[Either[Unit, StatusUpdate[U]]]
 
-  def ofConfigMap[F[_]: ConcurrentEffect: Timer, T: YamlReader](
+  def ofConfigMap[F[_]: ConcurrentEffect: Timer: Parallel, T: YamlReader](
     cfg: ConfigMapConfig,
     client: F[KubernetesClient],
     controller: CmController[F, T]
   )(implicit watchMaker: ConfigMapWatchMaker[F, T], helper: ConfigMapHelperMaker[F, T]): Operator[F, T, Unit] =
     ofConfigMap[F, T](cfg, client)((_: ConfigMapHelper[F, T]) => controller)
 
-  def ofConfigMap[F[_]: Timer, T: YamlReader](cfg: ConfigMapConfig, client: F[KubernetesClient])(
+  def ofConfigMap[F[_]: Timer: Parallel, T: YamlReader](cfg: ConfigMapConfig, client: F[KubernetesClient])(
     controller: ConfigMapHelper[F, T] => CmController[F, T]
   )(
     implicit F: ConcurrentEffect[F],
@@ -163,31 +173,38 @@ object Operator extends LazyLogging {
     val pipeline = for {
       k8sClient <- client
       isOpenShift <- checkEnvAndConfig(k8sClient, cfg)
-      channel <- newActionChannel[F, T, Unit]
-      feedback <- newFeedbackChannel[F, Unit]
+      channelPair <- createChannels[F, T, Unit](cfg.parallelism)
       parser <- ConfigMapParser()
-
       helper = {
         val context = ConfigMapHelperContext(cfg, k8sClient, isOpenShift, parser)
         helperMaker.make(context)
       }
       ctl = controller(helper)
+      channels = new Channels[F, T, Unit](channelPair.zipWithIndex.map {
+        case ((action, feedback), i) => new ActionConsumer[F, T, Unit](i, ctl, cfg.getKind[T], action, feedback)
+      }, Nil)
       context = ConfigMapWatcherContext(
         cfg.namespace,
         cfg.getKind,
         ctl,
-        new ActionConsumer[F, T, Unit](ctl, cfg.getKind[T], feedback),
+        channels,
         ConfigMapHelper.convertCm[T](parser),
-        channel,
         k8sClient,
         Labels.forKind(cfg.getKind, cfg.prefix)
       )
-
       w <- F.delay(watchMaker.make(context).watch)
-    } yield createPipeline(helper, ctl, w, channel)
+    } yield createPipeline(helper, ctl, w, channels)
 
     new Operator[F, T, Unit](pipeline)
   }
+
+  private def createChannels[F[_]: Timer: Parallel: ConcurrentEffect, T, U](parallelism: Int) =
+    (0 until parallelism).map { _ =>
+      for {
+        actionChannel <- newActionChannel[F, T, U]
+        feedbackChannel <- newFeedbackChannel[F, U]
+      } yield (actionChannel, feedbackChannel)
+    }.toList.sequence
 
   private def newActionChannel[F[_]: Concurrent, T, U]: F[Channel[F, T, U]] =
     MVar[F].empty[Either[OperatorError, OperatorAction[T, U]]]
@@ -196,9 +213,9 @@ object Operator extends LazyLogging {
     helper: AbstractHelper[F, T, U],
     controller: Controller[F, T, U],
     watcher: F[(CloseableWatcher, F[ConsumerExitCode])],
-    channel: Channel[F, T, U]
+    channels: Channels[F, T, U]
   ) =
-    OperatorPipeline[F, T, U](helper, watcher, channel, controller.onInit())
+    OperatorPipeline[F, T, U](helper, watcher, channels, controller.onInit())
 
   private def checkEnvAndConfig[F[_]: Sync, T: JsonReader](
     client: KubernetesClient,
@@ -221,7 +238,7 @@ object Operator extends LazyLogging {
 private case class OperatorPipeline[F[_], T, U](
   helper: AbstractHelper[F, T, U],
   consumer: F[(CloseableWatcher, F[ConsumerExitCode])],
-  channel: Channel[F, T, U],
+  channels: Channels[F, T, U],
   onInit: F[Unit]
 )
 
@@ -300,7 +317,7 @@ class Operator[F[_], T: Reader, U] private (
     reconcilerInterval match {
       case None => F.never[ReconcilerExitCode]
       case Some(i) =>
-        val r = new Reconciler[F, T, U](i, pipe.channel, F.delay(pipe.helper.currentResources))
+        val r = new Reconciler[F, T, U](i, pipe.channels, F.delay(pipe.helper.currentResources))
         F.delay(logger.info(s"${gr}Starting reconciler $kind$xx in namespace '$namespace' with $i interval")) *>
           r.run.guaranteeCase {
             case Canceled => F.delay(logger.debug("Reconciler was canceled!"))

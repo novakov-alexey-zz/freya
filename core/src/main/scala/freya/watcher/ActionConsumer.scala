@@ -3,45 +3,54 @@ package freya.watcher
 import cats.effect.ConcurrentEffect
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import freya.ExitCodes.ConsumerExitCode
-import freya.errors.{ParseReconcileError, ParseResourceError, WatcherClosedError}
+import freya.errors.{OperatorError, ParseReconcileError, ParseResourceError, WatcherClosedError}
 import freya.internal.AnsiColors.{gr, re, xx}
 import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.models.{CustomResource, NewStatus}
 import freya.watcher.AbstractWatcher.Channel
 import freya.watcher.FeedbackConsumer.FeedbackChannel
 import freya.watcher.actions._
-import freya.{Controller, ExitCodes}
+import freya.Controller
 import io.fabric8.kubernetes.client.Watcher.Action.{ADDED, DELETED, ERROR, MODIFIED}
 
 class ActionConsumer[F[_], T, U](
+  index: Int,
   val controller: Controller[F, T, U],
   val kind: String,
+  val channel: Channel[F, T, U],
   feedback: FeedbackChannel[F, U]
 )(implicit F: ConcurrentEffect[F])
     extends LazyLogging {
 
   private val noStatus = F.pure[NewStatus[U]](None)
 
-  private[freya] def consume(channel: Channel[F, T, U]): F[ConsumerExitCode] =
+  private[freya] def consume: F[Unit] =
     for {
       action <- channel.take
+      ec <- processAction(action)
+    } yield ec
+
+  private def processAction(action: Either[OperatorError, OperatorAction[T, U]]): F[Unit] =
+    for {
       _ <- F.delay(logger.debug(s"consuming action $action"))
-      s <- action match {
+      ec <- action match {
         case Right(a) =>
-          updateStatus(a.resource, handleAction(a)) *> consume(channel)
+          updateStatus(a.resource, handleAction(a)) *> consume
         case Left(e) =>
-          e match {
-            case WatcherClosedError(e) =>
-              F.delay(logger.error("K8s closed socket, so closing consumer as well", e)) *>
-                  feedback.put(Left(())) *> ExitCodes.WatcherClosedExitCode.pure[F]
-            case ParseResourceError(a, t, r) =>
-              F.delay(logger.error(s"Failed action $a for resource $r", t)) *> consume(channel)
-            case ParseReconcileError(t, r) =>
-              F.delay(logger.error(s"Failed 'reconcile' action for resource $r", t)) *> consume(channel)
-          }
+          handleError(e)
       }
-    } yield s
+    } yield ec
+
+  private def handleError(e: OperatorError) =
+    e match {
+      case WatcherClosedError(e) =>
+        F.delay(logger.error(s"K8s closed socket, so closing consumer $index as well", e)) *>
+          feedback.put(Left(()))
+      case ParseResourceError(a, t, r) =>
+        F.delay(logger.error(s"Failed action $a for resource $r", t)) *> consume
+      case ParseReconcileError(t, r) =>
+        F.delay(logger.error(s"Failed 'reconcile' action for resource $r", t)) *> consume
+    }
 
   private def handleAction(oAction: OperatorAction[T, U]): F[NewStatus[U]] =
     (oAction match {
