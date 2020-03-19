@@ -45,7 +45,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T](context: Conf
     watchable: Watchable[Watch, Watcher[ConfigMap]]
   ): F[(CloseableWatcher, F[ConsumerExitCode])] = {
 
-    val watch = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
+    val startWatcher = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
         if (context.controller.isSupported(cm)) {
           logger.debug(s"ConfigMap in namespace $targetNamespace was $action\nConfigMap:\n$cm\n")
@@ -53,7 +53,7 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T](context: Conf
             case (t, resource) =>
               ParseResourceError(action, t, resource)
           }
-          enqueueAction(action, converted)
+          enqueueAction(cm.getMetadata.getNamespace, action, converted)
         } else logger.debug(s"Unsupported ConfigMap skipped: ${cm.toString}")
       }
 
@@ -61,8 +61,8 @@ class ConfigMapWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T](context: Conf
         ConfigMapWatcher.super.onClose(e)
     }))
 
-    Sync[F].delay(logger.info(s"ConfigMap watcher running for labels ${context.selector}")) *> watch.map(
-      _ -> runActionConsumers
+    Sync[F].delay(logger.info(s"ConfigMap watcher running for labels ${context.selector}")) *> startWatcher.map(
+      _ -> context.channels.stopFlag.read
     )
   }
 }

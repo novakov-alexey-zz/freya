@@ -4,6 +4,7 @@ import java.io.Closeable
 
 import cats.effect.ConcurrentEffect
 import cats.effect.concurrent.MVar
+import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes.ConsumerExitCode
 import freya._
@@ -13,17 +14,18 @@ import freya.models.CustomResource
 import freya.watcher.actions._
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 
-import scala.annotation.tailrec
+import scala.collection.mutable
 
 object AbstractWatcher {
   type CloseableWatcher = Closeable
   type Channel[F[_], T, U] = MVar[F, Either[OperatorError, OperatorAction[T, U]]]
+  type NamespaceQueue[T, U] = mutable.Queue[Either[OperatorError, OperatorAction[T, U]]]
 }
 
 abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
-   namespace: K8sNamespace,
-   channels: Channels[F, T, U],
-   clientNamespace: String
+  namespace: K8sNamespace,
+  channels: Channels[F, T, U],
+  clientNamespace: String
 )(implicit F: ConcurrentEffect[F])
     extends LazyLogging
     with WatcherMaker[F] {
@@ -31,47 +33,51 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
   val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(clientNamespace, namespace)
 
   protected final def enqueueAction(
+    namespace: String,
     wAction: Watcher.Action,
     errorOrResource: Either[OperatorError, CustomResource[T, U]]
   ): Unit = {
     val action = errorOrResource.map(r => ServerAction[T, U](wAction, r))
-    putActionBlocking(action)
+    putActionBlocking(namespace, action)
   }
 
-  @tailrec
-  private def putActionBlocking(action: Either[OperatorError, ServerAction[T, U]]): Unit = {
-    val maybeChannel = runSync(channels.findFreeChannel)
-    maybeChannel match {
-      case Some(ch) => runAsync(ch.put(action))
+  private def putActionBlocking(namespace: String, action: Either[OperatorError, ServerAction[T, U]]): Unit = {
+    val (consumer, starter) = channels.getConsumer(namespace) match {
+      case Some(c) => c -> None
       case None =>
-        Thread.sleep(5000)
-        putActionBlocking(action)
+        val (consumer, starter) = runSync(channels.registerConsumer(namespace))
+        consumer -> Some(starter)
     }
+    starter.foreach(
+      s =>
+        runAsync[ConsumerExitCode](
+          s,
+          ec => logger.debug(s"action consumer for '$namespace' namespace stopped with exit code: $ec")
+        )
+    )
+    runSync(consumer.putAction(action))
   }
 
   private def runSync[A](f: F[A]): A =
     F.toIO(f).unsafeRunSync()
 
-  private def runAsync(f: F[Unit]): Unit =
+  private def runAsync[A](f: F[A], fa: A => Unit): Unit =
     F.toIO(f).unsafeRunAsync {
-      case Right(_) => ()
+      case Right(a) => fa(a)
       case Left(t) => logger.error("Could not evaluate effect", t)
     }
 
   protected def onClose(e: KubernetesClientException): Unit = {
     val err = if (e != null) {
-      logger.error(s"Watcher closed with exception in namespace '$namespace'", e)
-      Some(e)
+      F.delay(logger.error(s"Watcher closed with exception in namespace '$namespace'", e)) *>
+        e.some.pure[F]
     } else {
-      logger.warn(s"Watcher closed in namespace '$namespace''")
-      None
+      F.delay(logger.warn(s"Watcher closed in namespace '$namespace''")) *> none[KubernetesClientException].pure[F]
     }
-    runSync(channels.putForAll(Left(WatcherClosedError(err))))
+    runSync(for {
+      e <- err
+      _ <- channels.putForAll(Left(WatcherClosedError(e)))
+      _ <- channels.stopFlag.put(ExitCodes.ActionConsumerExitCode)
+    } yield ())
   }
-
-  protected def runActionConsumers: F[ConsumerExitCode] =
-    channels.startConsumers
-
-  protected def runFeedbackConsumer: F[ConsumerExitCode] =
-    channels.startFeedbackConsumers
 }

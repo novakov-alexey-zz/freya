@@ -2,11 +2,11 @@ package freya
 
 import cats.effect.IO
 import cats.effect.concurrent.MVar
-import freya.errors.OperatorError
+import freya.ExitCodes.ConsumerExitCode
 import freya.internal.Reconciler
 import freya.models.Resource
-import freya.watcher.actions.OperatorAction
-import freya.watcher.{ActionConsumer, Channels}
+import freya.watcher.AbstractWatcher.Channel
+import freya.watcher.{ActionConsumer, Channels, FeedbackConsumerAlg}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -38,8 +38,13 @@ class ReconcilerTest extends AnyFlatSpec with Matchers {
     res should ===(Left((ExitCodes.ReconcileExitCode)))
   }
 
-  private def createChannels = {
-    val channel = MVar[IO].empty[Either[OperatorError, OperatorAction[Kerb, Status]]].unsafeRunSync()
-    new Channels(List(new ActionConsumer[IO, Kerb, Status](0, null, "", channel, null)), Nil)
+  private def createChannels: Channels[IO, Kerb, Status] = {
+    val queue = Operator.namespaceQueue[IO, Kerb, Status]
+    new Channels(
+      MVar[IO].empty[ConsumerExitCode].unsafeRunSync(),
+      (namespace: String, ch: Channel[IO, Kerb, Status], feedback: Option[FeedbackConsumerAlg[IO, Status]]) =>
+        new ActionConsumer[IO, Kerb, Status](namespace, null, "", queue, 0, ch, feedback),
+      () => None
+    )
   }
 }

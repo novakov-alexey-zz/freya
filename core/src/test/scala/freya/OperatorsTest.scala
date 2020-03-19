@@ -25,7 +25,7 @@ import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import org.scalacheck.Gen
-import org.scalactic.anyvals.PosInt
+import org.scalactic.anyvals.{PosInt, PosZDouble}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
@@ -46,7 +46,7 @@ class OperatorsTest
     with ScalaCheckPropertyChecks
     with BeforeAndAfter {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
-  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
+  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(15, Seconds)), scaled(Span(50, Millis)))
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkK8sOnStartup = false)
   val configMapcfg = ConfigMapConfig(AllNamespaces, prefix, checkK8sOnStartup = false)
@@ -322,7 +322,7 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, CM.gen[Kerb], arbitrary[Boolean], minSuccessful(maxRestarts)) { (action, cm, close) =>
+    forAll(WatcherAction.gen, CM.gen[Kerb], arbitrary[Boolean], minSuccessful(maxRestarts), maxDiscardedFactor(PosZDouble(1.0))) { (action, cm, close) =>
       //when
       if (close)
         closeCurrentWatcher[ConfigMap](singleWatcher, currentWatcher)

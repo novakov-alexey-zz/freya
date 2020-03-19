@@ -12,8 +12,9 @@ import freya.watcher.FeedbackConsumer.FeedbackChannel
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 
-trait FeedbackConsumerAlg[F[_]] {
+trait FeedbackConsumerAlg[F[_], T] {
   def consume: F[ConsumerExitCode]
+  def put(status: Either[Unit, StatusUpdate[T]]): F[Unit]
 }
 
 object FeedbackConsumer {
@@ -23,9 +24,12 @@ object FeedbackConsumer {
 class FeedbackConsumer[F[_], T](client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, T])(
   implicit F: ConcurrentEffect[F],
   writer: JsonWriter[T]
-) extends FeedbackConsumerAlg[F]
+) extends FeedbackConsumerAlg[F, T]
     with LazyLogging {
   private val crdApi = new CrdApi(client, crd)
+
+  def put(status: Either[Unit, StatusUpdate[T]]): F[Unit] =
+    channel.put(status)
 
   def consume: F[ConsumerExitCode] =
     for {

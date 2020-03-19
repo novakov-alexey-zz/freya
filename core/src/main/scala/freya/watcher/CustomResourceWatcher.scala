@@ -1,7 +1,7 @@
 package freya.watcher
 
 import cats.Parallel
-import cats.effect.{Concurrent, ConcurrentEffect, Sync, Timer}
+import cats.effect.{ConcurrentEffect, Sync, Timer}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{OperatorError, ParseResourceError}
@@ -44,7 +44,7 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T, U](conte
           case (t, resource) =>
             ParseResourceError(action, t, resource)
         }
-        enqueueAction(action, converted)
+        enqueueAction(cr.getMetadata.getNamespace, action, converted)
 
         logger.debug(s"action enqueued: $action")
       }
@@ -54,9 +54,7 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T, U](conte
     }))
 
     Sync[F].delay(logger.info(s"CustomResource watcher is running for kinds '${context.kind}'")) *> startWatcher.map(
-      _ -> {
-        Concurrent[F].race(runActionConsumers, runFeedbackConsumer).map(_.fold(identity, identity))
-      }
+      _ -> context.channels.stopFlag.read
     )
   }
 }
