@@ -25,7 +25,7 @@ import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import org.scalacheck.Gen
-import org.scalactic.anyvals.{PosInt, PosZDouble}
+import org.scalactic.anyvals.PosInt
 import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
@@ -34,6 +34,7 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.jdk.CollectionConverters._
@@ -162,7 +163,7 @@ class OperatorsTest
     //given
     val controller = new CrdTestController[IO]
     val (operator, singleWatcher, status) = crdOperator[IO, Kerb](controller)
-
+    val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
     //when
     val cancelable = startOperator(operator.run)
 
@@ -178,9 +179,10 @@ class OperatorsTest
       singleWatcher.foreach(_.eventReceived(action, anyCr))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
+      allEvents += ((action, kerb, meta))
       //then
       eventually {
-        controller.events should contain((action, kerb, meta))
+        controller.events should ===(allEvents)
       }
       eventually {
         if (action != Watcher.Action.DELETED) checkStatus(status, kerb.failInTest, meta)
@@ -271,7 +273,7 @@ class OperatorsTest
     val controller = new CrdTestController[IO]
     val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller)
     val maxRestarts = PosInt(20)
-
+    val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
     //when
     val cancelable = startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
     var oldWatcher = getWatcherOrFail(singleWatcher)
@@ -294,15 +296,13 @@ class OperatorsTest
         closeCurrentWatcher[AnyCustomResource](singleWatcher, oldWatcher)
 
       oldWatcher = getWatcherOrFail(singleWatcher)
-
-      //when
       singleWatcher.foreach(_.eventReceived(action, anyCr))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
-
+      allEvents += ((action, kerb, meta))
       //then
       eventually {
-        controller.events should contain((action, kerb, meta))
+        controller.events should ===(allEvents)
       }
     }
 
@@ -314,6 +314,7 @@ class OperatorsTest
     val controller = new ConfigMapTestController[IO]
     val (operator, singleWatcher) = configMapOperator[IO](controller)
     val maxRestarts = PosInt(20)
+    val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
 
     //when
     val cancelable = startOperator(operator.withRestart(Infinite(0.seconds, 1.seconds)))
@@ -322,22 +323,21 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, CM.gen[Kerb], arbitrary[Boolean], minSuccessful(maxRestarts), maxDiscardedFactor(PosZDouble(1.0))) { (action, cm, close) =>
+    forAll(WatcherAction.gen, CM.gen[Kerb], arbitrary[Boolean], minSuccessful(maxRestarts)) { (action, cm, close) =>
       //when
       if (close)
         closeCurrentWatcher[ConfigMap](singleWatcher, currentWatcher)
 
       currentWatcher = getWatcherOrFail(singleWatcher)
-
-      //when
       singleWatcher.foreach(_.eventReceived(action, cm))
 
       val meta = toMetadata(cm)
       val spec = parseCM(cmParser, cm)
+      allEvents += ((action, spec, meta))
 
       //then
       eventually {
-        controller.events should contain((action, spec, meta))
+        controller.events should ===(allEvents)
       }
     }
 
@@ -352,6 +352,7 @@ class OperatorsTest
     val controller = new ConfigMapTestController[IO]
     val (operator, singleWatcher) = configMapOperator[IO](controller)
     val maxRestarts = PosInt(3)
+    val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
 
     //when
     val exitCode = operator.withRestart(Times(maxRestarts, 0.seconds)).unsafeToFuture()
@@ -368,8 +369,10 @@ class OperatorsTest
       //then
       val meta = toMetadata(cm)
       val spec = parseCM(parser, cm)
+      allEvents += ((action, spec, meta))
+
       eventually {
-        controller.events should contain((action, spec, meta))
+        controller.events should ===(allEvents)
       }
     }
 
@@ -387,7 +390,7 @@ class OperatorsTest
       override def onInit(): IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
     }
     val (operator, _) = configMapOperator[IO](controller)
-    forAll(Gen.alphaLowerStr) { _ => operator.run.unsafeRunSync() should ===(ExitCode.Error) }
+    forAll(Gen.const(1)) { _ => operator.run.unsafeRunSync() should ===(ExitCode.Error) }
   }
 
   private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T]) = {
@@ -409,6 +412,7 @@ class OperatorsTest
     //given
     val controller = new ConfigMapTestController[IO]
     val (operator, singleWatcher) = configMapOperator[IO](controller)
+    val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
 
     //when
     val cancelable = startOperator(operator.run)
@@ -421,17 +425,17 @@ class OperatorsTest
       singleWatcher.foreach(_.eventReceived(action, cm))
       val meta = toMetadata(cm)
       val spec = parseCM(cmParser, cm)
-
+      allEvents += ((action, spec, meta))
       //then
       eventually {
-        controller.events should contain((action, spec, meta))
+        controller.events should ===(allEvents)
       }
     }
 
     cancelable.unsafeRunSync()
   }
 
-  class CountingFailureFlagController extends ConfigMapTestController[IO] {
+  class FailureCounterController extends ConfigMapTestController[IO] {
     var failed: Int = 0
 
     override def onAdd(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] = {
@@ -455,8 +459,9 @@ class OperatorsTest
 
   property("Operator handles parser errors") {
     //given
-    val controller = new CountingFailureFlagController()
+    val controller = new FailureCounterController()
     val (operator, singleWatcher) = configMapOperator[IO](controller)
+    val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
 
     //when
     val cancelable = startOperator(operator.run)
@@ -472,11 +477,12 @@ class OperatorsTest
       singleWatcher.foreach(_.eventReceived(action, cm))
 
       //then
-      if (!spec.failInTest)
+      if (!spec.failInTest) {
+        allEvents += ((action, spec, meta))
         eventually {
-          controller.events should contain((action, spec, meta))
+          controller.events should ===(allEvents)
         }
-      else
+      } else
         controller.events should not contain ((action, spec, meta))
 
       controller.failed should ===(0)
@@ -487,6 +493,7 @@ class OperatorsTest
 
   property("Operator handles controller failures") {
     //given
+    val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
     val controller: ConfigMapTestController[IO] = new ConfigMapTestController[IO] {
       val error: IO[NewStatus[Unit]] = IO.raiseError(new RuntimeException("test exception"))
 
@@ -519,12 +526,13 @@ class OperatorsTest
       val spec = parseCM(cmParser, cm)
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
-
       //then
-      if (!spec.failInTest)
+      if (!spec.failInTest) {
+        allEvents += ((action, spec, meta))
         eventually {
-          controller.events should contain((action, spec, meta))
+          controller.events should ===(allEvents)
         }
+      }
     }
 
     cancelable.unsafeRunSync()
@@ -532,7 +540,8 @@ class OperatorsTest
 
   property("ConfigMap operator handles only supported ConfigMaps") {
     //given
-    val controller = new CountingFailureFlagController() {
+    val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
+    val controller = new FailureCounterController() {
       override def isSupported(cm: ConfigMap): Boolean = {
         val spec = parseCM(cmParser, cm)
         !spec.failInTest
@@ -551,11 +560,12 @@ class OperatorsTest
       singleWatcher.foreach(_.eventReceived(action, cm))
 
       //then
-      if (!spec.failInTest)
+      if (!spec.failInTest) {
+        allEvents += ((action, spec, meta))
         eventually {
-          controller.events should contain((action, spec, meta))
+          controller.events should ===(allEvents)
         }
-      else
+      } else
         controller.events should not contain ((action, spec, meta))
 
       controller.failed should ===(0)

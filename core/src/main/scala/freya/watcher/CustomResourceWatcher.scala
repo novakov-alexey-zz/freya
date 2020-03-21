@@ -1,6 +1,7 @@
 package freya.watcher
 
 import cats.Parallel
+import cats.effect.concurrent.MVar
 import cats.effect.{ConcurrentEffect, Sync, Timer}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
@@ -19,11 +20,12 @@ final case class CrdWatcherContext[F[_]: ConcurrentEffect, T, U](
   channels: Channels[F, T, U],
   convertCr: AnyCustomResource => Resource[T, U],
   client: KubernetesClient,
-  crd: CustomResourceDefinition
+  crd: CustomResourceDefinition,
+  stopFlag: MVar[F, ConsumerExitCode]
 )
 
 class CustomResourceWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T, U](context: CrdWatcherContext[F, T, U])
-    extends AbstractWatcher[F, T, U, Controller[F, T, U]](context.ns, context.channels, context.client.getNamespace) {
+    extends AbstractWatcher[F, T, U, Controller[F, T, U]](context.ns, context.channels, context.stopFlag, context.client.getNamespace) {
 
   private val crdApi = new CrdApi(context.client, context.crd)
 
@@ -54,7 +56,7 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T, U](conte
     }))
 
     Sync[F].delay(logger.info(s"CustomResource watcher is running for kinds '${context.kind}'")) *> startWatcher.map(
-      _ -> context.channels.stopFlag.read
+      _ -> context.stopFlag.read
     )
   }
 }

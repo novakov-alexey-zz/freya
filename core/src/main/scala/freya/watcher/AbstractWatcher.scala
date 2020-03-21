@@ -18,19 +18,20 @@ import scala.collection.mutable
 
 object AbstractWatcher {
   type CloseableWatcher = Closeable
-  type Channel[F[_], T, U] = MVar[F, Either[OperatorError, OperatorAction[T, U]]]
-  type NamespaceQueue[T, U] = mutable.Queue[Either[OperatorError, OperatorAction[T, U]]]
+  type Action[T, U] = Either[OperatorError, OperatorAction[T, U]]
+  type NamespaceQueue[T, U] = mutable.Queue[Action[T, U]]
 }
 
 abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
   namespace: K8sNamespace,
   channels: Channels[F, T, U],
+  stopFlag: MVar[F, ConsumerExitCode],
   clientNamespace: String
 )(implicit F: ConcurrentEffect[F])
     extends LazyLogging
     with WatcherMaker[F] {
 
-  val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(clientNamespace, namespace)
+  protected val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(clientNamespace, namespace)
 
   protected final def enqueueAction(
     namespace: String,
@@ -68,16 +69,16 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
     }
 
   protected def onClose(e: KubernetesClientException): Unit = {
-    val err = if (e != null) {
+    val error = if (e != null) {
       F.delay(logger.error(s"Watcher closed with exception in namespace '$namespace'", e)) *>
         e.some.pure[F]
     } else {
       F.delay(logger.warn(s"Watcher closed in namespace '$namespace''")) *> none[KubernetesClientException].pure[F]
     }
     runSync(for {
-      e <- err
+      e <- error
       _ <- channels.putForAll(Left(WatcherClosedError(e)))
-      _ <- channels.stopFlag.put(ExitCodes.ActionConsumerExitCode)
+      _ <- stopFlag.put(ExitCodes.ActionConsumerExitCode)
     } yield ())
   }
 }

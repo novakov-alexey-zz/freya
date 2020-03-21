@@ -5,10 +5,11 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes
 import freya.ExitCodes.ReconcilerExitCode
-import freya.errors.{OperatorError, ParseReconcileError}
+import freya.errors.ParseReconcileError
 import freya.models.ResourcesList
+import freya.watcher.AbstractWatcher.Action
 import freya.watcher.Channels
-import freya.watcher.actions.{OperatorAction, ReconcileAction}
+import freya.watcher.actions.ReconcileAction
 
 import scala.concurrent.duration._
 
@@ -47,13 +48,13 @@ private[freya] class Reconciler[F[_], T, U](
       }.sequence.void
     )
 
-  private def putAction(namespace: String, action: Either[OperatorError, OperatorAction[T, U]]) =
+  private def putAction(namespace: String, action: Action[T, U]) =
     channels.getConsumer(namespace) match {
       case Some(c) => c.putAction(action)
       case None => putWithRegistration(namespace, action)
     }
 
-  private def putWithRegistration(ns: String, action: Either[OperatorError, OperatorAction[T, U]]) =
+  private def putWithRegistration(ns: String, action: Action[T, U]) =
     channels.registerConsumer(ns).flatMap {
       case (c, startConsumer) =>
         // brutal side-effect to start new namespace consumer in background

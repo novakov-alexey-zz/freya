@@ -7,15 +7,13 @@ import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.OperatorError
-import freya.watcher.AbstractWatcher.Channel
-import freya.watcher.actions.{OperatorAction, ServerAction}
+import freya.watcher.actions.ServerAction
 
 import scala.collection.mutable
 
 class Channels[F[_]: Parallel, T, U](
-  val stopFlag: MVar[F, ConsumerExitCode],
-  makeConsumer: (String, Channel[F, T, U], Option[FeedbackConsumerAlg[F, U]]) => ActionConsumer[F, T, U],
-  makeFeedbackConsumer: () => Option[FeedbackConsumerAlg[F, U]]
+  newActionConsumer: (String, MVar[F, Unit], Option[FeedbackConsumerAlg[F, U]]) => ActionConsumer[F, T, U],
+  newFeedbackConsumer: () => Option[FeedbackConsumerAlg[F, U]]
 )(implicit F: ConcurrentEffect[F])
     extends StrictLogging {
 
@@ -26,9 +24,9 @@ class Channels[F[_]: Parallel, T, U](
 
   private[freya] def registerConsumer(namespace: String): F[(ActionConsumer[F, T, U], F[ConsumerExitCode])] =
     for {
-      feedbackConsumer <- makeFeedbackConsumer().pure[F]
-      c <- MVar.empty[F, Either[OperatorError, OperatorAction[T, U]]]
-      consumer = makeConsumer(namespace, c, feedbackConsumer)
+      feedbackConsumer <- newFeedbackConsumer().pure[F]
+      notifyFlag <- MVar.empty[F, Unit]
+      consumer = newActionConsumer(namespace, notifyFlag, feedbackConsumer)
       _ = actionConsumers += namespace -> consumer
       startConsumer <- F.delay {
         val start = feedbackConsumer match {

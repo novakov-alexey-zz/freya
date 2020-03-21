@@ -2,11 +2,13 @@ package freya.internal
 
 import java.net.URL
 
+import cats.effect.Sync
+import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace
 import freya.K8sNamespace.{CurrentNamespace, Namespace}
-import io.fabric8.kubernetes.client.ConfigBuilder
 import io.fabric8.kubernetes.client.utils.HttpClientUtils
+import io.fabric8.kubernetes.client.{ConfigBuilder, KubernetesClient}
 import okhttp3.{HttpUrl, Request}
 
 import scala.util.Try
@@ -39,4 +41,11 @@ private[freya] object OperatorUtils extends LazyLogging {
       (false, -1)
     }, identity)
 
+  def checkKubeEnv[T, F[_]: Sync](client: KubernetesClient): F[Option[Boolean]] =
+    Sync[F].delay {
+      val (onOpenShift, code) = checkIfOnOpenshift(client.getMasterUrl)
+      if (onOpenShift) logger.debug(s"Returned code: $code. We are on OpenShift.")
+      else logger.debug(s"Returned code: $code. We are not on OpenShift. Assuming, we are on Kubernetes.")
+      onOpenShift.some
+    }
 }
