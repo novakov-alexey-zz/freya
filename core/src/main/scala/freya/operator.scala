@@ -8,7 +8,7 @@ import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.{ConfigMapConfig, CrdConfig}
-import freya.ExitCodes.{ConsumerExitCode, OperatorExitCode, ReconcilerExitCode}
+import freya.ExitCodes.{ConsumerExitCode, ReconcilerExitCode}
 import freya.Retry.{Infinite, Times}
 import freya.internal.AnsiColors._
 import freya.internal.kubeapi.CrdApi.StatusUpdate
@@ -193,7 +193,7 @@ class Operator[F[_], T: Reader, U] private (
           F.delay(consumer.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx"))
       }
       .use {
-        case (signal, _) => signal.map(_.merge)
+        case (signal, _) => signal
       }
       .recoverWith {
         case e =>
@@ -230,7 +230,7 @@ class Operator[F[_], T: Reader, U] private (
     else ec.pure[F]
   }
 
-  def start: F[(F[OperatorExitCode], CloseableWatcher)] =
+  def start: F[(F[ExitCode], CloseableWatcher)] =
     (for {
       pipe <- pipeline
 
@@ -245,25 +245,25 @@ class Operator[F[_], T: Reader, U] private (
           logger
             .info(s"${gr}Operator $kind was started$xx in namespace '$namespace'")
         )
-      reconciler = runReconciler(pipe, kind, namespace) //TODO: do not run reconciler, if interval is not set
-    } yield (F.race(consumer, reconciler), closableWatcher)).onError {
+      workers = reconcilerInterval.fold(consumer)(
+        i => F.race(consumer, runReconciler(i, pipe, kind, namespace)).map(_.merge)
+      )
+    } yield (workers, closableWatcher)).onError {
       case ex: Throwable =>
         F.delay(logger.error(s"Could not to start operator", ex))
     }
 
   private def runReconciler(
+    interval: FiniteDuration,
     pipe: OperatorPipeline[F, T, U],
     kind: String,
     namespace: K8sNamespace
-  ): F[ReconcilerExitCode] =
-    reconcilerInterval match {
-      case None => F.never[ReconcilerExitCode]
-      case Some(i) =>
-        val r = new Reconciler[F, T, U](i, pipe.channels, F.delay(pipe.helper.currentResources))
-        F.delay(logger.info(s"${gr}Starting reconciler $kind$xx in namespace '$namespace' with $i interval")) *>
-          r.run.guaranteeCase {
-            case Canceled => F.delay(logger.debug("Reconciler was canceled!"))
-            case _ => F.unit
-          }
-    }
+  ): F[ReconcilerExitCode] = {
+    val r = new Reconciler[F, T, U](interval, pipe.channels, F.delay(pipe.helper.currentResources))
+    F.delay(logger.info(s"${gr}Starting reconciler $kind$xx in namespace '$namespace' with $interval interval")) *>
+      r.run.guaranteeCase {
+        case Canceled => F.delay(logger.debug("Reconciler was canceled!"))
+        case _ => F.unit
+      }
+  }
 }
