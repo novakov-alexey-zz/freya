@@ -4,11 +4,11 @@ import cats.effect.Sync
 import cats.implicits._
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.typesafe.scalalogging.LazyLogging
-import freya.{AdditionalPrinterColumn, JsonReader}
 import freya.Configuration.CrdConfig
 import freya.internal.AnsiColors._
 import freya.internal.kubeapi.CrdApi
 import freya.watcher.AnyCustomResource
+import freya.{AdditionalPrinterColumn, JsonReader}
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.api.model.apiextensions._
 import io.fabric8.kubernetes.client.utils.Serialization
@@ -67,33 +67,7 @@ private[freya] object Deployer extends LazyLogging {
     for {
       _ <- Sync[F].delay(logger.info(s"Creating CustomResourceDefinition for ${cfg.getKind}."))
       jsonSchema <- Sync[F].delay(JSONSchemaReader.readSchema(cfg.getKind))
-
-      baseBuilder = CrdApi
-        .getCrdBuilder(
-          cfg.prefix,
-          cfg.getKind[T],
-          cfg.shortNames,
-          cfg.kindPluralCaseInsensitive[T],
-          cfg.version,
-          cfg.apiVersion
-        )
-        .withNewSubresources()
-        .withStatus(new CustomResourceSubresourceStatusBuilder().build())
-        .endSubresources()
-      builderWithSchema = {
-        val crdBuilder = jsonSchema match {
-          case Some(s) =>
-            val schema = removeDefaultValues(s)
-            baseBuilder.withNewValidation
-              .withNewOpenAPIV3SchemaLike(schema)
-              .endOpenAPIV3Schema
-              .endValidation
-          case None =>
-            baseBuilder
-        }
-        addColumns(cfg.additionalPrinterColumns, crdBuilder)
-      }
-
+      (baseBuilder, builderWithSchema) = createBuilder(cfg, jsonSchema)
       crd <- Sync[F].delay {
         val crd = builderWithSchema.endSpec.build
         // https://github.com/fabric8io/kubernetes-client/issues/1486
@@ -112,7 +86,36 @@ private[freya] object Deployer extends LazyLogging {
       }
     } yield crd
 
-  private def addColumns[T, F[_]: Sync](
+  private def createBuilder[F[_]: Sync, T: JsonReader](cfg: CrdConfig, jsonSchema: Option[JSONSchemaProps]) = {
+    val baseBuilder = CrdApi
+      .getCrdBuilder(
+        cfg.prefix,
+        cfg.getKind[T],
+        cfg.shortNames,
+        cfg.kindPluralCaseInsensitive[T],
+        cfg.version,
+        cfg.apiVersion
+      )
+      .withNewSubresources()
+      .withStatus(new CustomResourceSubresourceStatusBuilder().build())
+      .endSubresources()
+    val builderWithSchema = {
+      val crdBuilder = jsonSchema match {
+        case Some(s) =>
+          val schema = removeDefaultValues(s)
+          baseBuilder.withNewValidation
+            .withNewOpenAPIV3SchemaLike(schema)
+            .endOpenAPIV3Schema
+            .endValidation
+        case None =>
+          baseBuilder
+      }
+      addColumns[F, T](cfg.additionalPrinterColumns, crdBuilder)
+    }
+    (baseBuilder, builderWithSchema)
+  }
+
+  private def addColumns[F[_]: Sync, T](
     additionalPrinterColumns: List[AdditionalPrinterColumn],
     crdBuilder: CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder]
   ) = {
