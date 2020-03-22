@@ -33,22 +33,26 @@ class Channels[F[_]: Parallel, T, U](
     for {
       feedbackConsumer <- newFeedbackConsumer().pure[F]
       notifyFlag <- MVar.empty[F, Unit]
-      consumer <- F.delay {
+      (previous, newConsumer) <- F.delay {
         val consumer = newActionConsumer(namespace, notifyFlag, feedbackConsumer)
-        actionConsumers += namespace -> consumer
-        consumer
+        val previous = actionConsumers.putIfAbsent(namespace, consumer)
+        (previous, consumer)
       }
-      startConsumer <- F.delay {
-        val start = feedbackConsumer match {
-          case Some(feedback) => F.race(consumer.consume, feedback.consume).map(_.merge)
-          case None => consumer.consume
-        }
-        F.delay(logger.info(s"Action consumer for '$namespace' namespace was started")) *> start
+      consumer <- previous match {
+        case Some(c) => c.pure[F]
+        case None =>
+          F.delay {
+            val start = feedbackConsumer match {
+              case Some(feedback) => F.race(newConsumer.consume, feedback.consume).map(_.merge)
+              case None => newConsumer.consume
+            }
+            runAsync[ConsumerExitCode](
+              F.delay(logger.info(s"Action consumer for '$namespace' namespace was started")) *> start,
+              ec => logger.debug(s"Action consumer for '$namespace' namespace was stopped with exit code: $ec")
+            )
+            newConsumer
+          }
       }
-      _ = runAsync[ConsumerExitCode](
-        startConsumer,
-        ec => logger.debug(s"action consumer for '$namespace' namespace stopped with exit code: $ec")
-      )
     } yield consumer
 
   private[freya] def putForAll(action: Either[OperatorError, ServerAction[T, U]]): F[Unit] =

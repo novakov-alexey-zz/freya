@@ -14,6 +14,7 @@ import freya.Retry.{Infinite, Times}
 import freya.generators.arbitrary
 import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.internal.kubeapi.MetadataApi
+import freya.json.jackson._
 import freya.models.{CustomResource, NewStatus, Resource, ResourcesList}
 import freya.resource.ConfigMapParser
 import freya.watcher.AbstractWatcher.CloseableWatcher
@@ -126,23 +127,22 @@ class OperatorsTest
     java.util.Collections.newSetFromMap(new ConcurrentHashMap[T, java.lang.Boolean]).asScala
 
   def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift: Parallel, T: JsonReader](
-    controller: Controller[F, T, Status]
+    controller: Controller[F, T, Status],
+    cfg: CrdConfig = crdCfg
   ): (Operator[F, T, Status], mutable.Set[Watcher[AnyCustomResource]], mutable.Set[StatusUpdate[Status]]) = {
-    import freya.json.jackson._
     val (fakeWatchable, singleWatcher) = makeWatchable[T, AnyCustomResource]
     implicit val watchable: Watchable[Watch, Watcher[AnyCustomResource]] = fakeWatchable
 
     val status = mutable.Set.empty[StatusUpdate[Status]]
     implicit val feedbackConsumer: FeedbackConsumerMaker[F, Status] = testFeedbackConsumer[F](status)
 
-    val operator = Operator.ofCrd[F, T, Status](crdCfg, client[F], controller)
+    val operator = Operator.ofCrd[F, T, Status](cfg, client[F], controller)
     (operator, singleWatcher, status)
   }
 
   private def testFeedbackConsumer[F[_]: ConcurrentEffect: Timer: ContextShift](
     status: mutable.Set[StatusUpdate[Status]]
   ): FeedbackConsumerMaker[F, Status] = {
-    import freya.json.jackson._
     (client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, Status]) =>
       new FeedbackConsumer(client, crd, channel) {
         override def consume: F[ConsumerExitCode] =
@@ -159,7 +159,6 @@ class OperatorsTest
   }
 
   property("Crd Operator handles different events") {
-    import freya.json.jackson._
     //given
     val controller = new CrdTestController[IO]
     val (operator, singleWatcher, status) = crdOperator[IO, Kerb](controller)
@@ -192,13 +191,32 @@ class OperatorsTest
   }
 
   property("Crd Operator dispatches different namespace events concurrently") {
-    import freya.json.jackson._
-    //given
     val parallelNamespaces = 10
-    val controllerDelay = 1.second
-    val maxOverhead = 1.second
-    val controller = new CrdTestController[IO](controllerDelay)
-    val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller)
+    val delay = 1.second
+
+    val actualDuration = concurrentControllerTest(delay, parallelNamespaces, concurrent = true)
+    val overhead = 700.millis
+    val expectedDuration = delay + overhead
+    println(s"Expected Max Duration: $expectedDuration")
+
+    actualDuration should be <= expectedDuration
+  }
+
+  property("Crd Operator dispatches different namespace events via single thread") {
+    val parallelNamespaces = 10
+    val delay = 100.millis
+
+    val actualDuration = concurrentControllerTest(delay, parallelNamespaces, concurrent = false)
+    val expectedDuration = delay * parallelNamespaces.toLong
+    println(s"Expected Min Duration: $expectedDuration")
+
+    actualDuration should be >= expectedDuration
+  }
+
+  private def concurrentControllerTest(delay: FiniteDuration, parallelNamespaces: Int, concurrent: Boolean) = {
+    //given
+    val controller = new CrdTestController[IO](delay)
+    val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller, crdCfg.copy(concurrentController = concurrent))
     val allEvents = new ConcurrentLinkedQueue[(Watcher.Action, Kerb, Metadata)]()
     //when
     val cancelable = startOperator(operator.run)
@@ -224,11 +242,11 @@ class OperatorsTest
       }
     }
     val finish = System.currentTimeMillis()
-    val duration = FiniteDuration(finish - start, TimeUnit.MILLISECONDS)
-    println(s"Duration: ${duration.toSeconds} sec")
-    duration should be <= (controllerDelay + maxOverhead)
 
+    val duration = FiniteDuration(finish - start, TimeUnit.MILLISECONDS)
+    println(s"Actual Duration: $duration")
     cancelable.unsafeRunSync()
+    duration
   }
 
   private def checkStatus[T](status: mutable.Set[StatusUpdate[Status]], statusFlag: Boolean, meta: Metadata) = {
@@ -237,7 +255,6 @@ class OperatorsTest
   }
 
   property("Crd Operator gets event from reconciler process") {
-    import freya.json.jackson._
     //given
     val controller = new CrdTestController[IO]
     implicit val (fakeWatchable, _) = makeWatchable[Kerb, AnyCustomResource]
@@ -309,7 +326,6 @@ class OperatorsTest
   }
 
   property("Crd Operator handles different events on restarts") {
-    import freya.json.jackson._
     //given
     val controller = new CrdTestController[IO]
     val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller)
