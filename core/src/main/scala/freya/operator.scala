@@ -95,7 +95,7 @@ object Operator extends LazyLogging {
   )(implicit feedbackConsumer: FeedbackConsumerMaker[F, U]) = {
     val makeConsumer =
       (namespace: String, notifyFlag: MVar[F, Unit], feedback: Option[FeedbackConsumerAlg[F, U]]) => {
-        val queue = BlockingQueue[F, Action[T, U]](cfg.namespaceQueueSize, namespace, notifyFlag)
+        val queue = BlockingQueue[F, Action[T, U]](cfg.eventQueueSize, namespace, notifyFlag)
         new ActionConsumer[F, T, U](namespace, ctl, cfg.getKind[T], queue, feedback)
       }
     val makeFeedbackConsumer = () => feedbackConsumer.make(client, crd, feedbackChannel).some
@@ -134,7 +134,7 @@ object Operator extends LazyLogging {
               namespace,
               controller,
               cfg.getKind[T],
-              BlockingQueue[F, Action[T, Unit]](cfg.namespaceQueueSize, namespace, signal),
+              BlockingQueue[F, Action[T, Unit]](cfg.eventQueueSize, namespace, signal),
               feedback
             )
         new Channels[F, T, Unit](cfg.concurrentController, makeConsumer, () => None)

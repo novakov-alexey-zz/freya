@@ -19,6 +19,13 @@ CrdConfig(
   namespace = Namespace("test"), 
   // CRD api prefix 
   prefix = "io.myorg.kerboperator",
+  // size of in-memory queue for received events from Kubernetes api-server, once event queue is full, watcher starts
+  // to back-pressure server web-socket
+  eventQueueSize = 10,
+  // If true, different namespace events are dispatched concurrently, i.e. controller will be called concurrently
+  // among different namespace events. 
+  // However, the same namespace events will be dispatched in series using single queue per namespace. 
+  concurrentController = true,
   // Check on startup whether current K8s is an OpenShift   
   checkK8sOnStartup = true, 
   // if None, then kind name is taken from case class name, i.e. Kerb
