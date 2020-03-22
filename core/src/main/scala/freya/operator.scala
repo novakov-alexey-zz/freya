@@ -70,7 +70,7 @@ object Operator extends LazyLogging {
         crdHelper.make(context)
       }
       ctl = controller(helper)
-      channels = createChannels[F, T, U](feedbackChannel, c, crd, ctl, cfg.getKind[T], cfg.namespaceQueueSize)
+      channels = createChannels[F, T, U](feedbackChannel, c, crd, ctl, cfg)
       context = CrdWatcherContext(
         cfg.namespace,
         cfg.getKind[T],
@@ -91,16 +91,15 @@ object Operator extends LazyLogging {
     client: KubernetesClient,
     crd: CustomResourceDefinition,
     ctl: Controller[F, T, U],
-    kind: String,
-    namespaceQueueSize: Int
+    cfg: CrdConfig
   )(implicit feedbackConsumer: FeedbackConsumerMaker[F, U]) = {
     val makeConsumer =
       (namespace: String, notifyFlag: MVar[F, Unit], feedback: Option[FeedbackConsumerAlg[F, U]]) => {
-        val queue = BlockingQueue[F, Action[T, U]](namespaceQueueSize, namespace, notifyFlag)
-        new ActionConsumer[F, T, U](namespace, ctl, kind, queue, feedback)
+        val queue = BlockingQueue[F, Action[T, U]](cfg.namespaceQueueSize, namespace, notifyFlag)
+        new ActionConsumer[F, T, U](namespace, ctl, cfg.getKind[T], queue, feedback)
       }
     val makeFeedbackConsumer = () => feedbackConsumer.make(client, crd, feedbackChannel).some
-    new Channels(makeConsumer, makeFeedbackConsumer)
+    new Channels(cfg.concurrentController, makeConsumer, makeFeedbackConsumer)
   }
 
   def ofConfigMap[F[_]: ConcurrentEffect: Timer: Parallel, T: YamlReader](
@@ -138,7 +137,7 @@ object Operator extends LazyLogging {
               BlockingQueue[F, Action[T, Unit]](cfg.namespaceQueueSize, namespace, signal),
               feedback
             )
-        new Channels[F, T, Unit](makeConsumer, () => None)
+        new Channels[F, T, Unit](cfg.concurrentController, makeConsumer, () => None)
       }
       context = ConfigMapWatcherContext(
         cfg.namespace,

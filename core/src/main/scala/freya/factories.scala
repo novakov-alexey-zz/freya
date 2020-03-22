@@ -3,11 +3,17 @@ package freya
 import cats.Parallel
 import cats.effect.{ConcurrentEffect, Sync, Timer}
 import freya.Configuration.CrdConfig
+import freya.ExitCodes.ConsumerExitCode
 import freya.internal.crd.Deployer
+import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.watcher.FeedbackConsumer.FeedbackChannel
 import freya.watcher._
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
+
+trait WatcherMaker[F[_]] {
+  def watch: F[(CloseableWatcher, F[ConsumerExitCode])]
+}
 
 trait CrdWatchMaker[F[_], T, U] {
   def make(context: CrdWatcherContext[F, T, U]): WatcherMaker[F]

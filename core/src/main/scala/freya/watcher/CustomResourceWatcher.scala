@@ -25,7 +25,12 @@ final case class CrdWatcherContext[F[_]: ConcurrentEffect, T, U](
 )
 
 class CustomResourceWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T, U](context: CrdWatcherContext[F, T, U])
-    extends AbstractWatcher[F, T, U, Controller[F, T, U]](context.ns, context.channels, context.stopFlag, context.client.getNamespace) {
+    extends AbstractWatcher[F, T, U, Controller[F, T, U]](
+      context.ns,
+      context.channels,
+      context.stopFlag,
+      context.client.getNamespace
+    ) {
 
   private val crdApi = new CrdApi(context.client, context.crd)
 

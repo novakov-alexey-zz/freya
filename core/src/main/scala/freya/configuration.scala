@@ -22,6 +22,7 @@ sealed abstract class Configuration(
   val namespace: K8sNamespace = AllNamespaces,
   val customKind: Option[String] = None,
   val namespaceQueueSize: Int,
+  val concurrentController: Boolean,
   val checkK8sOnStartup: Boolean = false
 ) {
   def validate[T: JsonReader]: Either[String, Unit] =
@@ -45,6 +46,7 @@ object Configuration {
     override val namespace: K8sNamespace,
     override val prefix: String,
     override val namespaceQueueSize: Int = 10,
+    override val concurrentController: Boolean = true,
     version: String = "v1",
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None,
@@ -53,7 +55,7 @@ object Configuration {
     pluralName: String = "",
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty,
     crdApiVersion: String = "v1beta1"
-  ) extends Configuration(prefix, namespace, customKind, namespaceQueueSize) {
+  ) extends Configuration(prefix, namespace, customKind, namespaceQueueSize, concurrentController) {
 
     def kindPluralCaseInsensitive[T: JsonReader]: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
@@ -66,9 +68,10 @@ object Configuration {
     override val namespace: K8sNamespace,
     override val prefix: String,
     override val namespaceQueueSize: Int = 10,
+    override val concurrentController: Boolean = true,
     override val checkK8sOnStartup: Boolean = true,
     override val customKind: Option[String] = None
-  ) extends Configuration(prefix, namespace, customKind, namespaceQueueSize)
+  ) extends Configuration(prefix, namespace, customKind, namespaceQueueSize, concurrentController)
 
 }
 sealed trait K8sNamespace {

@@ -15,7 +15,7 @@ import freya.{Controller, ExitCodes}
 import io.fabric8.kubernetes.client.Watcher.Action.{ADDED, DELETED, ERROR, MODIFIED}
 
 class ActionConsumer[F[_], T, U](
-  key: String,
+  name: String,
   controller: Controller[F, T, U],
   kind: String,
   queue: BlockingQueue[F, Action[T, U]],
@@ -48,7 +48,7 @@ class ActionConsumer[F[_], T, U](
   private def handleError(e: OperatorError): F[Boolean] =
     e match {
       case WatcherClosedError(e) =>
-        F.delay(logger.error(s"K8s closed socket, so closing consumer $key as well", e)) *>
+        F.delay(logger.error(s"K8s closed socket, so closing consumer $name as well", e)) *>
             feedback.fold(F.unit)(_.put(stopFeedbackConsumer)) *> stop
       case ParseResourceError(a, t, r) =>
         F.delay(logger.error(s"Failed action $a for resource $r", t)) *> continue

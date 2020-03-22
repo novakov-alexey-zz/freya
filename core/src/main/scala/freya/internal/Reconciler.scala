@@ -49,19 +49,5 @@ private[freya] class Reconciler[F[_], T, U](
     )
 
   private def putAction(namespace: String, action: Action[T, U]) =
-    channels.getConsumer(namespace) match {
-      case Some(c) => c.putAction(action)
-      case None => putWithRegistration(namespace, action)
-    }
-
-  private def putWithRegistration(ns: String, action: Action[T, U]) =
-    channels.registerConsumer(ns).flatMap {
-      case (c, startConsumer) =>
-        // brutal side-effect to start new namespace consumer in background
-        F.toIO(startConsumer).unsafeRunAsync {
-          case Right(ec) => logger.debug(s"Action consumer stopped with exit code $ec")
-          case Left(t) => logger.error(s"Failed to register new action consumer for '$ns' namespace", t)
-        }
-        c.putAction(action)
-    }
+    channels.getOrCreateConsumer(namespace).flatMap(_.putAction(action))
 }

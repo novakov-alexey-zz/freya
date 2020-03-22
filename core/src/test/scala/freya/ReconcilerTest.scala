@@ -38,9 +38,13 @@ class ReconcilerTest extends AnyFlatSpec with Matchers {
   }
 
   private def createChannels: Channels[IO, Kerb, Status] = {
-    new Channels((namespace: String, signal: MVar[IO, Unit], feedback: Option[FeedbackConsumerAlg[IO, Status]]) => {
-      val q = BlockingQueue[IO, Action[Kerb, Status]](5, namespace, signal)
-      new ActionConsumer[IO, Kerb, Status](namespace, null, "", q, feedback)
-    }, () => None)
+    new Channels(
+      true,
+      (namespace: String, signal: MVar[IO, Unit], feedback: Option[FeedbackConsumerAlg[IO, Status]]) => {
+        val q = BlockingQueue[IO, Action[Kerb, Status]](5, namespace, signal)
+        new ActionConsumer[IO, Kerb, Status](namespace, null, "", q, feedback)
+      },
+      () => None
+    )
   }
 }

@@ -42,31 +42,11 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
     putActionBlocking(namespace, action)
   }
 
-  private def putActionBlocking(namespace: String, action: Either[OperatorError, ServerAction[T, U]]): Unit = {
-    val (consumer, starter) = channels.getConsumer(namespace) match {
-      case Some(c) => c -> None
-      case None =>
-        val (consumer, starter) = runSync(channels.registerConsumer(namespace))
-        consumer -> Some(starter)
-    }
-    starter.foreach(
-      s =>
-        runAsync[ConsumerExitCode](
-          s,
-          ec => logger.debug(s"action consumer for '$namespace' namespace stopped with exit code: $ec")
-        )
-    )
-    runSync(consumer.putAction(action))
-  }
+  private def putActionBlocking(namespace: String, action: Either[OperatorError, ServerAction[T, U]]): Unit =
+    runSync(channels.getOrCreateConsumer(namespace).flatMap(_.putAction(action)))
 
   private def runSync[A](f: F[A]): A =
     F.toIO(f).unsafeRunSync()
-
-  private def runAsync[A](f: F[A], fa: A => Unit): Unit =
-    F.toIO(f).unsafeRunAsync {
-      case Right(a) => fa(a)
-      case Left(t) => logger.error("Could not evaluate effect", t)
-    }
 
   protected def onClose(e: KubernetesClientException): Unit = {
     val error = if (e != null) {

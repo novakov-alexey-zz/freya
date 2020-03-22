@@ -1,6 +1,6 @@
 package freya
 
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, TimeUnit}
 
 import cats.Parallel
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
@@ -47,7 +47,7 @@ class OperatorsTest
     with ScalaCheckPropertyChecks
     with BeforeAndAfter {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
-  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(15, Seconds)), scaled(Span(50, Millis)))
+  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkK8sOnStartup = false)
   val configMapcfg = ConfigMapConfig(AllNamespaces, prefix, checkK8sOnStartup = false)
@@ -135,7 +135,7 @@ class OperatorsTest
     val status = mutable.Set.empty[StatusUpdate[Status]]
     implicit val feedbackConsumer: FeedbackConsumerMaker[F, Status] = testFeedbackConsumer[F](status)
 
-    val operator = Operator.ofCrd[F, T, Status](crdCfg, client[F], controller) //.withReconciler(1.millis)
+    val operator = Operator.ofCrd[F, T, Status](crdCfg, client[F], controller)
     (operator, singleWatcher, status)
   }
 
@@ -173,8 +173,7 @@ class OperatorsTest
     forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) { (action, anyCr) =>
       //when
       val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-      anyCr.setSpec(mapper.writeValueAsString(kerb))
-      anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
+      transformToString(anyCr, kerb)
 
       singleWatcher.foreach(_.eventReceived(action, anyCr))
 
@@ -182,12 +181,52 @@ class OperatorsTest
       allEvents += ((action, kerb, meta))
       //then
       eventually {
-        controller.events should ===(allEvents)
+        controller.events.asScala.toList should ===(allEvents)
       }
       eventually {
         if (action != Watcher.Action.DELETED) checkStatus(status, kerb.failInTest, meta)
       }
     }
+
+    cancelable.unsafeRunSync()
+  }
+
+  property("Crd Operator dispatches different namespace events concurrently") {
+    import freya.json.jackson._
+    //given
+    val parallelNamespaces = 10
+    val controllerDelay = 1.second
+    val maxOverhead = 1.second
+    val controller = new CrdTestController[IO](controllerDelay)
+    val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller)
+    val allEvents = new ConcurrentLinkedQueue[(Watcher.Action, Kerb, Metadata)]()
+    //when
+    val cancelable = startOperator(operator.run)
+    val start = System.currentTimeMillis()
+    //then
+    forAll(
+      WatcherAction.gen,
+      AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb]),
+      workers(PosInt.ensuringValid(parallelNamespaces)),
+      minSuccessful(PosInt.ensuringValid(parallelNamespaces))
+    ) { (action, anyCr) =>
+      //when
+      val kerb = anyCr.getSpec.asInstanceOf[Kerb]
+      transformToString(anyCr, kerb)
+
+      singleWatcher.foreach(_.eventReceived(action, anyCr))
+
+      val meta = MetadataApi.translate(anyCr.getMetadata)
+      allEvents.add((action, kerb, meta))
+      //then
+      eventually {
+        controller.events.asScala.toSet should ===(allEvents.asScala.toSet)
+      }
+    }
+    val finish = System.currentTimeMillis()
+    val duration = FiniteDuration(finish - start, TimeUnit.MILLISECONDS)
+    println(s"Duration: ${duration.toSeconds} sec")
+    duration should be <= (controllerDelay + maxOverhead)
 
     cancelable.unsafeRunSync()
   }
@@ -219,8 +258,7 @@ class OperatorsTest
 
     forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { anyCr =>
       val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-      anyCr.setSpec(mapper.writeValueAsString(kerb))
-      anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
+      transformToString(anyCr, kerb)
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
       testResources += Right(CustomResource(meta, kerb, Status().some))
@@ -234,6 +272,11 @@ class OperatorsTest
     }
 
     cancelable.unsafeRunSync()
+  }
+
+  private def transformToString(anyCr: AnyCustomResource, kerb: Kerb): Unit = {
+    anyCr.setSpec(mapper.writeValueAsString(kerb))
+    anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
   }
 
   property("ConfigMap Operator gets event from reconciler process") {
@@ -254,9 +297,7 @@ class OperatorsTest
     val cancelable = startOperator(operator.run)
 
     forAll(CM.gen[Kerb]) { cm =>
-      val meta = toMetadata(cm)
-      val spec = parseCM(cmParser, cm)
-
+      val (meta, spec) = getSpecAndMeta(cm)
       testResources += Right(CustomResource(meta, spec, None))
       //then
       eventually {
@@ -288,8 +329,7 @@ class OperatorsTest
       minSuccessful(maxRestarts)
     ) { (action, anyCr, close) =>
       val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-      anyCr.setSpec(mapper.writeValueAsString(kerb))
-      anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
+      transformToString(anyCr, kerb)
 
       //when
       if (close)
@@ -302,7 +342,7 @@ class OperatorsTest
       allEvents += ((action, kerb, meta))
       //then
       eventually {
-        controller.events should ===(allEvents)
+        controller.events.asScala.toList should ===(allEvents)
       }
     }
 
@@ -331,17 +371,22 @@ class OperatorsTest
       currentWatcher = getWatcherOrFail(singleWatcher)
       singleWatcher.foreach(_.eventReceived(action, cm))
 
-      val meta = toMetadata(cm)
-      val spec = parseCM(cmParser, cm)
+      val (meta, spec) = getSpecAndMeta(cm)
       allEvents += ((action, spec, meta))
 
       //then
       eventually {
-        controller.events should ===(allEvents)
+        controller.events.asScala.toList should ===(allEvents)
       }
     }
 
     cancelable.unsafeRunSync()
+  }
+
+  private def getSpecAndMeta(cm: ConfigMap) = {
+    val meta = toMetadata(cm)
+    val spec = parseCM(cmParser, cm)
+    (meta, spec)
   }
 
   private def getWatcherOrFail[T](set: mutable.Set[Watcher[T]]): Watcher[T] =
@@ -356,9 +401,7 @@ class OperatorsTest
 
     //when
     val exitCode = operator.withRestart(Times(maxRestarts, 0.seconds)).unsafeToFuture()
-
     var currentWatcher = getWatcherOrFail(singleWatcher)
-    val parser = ConfigMapParser[IO]().unsafeRunSync()
 
     forAll(WatcherAction.gen, CM.gen[Kerb], minSuccessful(maxRestarts)) { (action, cm) =>
       //when
@@ -367,12 +410,11 @@ class OperatorsTest
       singleWatcher.foreach(_.eventReceived(action, cm))
 
       //then
-      val meta = toMetadata(cm)
-      val spec = parseCM(parser, cm)
+      val (meta, spec) = getSpecAndMeta(cm)
       allEvents += ((action, spec, meta))
 
       eventually {
-        controller.events should ===(allEvents)
+        controller.events.asScala.toList should ===(allEvents)
       }
     }
 
@@ -423,12 +465,11 @@ class OperatorsTest
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
-      val meta = toMetadata(cm)
-      val spec = parseCM(cmParser, cm)
+      val (meta, spec) = getSpecAndMeta(cm)
       allEvents += ((action, spec, meta))
       //then
       eventually {
-        controller.events should ===(allEvents)
+        controller.events.asScala.toList should ===(allEvents)
       }
     }
 
@@ -467,8 +508,7 @@ class OperatorsTest
     val cancelable = startOperator(operator.run)
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
-      val meta = toMetadata(cm)
-      val spec = parseCM(cmParser, cm)
+      val (meta, spec) = getSpecAndMeta(cm)
 
       if (spec.failInTest)
         cm.getData.put(ConfigMapParser.SpecificationKey, "error")
@@ -480,10 +520,10 @@ class OperatorsTest
       if (!spec.failInTest) {
         allEvents += ((action, spec, meta))
         eventually {
-          controller.events should ===(allEvents)
+          controller.events.asScala.toList should ===(allEvents)
         }
       } else
-        controller.events should not contain ((action, spec, meta))
+        controller.events.asScala.toSet should not contain ((action, spec, meta))
 
       controller.failed should ===(0)
     }
@@ -522,15 +562,14 @@ class OperatorsTest
     val cancelable = startOperator(operator.run)
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
-      val meta = toMetadata(cm)
-      val spec = parseCM(cmParser, cm)
+      val (meta, spec) = getSpecAndMeta(cm)
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
       //then
       if (!spec.failInTest) {
         allEvents += ((action, spec, meta))
         eventually {
-          controller.events should ===(allEvents)
+          controller.events.asScala.toList should ===(allEvents)
         }
       }
     }
@@ -553,8 +592,7 @@ class OperatorsTest
     val cancelable = startOperator(operator.run)
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
-      val meta = toMetadata(cm)
-      val spec = parseCM(cmParser, cm)
+      val (meta: Metadata, spec: Kerb) = getSpecAndMeta(cm)
 
       //when
       singleWatcher.foreach(_.eventReceived(action, cm))
@@ -563,10 +601,10 @@ class OperatorsTest
       if (!spec.failInTest) {
         allEvents += ((action, spec, meta))
         eventually {
-          controller.events should ===(allEvents)
+          controller.events.asScala.toList should ===(allEvents)
         }
       } else
-        controller.events should not contain ((action, spec, meta))
+        controller.events.asScala.toSet should not contain ((action, spec, meta))
 
       controller.failed should ===(0)
     }
