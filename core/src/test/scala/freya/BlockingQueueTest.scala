@@ -20,7 +20,7 @@ class BlockingQueueTest extends AnyPropSpec with Matchers with ScalaCheckPropert
         val consumer = ListBuffer.empty[String]
         l.map(q.produce).sequence.unsafeRunAsyncAndForget()
         q.consume {
-          s => IO(consumer += s) >> IO(if (consumer.length < l.length) true else false)
+          s => IO(consumer += s) >> IO(consumer.length < l.length)
         }.unsafeRunSync()
         consumer.length should ===(l.length)
       }
