@@ -25,19 +25,21 @@ object ObjectMetaTest {
 
   def gen: Gen[ObjectMeta] = gen(Map.empty)
 
-  def gen(labels: Map[String, String]): Gen[ObjectMeta] =
+  def constNamespaceGen(namespace: String): Gen[ObjectMeta] = gen(Map.empty, Gen.const(namespace))
+
+  def gen(labels: Map[String, String], namespaceGen: Gen[String] = maxStrGen(63)): Gen[ObjectMeta] =
     for {
       name <- maxStrGen(63)
-      namespace <- maxStrGen(63)
+      namespace <- namespaceGen
     } yield ObjectMetaTest(name, namespace, labels)
 }
 
 object AnyCustomResource {
 
-  def gen[T: Arbitrary](kind: String): Gen[AnyCustomResource] =
+  def gen[T: Arbitrary](kind: String, metaGen: Gen[ObjectMeta] = ObjectMetaTest.gen): Gen[AnyCustomResource] =
     for {
       spec <- arbitrary[T]
-      meta <- ObjectMetaTest.gen
+      meta <- metaGen
     } yield {
       val sc = new AnyCustomResource
       sc.setApiVersion("io.github.novakov-alexey/v1")

@@ -22,6 +22,7 @@ import freya.watcher.FeedbackConsumer.FeedbackChannel
 import freya.watcher._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
+import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
@@ -34,6 +35,7 @@ import org.scalatest.propspec.AnyPropSpec
 import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
+import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
@@ -48,7 +50,7 @@ class OperatorsTest
     with ScalaCheckPropertyChecks
     with BeforeAndAfter {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
-  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(10, Seconds)), scaled(Span(50, Millis)))
+  implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkK8sOnStartup = false)
   val configMapcfg = ConfigMapConfig(AllNamespaces, prefix, checkK8sOnStartup = false)
@@ -171,8 +173,7 @@ class OperatorsTest
 
     forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) { (action, anyCr) =>
       //when
-      val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-      transformToString(anyCr, kerb)
+      val kerb = transformToString(anyCr)
 
       singleWatcher.foreach(_.eventReceived(action, anyCr))
 
@@ -229,17 +230,16 @@ class OperatorsTest
       minSuccessful(PosInt.ensuringValid(parallelNamespaces))
     ) { (action, anyCr) =>
       //when
-      val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-      transformToString(anyCr, kerb)
+      val kerb = transformToString(anyCr)
 
       singleWatcher.foreach(_.eventReceived(action, anyCr))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
       allEvents.add((action, kerb, meta))
-      //then
-      eventually {
-        controller.events.asScala.toSet should ===(allEvents.asScala.toSet)
-      }
+    }
+    //then
+    eventually {
+      controller.events.asScala.toSet should ===(allEvents.asScala.toSet)
     }
     val finish = System.currentTimeMillis()
 
@@ -247,6 +247,69 @@ class OperatorsTest
     println(s"Actual Duration: $duration")
     cancelable.unsafeRunSync()
     duration
+  }
+
+  property("Crd Operator dispatches same namespace events in original sequence") {
+    //given
+    val parallelNamespaces = 10
+    val controllerEvents = TrieMap.empty[String, ConcurrentLinkedQueue[(Action, Kerb, Metadata)]]
+    val controller = new CrdTestController[IO]() {
+      override def save(action: Watcher.Action, spec: Kerb, meta: Metadata): IO[Unit] =
+        IO {
+          controllerEvents
+            .getOrElseUpdate(meta.namespace, new ConcurrentLinkedQueue[(Action, Kerb, Metadata)])
+            .add((action, spec, meta))
+        }.void
+    }
+    val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller, crdCfg)
+
+    def actionAndResourceGen(namespace: String) =
+      for {
+        a <- WatcherAction.gen
+        r <- AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb], ObjectMetaTest.constNamespaceGen(namespace))
+      } yield (a, r)
+
+    //when
+    val cancelable = startOperator(operator.run)
+    //then
+    (0 until parallelNamespaces).toList.map { namespace =>
+      IO {
+        val ns = namespace.toString
+        val list = Gen.nonEmptyListOf(actionAndResourceGen(ns)).sample.toList.flatten
+        //when
+        val currentEvents = list.zipWithIndex.map {
+          case ((action, anyCr), i) =>
+            // mutate current spec to have an index test event ordering later
+            val withIndex = anyCr.getSpec.asInstanceOf[Kerb].copy(index = i)
+            anyCr.setSpec(withIndex)
+            val kerb = transformToString(anyCr)
+
+            singleWatcher.foreach(_.eventReceived(action, anyCr))
+
+            val meta = MetadataApi.translate(anyCr.getMetadata)
+            (action, kerb, meta)
+        }
+
+        //then
+        eventually {
+          val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).toList.flatten
+          namespaceEvents should contain allElementsOf currentEvents
+        }
+      }
+    }.parSequence.unsafeRunSync()
+
+    controllerEvents.map {
+      case (namespace, queue) =>
+        queue.asScala.toList.foldLeft(0) {
+          case (acc, (_, kerb, _)) =>
+            withClue(s"[namespace: $namespace, ${queue.asScala.toList.map(_._2.index)}] ") {
+                acc should ===(kerb.index)
+                acc + 1
+            }
+        }
+    }
+
+    cancelable.unsafeRunSync()
   }
 
   private def checkStatus[T](status: mutable.Set[StatusUpdate[Status]], statusFlag: Boolean, meta: Metadata) = {
@@ -274,8 +337,7 @@ class OperatorsTest
     val cancelable = startOperator(operator.run)
 
     forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { anyCr =>
-      val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-      transformToString(anyCr, kerb)
+      val kerb = transformToString(anyCr)
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
       testResources += Right(CustomResource(meta, kerb, Status().some))
@@ -291,9 +353,11 @@ class OperatorsTest
     cancelable.unsafeRunSync()
   }
 
-  private def transformToString(anyCr: AnyCustomResource, kerb: Kerb): Unit = {
+  private def transformToString(anyCr: AnyCustomResource): Kerb = {
+    val kerb = anyCr.getSpec.asInstanceOf[Kerb]
     anyCr.setSpec(mapper.writeValueAsString(kerb))
     anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
+    kerb
   }
 
   property("ConfigMap Operator gets event from reconciler process") {
@@ -344,8 +408,7 @@ class OperatorsTest
       arbitrary[Boolean],
       minSuccessful(maxRestarts)
     ) { (action, anyCr, close) =>
-      val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-      transformToString(anyCr, kerb)
+      val kerb = transformToString(anyCr)
 
       //when
       if (close)

@@ -19,16 +19,19 @@ class CrdTestController[F[_]](delay: FiniteDuration = 0.seconds)(
     F.pure(Some(Status(ready)))
 
   override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    T.sleep(delay) *> F.delay(events.add((Action.ADDED, krb.spec, krb.metadata))) *> getStatus(krb.spec.failInTest)
+    T.sleep(delay) *> save(Action.ADDED, krb.spec, krb.metadata) *> getStatus(krb.spec.failInTest)
 
   override def onDelete(krb: CustomResource[Kerb, Status]): F[Unit] =
-    T.sleep(delay) *> F.delay(events.add((Action.DELETED, krb.spec, krb.metadata))).void
+    T.sleep(delay) *> save(Action.DELETED, krb.spec, krb.metadata).void
 
   override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    T.sleep(delay) *> F.delay(events.add((Action.MODIFIED, krb.spec, krb.metadata))) *> getStatus(krb.spec.failInTest)
+    T.sleep(delay) *> save(Action.MODIFIED, krb.spec, krb.metadata) *> getStatus(krb.spec.failInTest)
 
   override def reconcile(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
     T.sleep(delay) *> F.delay(reconciledEvents += ((krb.spec, krb.metadata))) *> getStatus(krb.spec.failInTest)
+
+  def save(action: Action, spec: Kerb, meta: Metadata): F[Unit] =
+    F.delay(events.add((action, spec, meta))).void
 
   override def onInit(): F[Unit] =
     F.delay {
