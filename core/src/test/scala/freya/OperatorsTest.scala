@@ -298,7 +298,7 @@ class OperatorsTest
       }
     }.parSequence.unsafeRunSync()
 
-    controllerEvents.map {
+    controllerEvents.foreach {
       case (namespace, queue) =>
         queue.asScala.toList.foldLeft(0) {
           case (acc, (_, kerb, _)) =>
