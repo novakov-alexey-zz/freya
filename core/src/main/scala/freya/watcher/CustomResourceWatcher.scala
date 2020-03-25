@@ -1,12 +1,14 @@
 package freya.watcher
 
-import cats.effect.{Concurrent, ConcurrentEffect, Sync}
+import cats.Parallel
+import cats.effect.concurrent.MVar
+import cats.effect.{ConcurrentEffect, Sync, Timer}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{OperatorError, ParseResourceError}
 import freya.internal.kubeapi.CrdApi
 import freya.models.Resource
-import freya.watcher.AbstractWatcher.{Channel, CloseableWatcher}
+import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.{Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
@@ -15,16 +17,20 @@ import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException
 final case class CrdWatcherContext[F[_]: ConcurrentEffect, T, U](
   ns: K8sNamespace,
   kind: String,
-  consumer: ActionConsumer[F, T, U],
-  feedback: FeedbackConsumerAlg[F],
+  channels: Channels[F, T, U],
   convertCr: AnyCustomResource => Resource[T, U],
-  channel: Channel[F, T, U],
   client: KubernetesClient,
-  crd: CustomResourceDefinition
+  crd: CustomResourceDefinition,
+  stopFlag: MVar[F, ConsumerExitCode]
 )
 
-class CustomResourceWatcher[F[_]: ConcurrentEffect, T, U](context: CrdWatcherContext[F, T, U])
-    extends AbstractWatcher[F, T, U, Controller[F, T, U]](context.ns, context.channel, context.client.getNamespace) {
+class CustomResourceWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T, U](context: CrdWatcherContext[F, T, U])
+    extends AbstractWatcher[F, T, U, Controller[F, T, U]](
+      context.ns,
+      context.channels,
+      context.stopFlag,
+      context.client.getNamespace
+    ) {
 
   private val crdApi = new CrdApi(context.client, context.crd)
 
@@ -45,7 +51,7 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T, U](context: CrdWatcherCon
           case (t, resource) =>
             ParseResourceError(action, t, resource)
         }
-        enqueueAction(action, converted)
+        enqueueAction(cr.getMetadata.getNamespace, action, converted)
 
         logger.debug(s"action enqueued: $action")
       }
@@ -54,10 +60,8 @@ class CustomResourceWatcher[F[_]: ConcurrentEffect, T, U](context: CrdWatcherCon
         CustomResourceWatcher.super.onClose(e)
     }))
 
-    Sync[F].delay(logger.info(s"CustomResource watcher running for kinds '${context.kind}'")) *> startWatcher.map(_ -> {
-      val actionConsumer = context.consumer.consume(context.channel)
-      val feedbackConsumer = context.feedback.consume
-      Concurrent[F].race(actionConsumer, feedbackConsumer).map(_.fold(identity, identity))
-    })
+    Sync[F].delay(logger.info(s"CustomResource watcher is running for kinds '${context.kind}'")) *> startWatcher.map(
+      _ -> context.stopFlag.read
+    )
   }
 }

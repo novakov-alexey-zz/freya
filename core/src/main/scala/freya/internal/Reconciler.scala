@@ -7,14 +7,15 @@ import freya.ExitCodes
 import freya.ExitCodes.ReconcilerExitCode
 import freya.errors.ParseReconcileError
 import freya.models.ResourcesList
-import freya.watcher.AbstractWatcher.Channel
+import freya.watcher.AbstractWatcher.Action
+import freya.watcher.Channels
 import freya.watcher.actions.ReconcileAction
 
 import scala.concurrent.duration._
 
 private[freya] class Reconciler[F[_], T, U](
   delay: FiniteDuration,
-  channel: Channel[F, T, U],
+  channels: Channels[F, T, U],
   currentResources: F[Either[Throwable, ResourcesList[T, U]]]
 )(implicit F: ConcurrentEffect[F], T: Timer[F])
     extends LazyLogging {
@@ -35,8 +36,18 @@ private[freya] class Reconciler[F[_], T, U](
     }
 
   private def publish(resources: Either[Throwable, ResourcesList[T, U]]): F[Unit] =
-    resources.fold(t => F.delay(logger.error(s"Failed to get current resources", t)), _.map {
-      case Left((t, resource)) => channel.put(Left(ParseReconcileError(t, resource)))
-      case Right(resource) => channel.put(Right(ReconcileAction(resource)))
-    }.sequence.void)
+    resources.fold(
+      t => F.delay(logger.error(s"Failed to get current resources", t)),
+      _.map {
+        case Left((t, resource)) =>
+          val action = Left(ParseReconcileError(t, resource))
+          putAction(resource.getMetadata.getNamespace, action)
+        case Right(resource) =>
+          val action = Right(ReconcileAction(resource))
+          putAction(resource.metadata.namespace, action)
+      }.sequence.void
+    )
+
+  private def putAction(namespace: String, action: Action[T, U]) =
+    channels.getOrCreateConsumer(namespace).flatMap(_.putAction(action))
 }

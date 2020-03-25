@@ -18,7 +18,7 @@ object ExitCodes {
   type ReconcilerExitCode = ExitCode
   type OperatorExitCode = Either[ConsumerExitCode, ReconcilerExitCode]
 
-  val WatcherClosedExitCode: ConsumerExitCode = ExitCode(2)
+  val ActionConsumerExitCode: ConsumerExitCode = ExitCode(2)
   val ReconcileExitCode: ReconcilerExitCode = ExitCode(3)
   val FeedbackExitCode: ConsumerExitCode = ExitCode(4)
 }
