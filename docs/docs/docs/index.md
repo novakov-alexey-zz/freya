@@ -138,7 +138,7 @@ connection. Running Operator is watching for events:
 
 ## Event Dispathcing
 
-<img src="https://novakov-alexey.github.io/freya/img/freya_runtime.png" alt="freya_runtime" width="400"/>
+<img src="https://novakov-alexey.github.io/freya/img/freya_runtime.png" alt="freya_runtime" width="700"/>
 
 Freya dispathces api-server events contcurrently accorss different namespaces, but in original order within the same namespace. Supplied controller will be called concurrently, thus any state variables of the controller needs to be thread-safe or atomic. In order to use signle-threaded dispatch, one can set `false` to `Configuration#concurrentController`. 
 
