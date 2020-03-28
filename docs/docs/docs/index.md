@@ -7,9 +7,10 @@ position: 2
 
 # Table of Contents
 1. [Implementation Steps with Freya](#implementation-steps-with-freya)
-2. [Restart Configuration](#restart-configuration)
-3. [Deploy CRD Manually](#deploy-crd-manually)
-4. [CRD Helper](#crd-helper)
+2. [Event Dispathcing](#event-dispathcing)
+3. [Restart Configuration](#restart-configuration)
+4. [Deploy CRD Manually](#deploy-crd-manually)
+5. [CRD Helper](#crd-helper)
 
 # CRD Operator
 
