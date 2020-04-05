@@ -6,11 +6,11 @@ a user defined case class for status into a JSON string.</p>
 <p>Supported libraries to parse JSON/YAML:</p>
 
 <p>Circe:</p>
-<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">"io.github.novakov-alexey"</span> <span class="o">%%</span> <span class="s">"freya-circe"</span> <span class="o">%</span> <span class="s">"0.2.1"</span> 
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">"io.github.novakov-alexey"</span> <span class="o">%%</span> <span class="s">"freya-circe"</span> <span class="o">%</span> <span class="s">"0.2.2"</span> 
 </code></pre></div></div>
 
 <p>Jackson:</p>
-<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">"io.github.novakov-alexey"</span> <span class="o">%%</span> <span class="s">"freya-jackson"</span> <span class="o">%</span> <span class="s">"0.2.1"</span>
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">"io.github.novakov-alexey"</span> <span class="o">%%</span> <span class="s">"freya-jackson"</span> <span class="o">%</span> <span class="s">"0.2.2"</span>
 </code></pre></div></div>
 
 <h2 id="usage">Usage</h2>
@@ -45,7 +45,7 @@ needs to be written. Thus, only import of the Freya Jackson module is needed.</p
 <p>Circe can derive its decoder/encoders automatically, when using its <code class="highlighter-rouge">generic</code> module with special import.</p>
 
 <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="nn">freya.json.circe._</span>
-<span class="c1">// this import will derive required decoders/ecoders for your spec and status case classes</span>
+<span class="c1">// this import will derive required decoders/encoders for your spec and status case classes</span>
 <span class="k">import</span> <span class="nn">io.circe.generic.auto._</span>
 </code></pre></div></div>
 
@@ -61,7 +61,7 @@ needs to be written. Thus, only import of the Freya Jackson module is needed.</p
 
 <h3 id="jackson-1">Jackson</h3>
 
-<p>Jackson provides several annotations to configure deserialization for enum-like classes:</p>
+<p>Jackson provides several annotations to configure deserialisation for enum-like classes:</p>
 
 <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="nn">com.fasterxml.jackson.annotation.JsonSubTypes.Type</span>
 <span class="k">import</span> <span class="nn">com.fasterxml.jackson.annotation.JsonTypeInfo.Id</span>
