@@ -137,7 +137,7 @@ connection. Running Operator is watching for events:
  - for customer resources with `Kerb` kind and apiGroup `io.myorg.kerboperator/v1`, in case of CRD Operator
  - for ConfigMap kind with label `io.myorg.kerboperator/kind=Kerb`, in case of ConfigMap Operator
 
-## Event Dispathcing
+## Event Dispatching
 
 <img src="https://novakov-alexey.github.io/freya/img/freya_runtime.png" alt="freya_runtime" width="700"/>
 
