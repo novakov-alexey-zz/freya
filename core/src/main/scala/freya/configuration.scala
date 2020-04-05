@@ -60,8 +60,6 @@ object Configuration {
     def kindPluralCaseInsensitive[T: JsonReader]: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
     }.toLowerCase
-
-    val apiVersion: String = s"$prefix/$version"
   }
 
   final case class ConfigMapConfig(

@@ -94,7 +94,7 @@ private[freya] object Deployer extends LazyLogging {
         cfg.shortNames,
         cfg.kindPluralCaseInsensitive[T],
         cfg.version,
-        cfg.apiVersion
+        cfg.crdApiVersion
       )
       .withNewSubresources()
       .withStatus(new CustomResourceSubresourceStatusBuilder().build())
