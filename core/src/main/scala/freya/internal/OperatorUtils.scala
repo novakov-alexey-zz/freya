@@ -11,15 +11,13 @@ import io.fabric8.kubernetes.client.utils.HttpClientUtils
 import io.fabric8.kubernetes.client.{ConfigBuilder, KubernetesClient}
 import okhttp3.{HttpUrl, Request}
 
-import scala.util.Try
-
 private[freya] object OperatorUtils extends LazyLogging {
 
   def targetNamespace(clientNamespace: String, namespace: K8sNamespace): K8sNamespace =
     if (namespace == CurrentNamespace) Namespace(clientNamespace) else namespace
 
-  def checkIfOnOpenshift(masterURL: URL): (Boolean, Int) =
-    Try {
+  def checkIfOnOpenshift[F[_]: Sync](masterURL: URL): F[(Boolean, Int)] =
+    Sync[F].delay {
       val urlBuilder = new HttpUrl.Builder().host(masterURL.getHost)
 
       if (masterURL.getPort == -1) urlBuilder.port(masterURL.getDefaultPort)
@@ -36,16 +34,18 @@ private[freya] object OperatorUtils extends LazyLogging {
       val success = response.isSuccessful
 
       (success, response.code)
-    }.fold(e => {
-      logger.error("Failed to distinguish between Kubernetes and OpenShift", e)
-      (false, -1)
-    }, identity)
+    }.recoverWith {
+      case ex: Throwable =>
+        logger.error("Failed to distinguish between Kubernetes and OpenShift", ex)
+        (false, -1).pure[F]
+    }
 
   def checkKubeEnv[T, F[_]: Sync](client: KubernetesClient): F[Option[Boolean]] =
-    Sync[F].delay {
-      val (onOpenShift, code) = checkIfOnOpenshift(client.getMasterUrl)
-      if (onOpenShift) logger.debug(s"Returned code: $code. We are on OpenShift.")
-      else logger.debug(s"Returned code: $code. We are not on OpenShift. Assuming, we are on Kubernetes.")
-      onOpenShift.some
-    }
+    for {
+      (onOpenShift, code) <- checkIfOnOpenshift(client.getMasterUrl)
+      _ <- Sync[F].delay {
+        if (onOpenShift) logger.debug(s"Returned code: $code. We are on OpenShift.")
+        else logger.debug(s"Returned code: $code. We are not on OpenShift. Assuming, we are on Kubernetes.")
+      }
+    } yield onOpenShift.some
 }
