@@ -7,7 +7,7 @@ position: 2
 
 # Table of Contents
 1. [Implementation Steps with Freya](#implementation-steps-with-freya)
-2. [Event Dispathcing](#event-dispathcing)
+2. [Event Dispatching](#event-dispatching)
 3. [Restart Configuration](#restart-configuration)
 4. [Deploy CRD Manually](#deploy-crd-manually)
 5. [CRD Helper](#crd-helper)
@@ -141,15 +141,15 @@ connection. Running Operator is watching for events:
 
 <img src="https://novakov-alexey.github.io/freya/img/freya_runtime.png" alt="freya_runtime" width="700"/>
 
-Freya dispathces api-server events contcurrently accorss different namespaces, but in original order within the same namespace. Supplied controller will be called concurrently, thus any state variables of the controller needs to be thread-safe or atomic. In order to use signle-threaded dispatch, one can set `false` to `Configuration#concurrentController`. 
+Freya dispatches api-server events concurrently accross different namespaces, but in original order within the same namespace. Supplied controller will be called concurrently, thus any state variables of the controller needs to be thread-safe or atomic. In order to use single-threaded dispatch, one can set `false` to `Configuration#concurrentController`. 
 
-Concurrent dispatching is maintaining in-memory queues per namepspace to buffer received events for a short time. These events are dispatched one by one to the controller. 
+Concurrent dispatching is maintaining in-memory queues per namespace to buffer received events for a short time. These events are dispatched one by one to the controller. 
 
 ## Restart configuration
 
 Freya can automatically restart your operator in case of any failure during the CRs/ConfigMaps event listening.
 In terms Cats-Effect IO, once IO task is completed, which means Freya Operator has exited from its normal
-listening process, it will be restarted with the same parameters. There are few options to control restart behavior.
+listening process, it will be restarted with the same parameters. There are few options to control restart behaviour.
 
 ### Retry infinitely with random delay
 
@@ -199,7 +199,7 @@ calculate next delay by `previous delay * multiplier`.
 In order to disable automatic deployment of Custom Resource Definition as well as OpenAPi schema, one can
 set false in `freya.Configuration.CrdConfig.deployCrd = false`. Operator will expect to find a CRD in K8s during the startup, it 
 won't try to deploy new CRD, even if CRD is not found. However, what may happen in case CRD is not found and `deployCrd`
-is to `false`, operator will fail and return failed `IO` value immediately. Freya Operator can't work without CRD being
+is `false`, then operator will fail and return failed `IO` value immediately. Freya Operator can't work without CRD being
 retrieved from K8s api-server. 
 
 Manual deployment of CRD is usually done with YAML files using tools like `kubectl`.   

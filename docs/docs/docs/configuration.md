@@ -24,7 +24,7 @@ CrdConfig(
   eventQueueSize = 10,
   // If true, different namespace events are dispatched concurrently, i.e. controller will be called concurrently
   // for different namespace events. 
-  // The same namespace events will be dispatched in the same order they were originaly recieved from Kubernetes. 
+  // The same namespace events will be dispatched in the same order they were originally received from Kubernetes. 
   concurrentController = true,
   // Check on startup whether current K8s is an OpenShift   
   checkK8sOnStartup = true, 

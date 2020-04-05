@@ -59,7 +59,7 @@ Circe can derive its decoder/encoders automatically, when using its `generic` mo
 
 ```scala mdoc
 import freya.json.circe._
-// this import will derive required decoders/ecoders for your spec and status case classes
+// this import will derive required decoders/encoders for your spec and status case classes
 import io.circe.generic.auto._ 
 ```
 
@@ -76,7 +76,7 @@ Let's use ADT (algebraic data types) to design custom resource case class for `P
 
 ### Jackson
 
-Jackson provides several annotations to configure deserialization for enum-like classes:
+Jackson provides several annotations to configure deserialisation for enum-like classes:
 
 ```scala mdoc:reset-object
 import com.fasterxml.jackson.annotation.JsonSubTypes.Type

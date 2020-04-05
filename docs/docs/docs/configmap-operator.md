@@ -8,7 +8,7 @@ position: 3
 
 # ConfigMap Operator
 
-Please first look at CRD Operator documentation. It contains more common informaton, which is applicable to ConfigMap
+Please first look at CRD Operator documentation. It contains more common information, which is applicable to ConfigMap
 operator too.
 
 `ConfigMap` is a native resource, so that no custom definition needs to be created in Kubernetes before we start creating
