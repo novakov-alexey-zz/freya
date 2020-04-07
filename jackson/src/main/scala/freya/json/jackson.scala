@@ -16,7 +16,6 @@ object jackson {
 
   implicit def jacksonRead[T: ClassTag]: JsonReader[T] = new JsonReader[T] {
 
-
     private val clazz: Class[T] =
       implicitly[ClassTag[T]].runtimeClass.asInstanceOf[Class[T]]
 

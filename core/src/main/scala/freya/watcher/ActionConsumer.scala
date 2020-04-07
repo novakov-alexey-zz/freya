@@ -58,7 +58,7 @@ class ActionConsumer[F[_], T, U](
 
   private def handleAction(oAction: OperatorAction[T, U]): F[NewStatus[U]] =
     (oAction match {
-      case ServerAction(wAction, resource) =>
+      case WatcherAction(wAction, resource) =>
         wAction match {
           case ADDED =>
             F.delay(

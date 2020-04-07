@@ -38,11 +38,11 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
     wAction: Watcher.Action,
     errorOrResource: Either[OperatorError, CustomResource[T, U]]
   ): Unit = {
-    val action = errorOrResource.map(r => ServerAction[T, U](wAction, r))
+    val action = errorOrResource.map(r => WatcherAction[T, U](wAction, r))
     putActionBlocking(namespace, action)
   }
 
-  private def putActionBlocking(namespace: String, action: Either[OperatorError, ServerAction[T, U]]): Unit =
+  private def putActionBlocking(namespace: String, action: Either[OperatorError, WatcherAction[T, U]]): Unit =
     runSync(channels.getOrCreateConsumer(namespace).flatMap(_.putAction(action)))
 
   private def runSync[A](f: F[A]): A =

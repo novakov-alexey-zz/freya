@@ -7,7 +7,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.OperatorError
-import freya.watcher.actions.ServerAction
+import freya.watcher.actions.WatcherAction
 
 import scala.collection.concurrent.TrieMap
 
@@ -55,7 +55,7 @@ class Channels[F[_]: Parallel, T, U](
       }
     } yield consumer
 
-  private[freya] def putForAll(action: Either[OperatorError, ServerAction[T, U]]): F[Unit] =
+  private[freya] def putForAll(action: Either[OperatorError, WatcherAction[T, U]]): F[Unit] =
     actionConsumers.values.map(_.putAction(action)).toList.parSequence.void
 
   private def runAsync[A](f: F[A], fa: A => Unit): Unit =
