@@ -54,7 +54,7 @@ object Configuration {
     shortNames: List[String] = List.empty[String],
     pluralName: String = "",
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty,
-    crdApiVersion: String = "v1beta1"
+    crdApiVersion: String = "apiextensions.k8s.io/v1beta1"
   ) extends Configuration(prefix, namespace, customKind, eventQueueSize, concurrentController) {
 
     def kindPluralCaseInsensitive[T: JsonReader]: String = {

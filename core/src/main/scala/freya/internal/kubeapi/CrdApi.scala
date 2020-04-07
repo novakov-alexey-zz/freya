@@ -22,8 +22,6 @@ object CrdApi {
 
   final case class StatusUpdate[T](meta: Metadata, status: T)
 
-  val ApiExtensionGroup = "apiextensions.k8s.io"
-
   def list(client: KubernetesClient): List[CustomResourceDefinition] =
     client.customResourceDefinitions.list.getItems.asScala.toList
 
@@ -42,7 +40,7 @@ object CrdApi {
     val shortNamesLower = shortNames.map(_.toLowerCase())
 
     new CustomResourceDefinitionBuilder()
-      .withApiVersion(s"$ApiExtensionGroup/$crdApiVersion")
+      .withApiVersion(crdApiVersion)
       .withNewMetadata
       .withName(s"$pluralName.$prefix")
       .endMetadata
