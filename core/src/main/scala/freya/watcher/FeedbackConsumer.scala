@@ -1,6 +1,6 @@
 package freya.watcher
 
-import cats.effect.ConcurrentEffect
+import cats.effect.Effect
 import cats.effect.concurrent.MVar
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
@@ -22,7 +22,7 @@ object FeedbackConsumer {
 }
 
 class FeedbackConsumer[F[_], T](client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, T])(
-  implicit F: ConcurrentEffect[F],
+  implicit F: Effect[F],
   writer: JsonWriter[T]
 ) extends FeedbackConsumerAlg[F, T]
     with LazyLogging {

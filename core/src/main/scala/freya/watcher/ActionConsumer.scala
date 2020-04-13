@@ -1,7 +1,7 @@
 package freya.watcher
 
 import cats.data.OptionT
-import cats.effect.ConcurrentEffect
+import cats.effect.Effect
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes.ConsumerExitCode
@@ -20,7 +20,7 @@ class ActionConsumer[F[_], T, U](
   kind: String,
   queue: BlockingQueue[F, Action[T, U]],
   feedback: Option[FeedbackConsumerAlg[F, U]]
-)(implicit F: ConcurrentEffect[F])
+)(implicit F: Effect[F])
     extends LazyLogging {
 
   private val noStatus = F.pure[NewStatus[U]](None)

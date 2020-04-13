@@ -33,7 +33,8 @@ import cats.effect._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import com.typesafe.scalalogging.LazyLogging
-import io.fabric8.kubernetes.client.DefaultKubernetesClient
+import io.fabric8.kubernetes.client.{KubernetesClient, DefaultKubernetesClient} 
+import scala.annotation.unused
 
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
@@ -44,7 +45,7 @@ implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
 // override reconcile method
 
-class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
+class KerbController[F[_]](@unused client: KubernetesClient)(implicit F: ConcurrentEffect[F]) 
   extends Controller[F, Kerb, Unit] with LazyLogging {
 
   override def reconcile(krb: CustomResource[Kerb, Unit]): F[NoStatus] =
@@ -52,7 +53,7 @@ class KerbController[F[_]](implicit F: ConcurrentEffect[F])
 }
 
 Operator
-  .ofCrd[IO, Kerb](cfg, client, new KerbController[IO])
+  .ofCrd[IO, Kerb](cfg, client, (c: KubernetesClient) => new KerbController[IO](c))
   .withReconciler(1.minute)
   .withRestart()
 ``` 

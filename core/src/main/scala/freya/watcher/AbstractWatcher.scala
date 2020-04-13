@@ -2,7 +2,7 @@ package freya.watcher
 
 import java.io.Closeable
 
-import cats.effect.ConcurrentEffect
+import cats.effect.Effect
 import cats.effect.concurrent.MVar
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
@@ -27,7 +27,7 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
   channels: Channels[F, T, U],
   stopFlag: MVar[F, ConsumerExitCode],
   clientNamespace: String
-)(implicit F: ConcurrentEffect[F])
+)(implicit F: Effect[F])
     extends LazyLogging
     with WatcherMaker[F] {
 

@@ -79,7 +79,7 @@ object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
       }
 
     Operator
-      .ofCrd[IO, Kerb, Status](crdCfg, client)(controller)
+      .ofCrd[IO, Kerb, Status](crdCfg, client, controller)
       .withRestart()
   }
 }

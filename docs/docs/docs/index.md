@@ -238,7 +238,7 @@ val controller = (helper: CrdHelper[IO, Kerb, NoStatus]) =>
   }
 
 Operator
-  .ofCrd[IO, Kerb, NoStatus](cfg, client)(controller)
+  .ofCrd[IO, Kerb, NoStatus](cfg, client, controller)
   .withRestart()
 ```
 

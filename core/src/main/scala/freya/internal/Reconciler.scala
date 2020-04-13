@@ -1,6 +1,6 @@
 package freya.internal
 
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.{Effect, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes
@@ -17,7 +17,7 @@ private[freya] class Reconciler[F[_], T, U](
   delay: FiniteDuration,
   channels: Channels[F, T, U],
   currentResources: F[Either[Throwable, ResourcesList[T, U]]]
-)(implicit F: ConcurrentEffect[F], T: Timer[F])
+)(implicit F: Effect[F], T: Timer[F])
     extends LazyLogging {
 
   def run: F[ReconcilerExitCode] =

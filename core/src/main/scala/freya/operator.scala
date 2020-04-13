@@ -28,7 +28,7 @@ object Operator extends LazyLogging {
   def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient],
-    controller: Controller[F, T, Unit]
+    controller: KubernetesClient => Controller[F, T, Unit]
   )(
     implicit watch: CrdWatchMaker[F, T, Unit],
     helper: CrdHelperMaker[F, T, Unit],
@@ -45,12 +45,25 @@ object Operator extends LazyLogging {
     helper: CrdHelperMaker[F, T, U],
     consumer: FeedbackConsumerMaker[F, U]
   ): Operator[F, T, U] =
-    ofCrd[F, T, U](cfg, client)((_: CrdHelper[F, T, U]) => controller)
+    ofCrd[F, T, U](cfg, client)((_: CrdHelper[F, T, U]) => (_: KubernetesClient) => controller)
+
+  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
+    cfg: CrdConfig,
+    client: F[KubernetesClient],
+    controller: CrdHelper[F, T, U] => Controller[F, T, U]
+  )(
+    implicit watch: CrdWatchMaker[F, T, U],
+    helper: CrdHelperMaker[F, T, U],
+    consumer: FeedbackConsumerMaker[F, U]
+  ): Operator[F, T, U] =
+    ofCrd[F, T, U](cfg, client)(
+      (h: CrdHelper[F, T, U]) => (_: KubernetesClient) => controller(h)
+    )
 
   def ofCrd[F[_]: Timer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
     cfg: CrdConfig,
     client: F[KubernetesClient]
-  )(controller: CrdHelper[F, T, U] => Controller[F, T, U])(
+  )(controller: CrdHelper[F, T, U] => KubernetesClient => Controller[F, T, U])(
     implicit F: ConcurrentEffect[F],
     watch: CrdWatchMaker[F, T, U],
     crdHelper: CrdHelperMaker[F, T, U],
@@ -69,7 +82,7 @@ object Operator extends LazyLogging {
         val context = CrdHelperContext(cfg, c, isOpenShift, crd, parser)
         crdHelper.make(context)
       }
-      ctl = controller(helper)
+      ctl = controller(helper)(c)
       channels = createChannels[F, T, U](feedbackChannel, c, crd, ctl, cfg)
       context = CrdWatcherContext(
         cfg.namespace,

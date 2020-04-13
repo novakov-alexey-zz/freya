@@ -2,7 +2,7 @@ package freya.watcher
 
 import cats.Parallel
 import cats.effect.concurrent.MVar
-import cats.effect.{ConcurrentEffect, Sync, Timer}
+import cats.effect.{Effect, Sync, Timer}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{OperatorError, ParseResourceError}
@@ -15,7 +15,7 @@ import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 
-final case class ConfigMapWatcherContext[F[_]: ConcurrentEffect, T](
+final case class ConfigMapWatcherContext[F[_]: Effect, T](
   namespace: K8sNamespace,
   kind: String,
   controller: CmController[F, T],
@@ -26,7 +26,7 @@ final case class ConfigMapWatcherContext[F[_]: ConcurrentEffect, T](
   stopFlag: MVar[F, ConsumerExitCode]
 )
 
-class ConfigMapWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T](context: ConfigMapWatcherContext[F, T])
+class ConfigMapWatcher[F[_]: Effect: Parallel: Timer, T](context: ConfigMapWatcherContext[F, T])
     extends AbstractWatcher[F, T, Unit, Controller[F, T, Unit]](
       context.namespace,
       context.channels,

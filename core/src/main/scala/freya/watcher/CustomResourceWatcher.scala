@@ -2,7 +2,7 @@ package freya.watcher
 
 import cats.Parallel
 import cats.effect.concurrent.MVar
-import cats.effect.{ConcurrentEffect, Sync, Timer}
+import cats.effect.{Effect, Sync, Timer}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{OperatorError, ParseResourceError}
@@ -14,7 +14,7 @@ import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 
-final case class CrdWatcherContext[F[_]: ConcurrentEffect, T, U](
+final case class CrdWatcherContext[F[_]: Effect, T, U](
   ns: K8sNamespace,
   kind: String,
   channels: Channels[F, T, U],
@@ -24,7 +24,7 @@ final case class CrdWatcherContext[F[_]: ConcurrentEffect, T, U](
   stopFlag: MVar[F, ConsumerExitCode]
 )
 
-class CustomResourceWatcher[F[_]: ConcurrentEffect: Parallel: Timer, T, U](context: CrdWatcherContext[F, T, U])
+class CustomResourceWatcher[F[_]: Effect: Parallel: Timer, T, U](context: CrdWatcherContext[F, T, U])
     extends AbstractWatcher[F, T, U, Controller[F, T, U]](
       context.ns,
       context.channels,
