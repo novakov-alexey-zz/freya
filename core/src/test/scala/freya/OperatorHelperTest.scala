@@ -105,15 +105,15 @@ class OperatorHelperTest
     val ns = new NamespaceBuilder().withNewMetadata.withName(testNs.value).endMetadata.build
     client.namespaces().createOrReplace(ns)
 
-    forAll(AnyCustomResource.gen[Kerb](cfg.getKind)) { ic =>
-      ic.getMetadata.setNamespace(testNs.value)
+    forAll(AnyCustomResource.gen[Kerb](cfg.getKind)) { case (cr, spec, _) =>
+      cr.getMetadata.setNamespace(testNs.value)
       //when
       krbClient
-        .inNamespace(ic.getMetadata.getNamespace)
-        .createOrReplace(ic)
+        .inNamespace(cr.getMetadata.getNamespace)
+        .createOrReplace(cr)
 
-      val meta = MetadataApi.translate(ic.getMetadata)
-      currentCrds += (meta -> ic.getSpec.asInstanceOf[Kerb])
+      val meta = MetadataApi.translate(cr.getMetadata)
+      currentCrds += (meta -> spec)
       //then
       eventually {
         helper.currentResources should be(Right(currentCrds))

@@ -7,7 +7,7 @@ import freya.internal.kubeapi.CrdApi
 import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.json.circe._
 import freya.resource.CirceCodecs
-import freya.watcher.AnyCustomResource
+import freya.watcher.{AnyCustomResource, StringProperty}
 import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder}
 import io.fabric8.kubernetes.api.model.{HasMetadata, ObjectMetaBuilder}
 import io.fabric8.kubernetes.client._
@@ -101,7 +101,7 @@ class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
         .withName("test-kerb")
         .build()
     )
-    anyCr.setSpec(spec)
+    anyCr.setSpec(StringProperty(Serialization.jsonMapper().writeValueAsString(spec)))
     anyCr
   }
 }

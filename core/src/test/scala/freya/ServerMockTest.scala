@@ -57,18 +57,18 @@ class ServerMockTest
         classOf[AnyCrDoneable]
       )
 
-    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](cfg.getKind)) { (action, ic) =>
-      val ns = new NamespaceBuilder().withNewMetadata.withName(ic.getMetadata.getNamespace).endMetadata.build
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](cfg.getKind)) { case (action, (cr, spec, _)) =>
+      val ns = new NamespaceBuilder().withNewMetadata.withName(cr.getMetadata.getNamespace).endMetadata.build
       client.namespaces().create(ns)
 
       krbClient
-        .inNamespace(ic.getMetadata.getNamespace)
-        .create(ic)
+        .inNamespace(cr.getMetadata.getNamespace)
+        .create(cr)
 
-      val meta = MetadataApi.translate(ic.getMetadata)
+      val meta = MetadataApi.translate(cr.getMetadata)
 
       eventually {
-        controller.events should contain((action, ic.getSpec, meta))
+        controller.events should contain((action, spec, meta))
       }
     }
 

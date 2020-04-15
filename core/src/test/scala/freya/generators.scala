@@ -35,19 +35,22 @@ object ObjectMetaTest {
 }
 
 object AnyCustomResource {
+  val mapper = new ObjectMapper
+  mapper.registerModule(DefaultScalaModule)
 
-  def gen[T: Arbitrary](kind: String, metaGen: Gen[ObjectMeta] = ObjectMetaTest.gen): Gen[AnyCustomResource] =
+  def gen[T: Arbitrary](kind: String, metaGen: Gen[ObjectMeta] = ObjectMetaTest.gen): Gen[(AnyCustomResource, T, Status)] =
     for {
       spec <- arbitrary[T]
       meta <- metaGen
     } yield {
-      val sc = new AnyCustomResource
-      sc.setApiVersion("io.github.novakov-alexey/v1")
-      sc.setKind(kind)
-      sc.setSpec(spec.asInstanceOf[AnyRef])
-      sc.setMetadata(meta)
-      sc.setStatus(Status())
-      sc
+      val r = new AnyCustomResource
+      r.setApiVersion("io.github.novakov-alexey/v1")
+      r.setKind(kind)
+      r.setSpec(StringProperty(mapper.writeValueAsString(spec)))
+      r.setMetadata(meta)
+      val status = Status()
+      r.setStatus(StringProperty(mapper.writeValueAsString(status)))
+      (r, spec, status)
     }
 }
 

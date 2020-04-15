@@ -171,20 +171,18 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) { (action, anyCr) =>
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) { case (action, (anyCr, spec, _)) =>
       //when
-      val kerb = transformToString(anyCr)
-
       singleWatcher.foreach(_.eventReceived(action, anyCr))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
-      allEvents += ((action, kerb, meta))
+      allEvents += ((action, spec, meta))
       //then
       eventually {
         controller.events.asScala.toList should ===(allEvents)
       }
       eventually {
-        if (action != Watcher.Action.DELETED) checkStatus(status, kerb.failInTest, meta)
+        if (action != Watcher.Action.DELETED) checkStatus(status, spec.failInTest, meta)
       }
     }
 
@@ -228,14 +226,12 @@ class OperatorsTest
       AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb]),
       workers(PosInt.ensuringValid(parallelNamespaces)),
       minSuccessful(PosInt.ensuringValid(parallelNamespaces))
-    ) { (action, anyCr) =>
+    ) { case (action, (anyCr, spec, _)) =>
       //when
-      val kerb = transformToString(anyCr)
-
       singleWatcher.foreach(_.eventReceived(action, anyCr))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
-      allEvents.add((action, kerb, meta))
+      allEvents.add((action, spec, meta))
     }
     //then
     eventually {
@@ -278,21 +274,20 @@ class OperatorsTest
         val list = Gen.nonEmptyListOf(actionAndResourceGen(ns)).sample.toList.flatten
         //when
         val currentEvents = list.zipWithIndex.map {
-          case ((action, anyCr), i) =>
+          case ((action, (anyCr, spec, _)), i) =>
             // mutate current spec to have an index test event ordering later
-            val withIndex = anyCr.getSpec.asInstanceOf[Kerb].copy(index = i)
-            anyCr.setSpec(withIndex)
-            val kerb = transformToString(anyCr)
+            val specWithIndex = spec.copy(index = i)
+            anyCr.setSpec(StringProperty(mapper.writeValueAsString(specWithIndex)))
 
             singleWatcher.foreach(_.eventReceived(action, anyCr))
 
             val meta = MetadataApi.translate(anyCr.getMetadata)
-            (action, kerb, meta)
+            (action, specWithIndex, meta)
         }
 
         //then
         eventually {
-          val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).toList.flatten
+          val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).getOrElse(Nil)
           namespaceEvents should contain allElementsOf currentEvents
         }
       }
@@ -329,36 +324,36 @@ class OperatorsTest
           Right(testResources.toList)
       }
 
-    val status = mutable.Set.empty[StatusUpdate[Status]]
-    implicit val feedbackConsumer: FeedbackConsumerMaker[IO, Status] = testFeedbackConsumer[IO](status)
+    val statusSet = mutable.Set.empty[StatusUpdate[Status]]
+    implicit val feedbackConsumer: FeedbackConsumerMaker[IO, Status] = testFeedbackConsumer[IO](statusSet)
 
     val operator = Operator.ofCrd[IO, Kerb, Status](crdCfg, client[IO], controller).withReconciler(1.millis)
     //when
     val cancelable = startOperator(operator.run)
 
-    forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { anyCr =>
-      val kerb = transformToString(anyCr)
+    forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { case (anyCr, spec, status) =>
+      //val kerb = transformToString(anyCr)
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
-      testResources += Right(CustomResource(meta, kerb, Status().some))
+      testResources += Right(CustomResource(meta, spec, status.some))
       //then
       eventually {
-        controller.reconciledEvents should contain((kerb, meta))
+        controller.reconciledEvents should contain((spec, meta))
       }
       eventually {
-        checkStatus(status, kerb.failInTest, meta)
+        checkStatus(statusSet, spec.failInTest, meta)
       }
     }
 
     cancelable.unsafeRunSync()
   }
 
-  private def transformToString(anyCr: AnyCustomResource): Kerb = {
-    val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-    anyCr.setSpec(mapper.writeValueAsString(kerb))
-    anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
-    kerb
-  }
+//  private def transformToString(anyCr: AnyCustomResource): Kerb = {
+//    val kerb = anyCr.getSpec.asInstanceOf[Kerb]
+//    anyCr.setSpec(mapper.writeValueAsString(kerb))
+//    anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
+//    kerb
+//  }
 
   property("ConfigMap Operator gets event from reconciler process") {
     import freya.yaml.jackson._
@@ -407,8 +402,8 @@ class OperatorsTest
       AnyCustomResource.gen[Kerb](crdCfg.getKind),
       arbitrary[Boolean],
       minSuccessful(maxRestarts)
-    ) { (action, anyCr, close) =>
-      val kerb = transformToString(anyCr)
+    ) { case (action, (anyCr, spec, _), close) =>
+//      val kerb = transformToString(anyCr)
 
       //when
       if (close)
@@ -418,7 +413,7 @@ class OperatorsTest
       singleWatcher.foreach(_.eventReceived(action, anyCr))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
-      allEvents += ((action, kerb, meta))
+      allEvents += ((action, spec, meta))
       //then
       eventually {
         controller.events.asScala.toList should ===(allEvents)

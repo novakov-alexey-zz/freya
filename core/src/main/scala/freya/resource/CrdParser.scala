@@ -2,8 +2,7 @@ package freya.resource
 
 import cats.effect.Sync
 import cats.implicits._
-import com.fasterxml.jackson.databind.ObjectMapper
-import freya.watcher.AnyCustomResource
+import freya.watcher.{AnyCustomResource, StringProperty}
 import freya.{CustomResourceParser, JsonReader}
 
 import scala.util.{Failure, Success, Try}
@@ -14,7 +13,6 @@ private[freya] object CrdParser {
 }
 
 private[freya] class CrdParser extends CustomResourceParser {
-  private val mapper = new ObjectMapper
 
   def parse[T: JsonReader, U: JsonReader](cr: AnyCustomResource): Either[Throwable, (T, Option[U])] = {
     for {
@@ -26,13 +24,9 @@ private[freya] class CrdParser extends CustomResourceParser {
     } yield (spec, status)
   }
 
-  private def parseProperty[T: JsonReader](property: AnyRef, name: String) = {
+  private def parseProperty[T: JsonReader](property: StringProperty, name: String) = {
     val read = implicitly[JsonReader[T]]
-    val json = property match {
-      case str: String => str
-      case _ => mapper.writeValueAsString(property)
-    }
-    val parsed = read.fromString(json)
+    val parsed = read.fromString(property.value)
     lazy val clazz = read.targetClass
 
     parsed match {
