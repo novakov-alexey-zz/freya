@@ -8,7 +8,7 @@ object Dependencies extends AutoPlugin {
 
     object DependenciesVersion {
       val betterMonadicVersion             = "0.3.1"
-      val catsVersion                      = "2.1.2"
+      val catsVersion                      = "2.1.3"
       val circeVersion                     = "0.13.0"
       val circeYamlVersion                 = "0.12.0"
       val circeExtrasVersion               = "0.12.2"
