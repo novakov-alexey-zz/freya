@@ -14,7 +14,7 @@ private[freya] object CrdParser {
 
 private[freya] class CrdParser extends CustomResourceParser {
 
-  def parse[T: JsonReader, U: JsonReader](cr: AnyCustomResource): Either[Throwable, (T, Option[U])] = {
+  def parse[T: JsonReader, U: JsonReader](cr: AnyCustomResource): Either[Throwable, (T, Option[U])] =
     for {
       spec <- parseProperty[T](cr.getSpec, "spec")
       status <- Option(cr.getStatus) match {
@@ -22,7 +22,6 @@ private[freya] class CrdParser extends CustomResourceParser {
         case Some(s) => parseProperty[U](s, "status").map(Some(_))
       }
     } yield (spec, status)
-  }
 
   private def parseProperty[T: JsonReader](property: StringProperty, name: String) = {
     val read = implicitly[JsonReader[T]]
