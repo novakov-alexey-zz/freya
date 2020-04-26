@@ -78,7 +78,7 @@ class ServerMockTest
   property("ConfigMap operator handles different events") {
     import freya.yaml.jackson._
     val client = server.getClient
-    val cfg = Configuration.ConfigMapConfig(AllNamespaces, prefix, checkK8sOnStartup = false)
+    val cfg = Configuration.ConfigMapConfig(AllNamespaces, prefix, checkOpenshiftOnStartup = false)
     val controller = new ConfigMapTestController[IO]
     val operator = Operator.ofConfigMap[IO, Kerb](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)

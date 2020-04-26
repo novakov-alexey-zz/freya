@@ -23,7 +23,7 @@ sealed abstract class Configuration(
   val customKind: Option[String] = None,
   val eventQueueSize: Int,
   val concurrentController: Boolean,
-  val checkK8sOnStartup: Boolean = false
+  val checkOpenshiftOnStartup: Boolean = false
 ) {
   def validate[T: JsonReader]: Either[String, Unit] =
     (Option(kindClass[T]), Option(prefix)) match {
@@ -48,7 +48,7 @@ object Configuration {
     override val eventQueueSize: Int = 10,
     override val concurrentController: Boolean = true,
     version: String = "v1",
-    override val checkK8sOnStartup: Boolean = true,
+    override val checkOpenshiftOnStartup: Boolean = true,
     override val customKind: Option[String] = None,
     deployCrd: Boolean = true,
     shortNames: List[String] = List.empty[String],
@@ -67,7 +67,7 @@ object Configuration {
     override val prefix: String,
     override val eventQueueSize: Int = 10,
     override val concurrentController: Boolean = true,
-    override val checkK8sOnStartup: Boolean = true,
+    override val checkOpenshiftOnStartup: Boolean = true,
     override val customKind: Option[String] = None
   ) extends Configuration(prefix, namespace, customKind, eventQueueSize, concurrentController)
 

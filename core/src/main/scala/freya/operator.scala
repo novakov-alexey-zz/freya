@@ -182,7 +182,7 @@ object Operator extends LazyLogging {
   ): F[Option[Boolean]] =
     for {
       _ <- Sync[F].fromEither(cfg.validate.leftMap(new RuntimeException(_)))
-      check <- if (cfg.checkK8sOnStartup) OperatorUtils.checkKubeEnv(client) else none[Boolean].pure[F]
+      check <- if (cfg.checkOpenshiftOnStartup) OperatorUtils.checkKubeEnv(client) else none[Boolean].pure[F]
     } yield check
 }
 

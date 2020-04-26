@@ -83,7 +83,7 @@ class OperatorHelperTest
   ignore("Crd helper should return current CRDs") {
     import freya.json.jackson._
     //given
-    val cfg = CrdConfig(testNs, prefix, checkK8sOnStartup = false)
+    val cfg = CrdConfig(testNs, prefix, checkOpenshiftOnStartup = false)
     val client = new DefaultKubernetesClient() // mock server does not work properly with CRDs
     Serialization.jsonMapper().registerModule(DefaultScalaModule)
 

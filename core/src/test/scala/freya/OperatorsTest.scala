@@ -52,8 +52,8 @@ class OperatorsTest
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
 
-  val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkK8sOnStartup = false)
-  val configMapcfg = ConfigMapConfig(AllNamespaces, prefix, checkK8sOnStartup = false)
+  val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkOpenshiftOnStartup = false)
+  val configMapcfg = ConfigMapConfig(AllNamespaces, prefix, checkOpenshiftOnStartup = false)
   val server = new KubernetesServer(false, false)
   val cmParser = ConfigMapParser[IO]().unsafeRunSync()
 
