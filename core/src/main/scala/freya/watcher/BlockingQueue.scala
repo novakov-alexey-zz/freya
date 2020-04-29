@@ -12,22 +12,23 @@ object BlockingQueue {
     new BlockingQueue[F, A](name, size, new ConcurrentLinkedQueue[A](), signal)
 }
 
-private[freya] class BlockingQueue[F[_]: Sync, A](
+private[freya] class BlockingQueue[F[_], A](
   name: String,
   size: Int,
   queue: ConcurrentLinkedQueue[A],
   signal: MVar[F, Unit]
-) extends LazyLogging {
+)(implicit F: Sync[F])
+    extends LazyLogging {
 
   private[freya] def consume(c: A => F[Boolean]): F[Unit] =
-    if (!queue.isEmpty) {
-      c(queue.poll()).flatMap(continue => Sync[F].whenA(continue)(signal.take >> consume(c)))
-    } else signal.take >> consume(c)
+    if (!queue.isEmpty)
+      c(queue.poll()).flatMap(continue => F.whenA(continue)(consume(c)))
+    else signal.take >> consume(c)
 
   private[freya] def produce(a: A): F[Unit] =
-    if (queue.size() < size) {
-      queue.add(a).pure[F] >> signal.put(())
-    } else
-      Sync[F].delay(logger.debug(s"Queue $name is full(${queue.size}), waiting for space")) >> signal
+    if (queue.size() < size)
+      F.delay(queue.add(a)) >> signal.tryPut(()).void
+    else
+      F.delay(logger.debug(s"Queue $name is full(${queue.size}), waiting for free space")) >> signal
         .put(()) >> produce(a)
 }
