@@ -15,7 +15,7 @@ ThisBuild / watchBeforeCommand := Watch.clearScreen
 //  Some("releases".at(nexus + "service/local/staging/deploy/maven2"))
 //}
 
-publishTo := sonatypePublishToBundle.value
+ThisBuild / publishTo := sonatypePublishToBundle.value
 
 ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credential")
 ThisBuild / scmInfo := Some(
