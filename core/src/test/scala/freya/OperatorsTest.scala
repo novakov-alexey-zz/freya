@@ -254,11 +254,11 @@ class OperatorsTest
     val controllerEvents = TrieMap.empty[String, ConcurrentLinkedQueue[(Action, Kerb, Metadata)]]
     val controller = new CrdTestController[IO]() {
       override def save(action: Watcher.Action, spec: Kerb, meta: Metadata): IO[Unit] =
-        IO {
+        IO(
           controllerEvents
             .getOrElseUpdate(meta.namespace, new ConcurrentLinkedQueue[(Action, Kerb, Metadata)])
             .add((action, spec, meta))
-        }.void
+        ).void
     }
     val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller, crdCfg)
 
@@ -299,7 +299,7 @@ class OperatorsTest
           }
         }
       }
-    }.sequence_.unsafeRunSync()
+    }.parSequence_.unsafeRunSync()
 
     controllerEvents.foreach {
       case (namespace, queue) =>
