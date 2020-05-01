@@ -171,19 +171,20 @@ class OperatorsTest
     //then
     controller.initialized should ===(true)
 
-    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) { case (action, (anyCr, spec, _)) =>
-      //when
-      singleWatcher.foreach(_.eventReceived(action, anyCr))
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) {
+      case (action, (anyCr, spec, _)) =>
+        //when
+        singleWatcher.foreach(_.eventReceived(action, anyCr))
 
-      val meta = MetadataApi.translate(anyCr.getMetadata)
-      allEvents += ((action, spec, meta))
-      //then
-      eventually {
-        controller.events.asScala.toList should ===(allEvents)
-      }
-      eventually {
-        if (action != Watcher.Action.DELETED) checkStatus(status, spec.failInTest, meta)
-      }
+        val meta = MetadataApi.translate(anyCr.getMetadata)
+        allEvents += ((action, spec, meta))
+        //then
+        eventually {
+          controller.events.asScala.toList should ===(allEvents)
+        }
+        eventually {
+          if (action != Watcher.Action.DELETED) checkStatus(status, spec.failInTest, meta)
+        }
     }
 
     cancelable.unsafeRunSync()
@@ -226,12 +227,13 @@ class OperatorsTest
       AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb]),
       workers(PosInt.ensuringValid(parallelNamespaces)),
       minSuccessful(PosInt.ensuringValid(parallelNamespaces))
-    ) { case (action, (anyCr, spec, _)) =>
-      //when
-      singleWatcher.foreach(_.eventReceived(action, anyCr))
+    ) {
+      case (action, (anyCr, spec, _)) =>
+        //when
+        singleWatcher.foreach(_.eventReceived(action, anyCr))
 
-      val meta = MetadataApi.translate(anyCr.getMetadata)
-      allEvents.add((action, spec, meta))
+        val meta = MetadataApi.translate(anyCr.getMetadata)
+        allEvents.add((action, spec, meta))
     }
     //then
     eventually {
@@ -286,7 +288,7 @@ class OperatorsTest
         }
 
         //then
-        eventually {
+        eventually(timeout(15.seconds), interval(50.millis)) {
           val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).getOrElse(Nil)
           namespaceEvents should contain allElementsOf currentEvents
         }
@@ -298,8 +300,8 @@ class OperatorsTest
         queue.asScala.toList.foldLeft(0) {
           case (acc, (_, kerb, _)) =>
             withClue(s"[namespace: $namespace, ${queue.asScala.toList.map(_._2.index)}] ") {
-                acc should ===(kerb.index)
-                acc + 1
+              acc should ===(kerb.index)
+              acc + 1
             }
         }
     }
@@ -331,18 +333,19 @@ class OperatorsTest
     //when
     val cancelable = startOperator(operator.run)
 
-    forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { case (anyCr, spec, status) =>
-      //val kerb = transformToString(anyCr)
+    forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) {
+      case (anyCr, spec, status) =>
+        //val kerb = transformToString(anyCr)
 
-      val meta = MetadataApi.translate(anyCr.getMetadata)
-      testResources += Right(CustomResource(meta, spec, status.some))
-      //then
-      eventually {
-        controller.reconciledEvents should contain((spec, meta))
-      }
-      eventually {
-        checkStatus(statusSet, spec.failInTest, meta)
-      }
+        val meta = MetadataApi.translate(anyCr.getMetadata)
+        testResources += Right(CustomResource(meta, spec, status.some))
+        //then
+        eventually {
+          controller.reconciledEvents should contain((spec, meta))
+        }
+        eventually {
+          checkStatus(statusSet, spec.failInTest, meta)
+        }
     }
 
     cancelable.unsafeRunSync()
@@ -402,22 +405,23 @@ class OperatorsTest
       AnyCustomResource.gen[Kerb](crdCfg.getKind),
       arbitrary[Boolean],
       minSuccessful(maxRestarts)
-    ) { case (action, (anyCr, spec, _), close) =>
+    ) {
+      case (action, (anyCr, spec, _), close) =>
 //      val kerb = transformToString(anyCr)
 
-      //when
-      if (close)
-        closeCurrentWatcher[AnyCustomResource](singleWatcher, oldWatcher)
+        //when
+        if (close)
+          closeCurrentWatcher[AnyCustomResource](singleWatcher, oldWatcher)
 
-      oldWatcher = getWatcherOrFail(singleWatcher)
-      singleWatcher.foreach(_.eventReceived(action, anyCr))
+        oldWatcher = getWatcherOrFail(singleWatcher)
+        singleWatcher.foreach(_.eventReceived(action, anyCr))
 
-      val meta = MetadataApi.translate(anyCr.getMetadata)
-      allEvents += ((action, spec, meta))
-      //then
-      eventually {
-        controller.events.asScala.toList should ===(allEvents)
-      }
+        val meta = MetadataApi.translate(anyCr.getMetadata)
+        allEvents += ((action, spec, meta))
+        //then
+        eventually {
+          controller.events.asScala.toList should ===(allEvents)
+        }
     }
 
     cancelable.unsafeRunSync()
