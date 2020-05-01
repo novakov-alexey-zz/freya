@@ -23,10 +23,8 @@ import freya.watcher._
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.Watcher.Action
+import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.dsl.Watchable
-
-import scala.util.control.NoStackTrace
-import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watch, Watcher}
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
 import org.scalatest.BeforeAndAfter
@@ -43,6 +41,7 @@ import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.jdk.CollectionConverters._
+import scala.util.control.NoStackTrace
 
 class OperatorsTest
     extends AnyPropSpec
@@ -350,13 +349,6 @@ class OperatorsTest
     cancelable.unsafeRunSync()
   }
 
-//  private def transformToString(anyCr: AnyCustomResource): Kerb = {
-//    val kerb = anyCr.getSpec.asInstanceOf[Kerb]
-//    anyCr.setSpec(mapper.writeValueAsString(kerb))
-//    anyCr.setStatus(mapper.writeValueAsString(anyCr.getStatus))
-//    kerb
-//  }
-
   property("ConfigMap Operator gets event from reconciler process") {
     import freya.yaml.jackson._
     //given
@@ -406,8 +398,6 @@ class OperatorsTest
       minSuccessful(maxRestarts)
     ) {
       case (action, (anyCr, spec, _), close) =>
-//      val kerb = transformToString(anyCr)
-
         //when
         if (close)
           closeCurrentWatcher[AnyCustomResource](singleWatcher, oldWatcher)
