@@ -10,11 +10,6 @@ ThisBuild / organization := "io.github.novakov-alexey"
 ThisBuild / watchBeforeCommand := Watch.clearScreen
 
 // Publishing config //////////////////////////////////////////////////////
-//ThisBuild / publishTo := {
-//  val nexus = "https://oss.sonatype.org/"
-//  Some("releases".at(nexus + "service/local/staging/deploy/maven2"))
-//}
-
 ThisBuild / publishTo := sonatypePublishToBundle.value
 
 ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credential")
@@ -36,11 +31,6 @@ ThisBuild / homepage := Some(url("https://github.com/novakov-alexey/freya"))
 ThisBuild / pomIncludeRepository := { _ =>
   false
 }
-//ThisBuild / publishTo := {
-//  val nexus = "https://oss.sonatype.org/"
-//  if (isSnapshot.value) Some("snapshots".at(nexus + "content/repositories/snapshots"))
-//  else Some("releases".at(nexus + "service/local/staging/deploy/maven2"))
-//}
 ThisBuild / publishMavenStyle := true
 
 // Publishing config end /////////////////////////////////////////////////////////
