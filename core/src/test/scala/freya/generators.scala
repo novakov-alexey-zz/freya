@@ -90,7 +90,7 @@ object Gens {
   def krb2: Gen[Kerb] =
     for {
       realm <- Gen.alphaUpperStr.suchThat(_.nonEmpty)
-      principals <- Gen.nonEmptyListOf(principal)
+      principals <- Gen.nonEmptyListOf(principal).suchThat(_.length <= 20)
       failInTest <- Arbitrary.arbitrary[Boolean]
     } yield Kerb(realm, principals, failInTest)
 
