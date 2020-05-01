@@ -290,7 +290,11 @@ class OperatorsTest
         //then
         eventually(timeout(60.seconds), interval(100.millis)) {
           val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).getOrElse(Nil)
-          namespaceEvents should contain allElementsOf currentEvents
+          withClue(
+            s"[received events in namespace `$ns` (size: ${namespaceEvents.length}) do not contain elements $currentEvents]"
+          ) {
+            namespaceEvents should contain allElementsOf currentEvents
+          }
         }
       }
     }.parSequence.unsafeRunSync()
