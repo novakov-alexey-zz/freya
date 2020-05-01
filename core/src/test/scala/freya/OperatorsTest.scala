@@ -53,9 +53,9 @@ class OperatorsTest
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkOpenshiftOnStartup = false)
-  val configMapcfg = ConfigMapConfig(AllNamespaces, prefix, checkOpenshiftOnStartup = false)
+  val configMapCfg: ConfigMapConfig = ConfigMapConfig(AllNamespaces, prefix, checkOpenshiftOnStartup = false)
   val server = new KubernetesServer(false, false)
-  val cmParser = ConfigMapParser[IO]().unsafeRunSync()
+  val cmParser: ConfigMapParser = ConfigMapParser[IO]().unsafeRunSync()
 
   val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
@@ -122,7 +122,7 @@ class OperatorsTest
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, ConfigMap]
     implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
 
-    Operator.ofConfigMap[F, Kerb](configMapcfg, client[F], controller) -> singleWatcher
+    Operator.ofConfigMap[F, Kerb](configMapCfg, client[F], controller) -> singleWatcher
   }
 
   private def concurrentHashSet[T]: mutable.Set[T] =
@@ -376,7 +376,7 @@ class OperatorsTest
           Right(testResources.toList)
       }
 
-    val operator = Operator.ofConfigMap[IO, Kerb](configMapcfg, client[IO], controller).withReconciler(1.millis)
+    val operator = Operator.ofConfigMap[IO, Kerb](configMapCfg, client[IO], controller).withReconciler(1.millis)
     //when
     val cancelable = startOperator(operator.run)
 

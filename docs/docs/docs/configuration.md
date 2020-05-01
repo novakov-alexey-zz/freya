@@ -26,8 +26,8 @@ CrdConfig(
   // for different namespace events. 
   // The same namespace events will be dispatched in the same order they were originally received from Kubernetes. 
   concurrentController = true,
-  // Check on startup whether current K8s is an OpenShift   
-  checkK8sOnStartup = true, 
+  // Check whether current K8s is an OpenShift on startup   
+  checkOpenshiftOnStartup = true, 
   // if None, then kind name is taken from case class name, i.e. Kerb
   customKind = Some("Kerberos"),
   // deploy CRD on startup, if no CRD already exists in K8s
