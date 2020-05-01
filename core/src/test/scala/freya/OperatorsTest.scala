@@ -24,8 +24,9 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.dsl.Watchable
-import io.fabric8.kubernetes.client.server.mock.KubernetesServer
-import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
+
+import scala.util.control.NoStackTrace
+import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watch, Watcher}
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
 import org.scalatest.BeforeAndAfter
@@ -55,22 +56,14 @@ class OperatorsTest
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkOpenshiftOnStartup = false)
   val configMapCfg: ConfigMapConfig = ConfigMapConfig(AllNamespaces, prefix, checkOpenshiftOnStartup = false)
-  val server = new KubernetesServer(false, false)
+  val client = new DefaultKubernetesClient()
   val cmParser: ConfigMapParser = ConfigMapParser[IO]().unsafeRunSync()
 
   val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
 
-  before {
-    server.before()
-  }
-
-  after {
-    server.after()
-  }
-
   def client[F[_]: Sync]: F[KubernetesClient] =
-    Sync[F].pure(server.getClient)
+    Sync[F].pure(client)
 
   def makeWatchable[T, U]: (Watchable[Watch, Watcher[U]], mutable.Set[Watcher[U]]) = {
     val singleWatcher = concurrentHashSet[Watcher[U]]
@@ -513,7 +506,7 @@ class OperatorsTest
 
   property("Operator returns error code on failure") {
     val controller = new ConfigMapTestController[IO] {
-      override def onInit(): IO[Unit] = IO.raiseError(new RuntimeException("test exception"))
+      override def onInit(): IO[Unit] = IO.raiseError(TestException("test exception"))
     }
     val (operator, _) = configMapOperator[IO](controller)
     forAll(Gen.const(1)) { _ => operator.run.unsafeRunSync() should ===(ExitCode.Error) }
@@ -615,11 +608,13 @@ class OperatorsTest
     cancelable.unsafeRunSync()
   }
 
+  case class TestException(msg: String) extends NoStackTrace
+
   property("Operator handles controller failures") {
     //given
     val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
     val controller: ConfigMapTestController[IO] = new ConfigMapTestController[IO] {
-      val error: IO[NewStatus[Unit]] = IO.raiseError(new RuntimeException("test exception"))
+      val error: IO[NewStatus[Unit]] = IO.raiseError(TestException("test exception"))
 
       override def onAdd(krb: CustomResource[Kerb, Unit]): IO[NewStatus[Unit]] =
         if (krb.spec.failInTest)
