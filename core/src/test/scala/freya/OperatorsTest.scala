@@ -32,6 +32,7 @@ import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
+import org.scalatest.tagobjects.Slow
 import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
@@ -247,7 +248,7 @@ class OperatorsTest
     duration
   }
 
-  property("Crd Operator dispatches same namespace events in original sequence") {
+  property("Crd Operator dispatches same namespace events in original sequence", Slow) {
     //given
     val parallelNamespaces = 10
     val controllerEvents = TrieMap.empty[String, ConcurrentLinkedQueue[(Action, Kerb, Metadata)]]
@@ -292,7 +293,7 @@ class OperatorsTest
           val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).getOrElse(Nil)
           withClue(
             s"[received events in namespace `$ns` (size: ${namespaceEvents.length}, " +
-              s"other keys: ${controllerEvents.keySet}) do not contain elements $currentEvents]"
+                s"other keys: ${controllerEvents.keySet}) do not contain elements $currentEvents]"
           ) {
             namespaceEvents should contain allElementsOf currentEvents
           }

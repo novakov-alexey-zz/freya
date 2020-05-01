@@ -14,6 +14,8 @@ jobs:
       with:
         java-version: 1.8
     - name: Run tests
-      run: sbt test
+      run: sbt "testOnly -- -l org.scalatest.tags.Slow"
+    - name: Run Slow tests
+      run: sbt "testOnly -- -n org.scalatest.tags.Slow"
     - name: Compile documentation
       run: sbt docs/mdoc
