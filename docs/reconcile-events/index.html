@@ -24,7 +24,8 @@ by your operator or not. Thus, it is important that your operators works in <cod
 <span class="k">import</span> <span class="nn">scala.concurrent.ExecutionContext</span>
 <span class="k">import</span> <span class="nn">scala.concurrent.duration._</span>
 <span class="k">import</span> <span class="nn">com.typesafe.scalalogging.LazyLogging</span>
-<span class="k">import</span> <span class="nn">io.fabric8.kubernetes.client.DefaultKubernetesClient</span>
+<span class="k">import</span> <span class="nn">io.fabric8.kubernetes.client.</span><span class="o">{</span><span class="nc">KubernetesClient</span><span class="o">,</span> <span class="nc">DefaultKubernetesClient</span><span class="o">}</span>  
+<span class="k">import</span> <span class="nn">scala.annotation.unused</span>
 
 <span class="k">val</span> <span class="nv">cfg</span> <span class="k">=</span> <span class="nc">CrdConfig</span><span class="o">(</span><span class="nc">Namespace</span><span class="o">(</span><span class="s">"test"</span><span class="o">),</span> <span class="n">prefix</span> <span class="k">=</span> <span class="s">"io.myorg.kerboperator"</span><span class="o">)</span>
 <span class="k">val</span> <span class="nv">client</span> <span class="k">=</span> <span class="nc">IO</span><span class="o">(</span><span class="k">new</span> <span class="nc">DefaultKubernetesClient</span><span class="o">)</span>
@@ -35,7 +36,7 @@ by your operator or not. Thus, it is important that your operators works in <cod
 
 <span class="c1">// override reconcile method</span>
 
-<span class="k">class</span> <span class="nc">KerbController</span><span class="o">[</span><span class="kt">F</span><span class="o">[</span><span class="k">_</span><span class="o">]](</span><span class="k">implicit</span> <span class="n">F</span><span class="k">:</span> <span class="kt">ConcurrentEffect</span><span class="o">[</span><span class="kt">F</span><span class="o">])</span> 
+<span class="k">class</span> <span class="nc">KerbController</span><span class="o">[</span><span class="kt">F</span><span class="o">[</span><span class="k">_</span><span class="o">]](</span><span class="nd">@unused</span> <span class="n">client</span><span class="k">:</span> <span class="kt">KubernetesClient</span><span class="o">)(</span><span class="k">implicit</span> <span class="n">F</span><span class="k">:</span> <span class="kt">ConcurrentEffect</span><span class="o">[</span><span class="kt">F</span><span class="o">])</span> 
   <span class="k">extends</span> <span class="nc">Controller</span><span class="o">[</span><span class="kt">F</span>, <span class="kt">Kerb</span>, <span class="kt">Unit</span><span class="o">]</span> <span class="k">with</span> <span class="nc">LazyLogging</span> <span class="o">{</span>
 
   <span class="k">override</span> <span class="k">def</span> <span class="nf">reconcile</span><span class="o">(</span><span class="n">krb</span><span class="k">:</span> <span class="kt">CustomResource</span><span class="o">[</span><span class="kt">Kerb</span>, <span class="kt">Unit</span><span class="o">])</span><span class="k">:</span> <span class="kt">F</span><span class="o">[</span><span class="kt">NoStatus</span><span class="o">]</span> <span class="k">=</span>
@@ -43,7 +44,7 @@ by your operator or not. Thus, it is important that your operators works in <cod
 <span class="o">}</span>
 
 <span class="nc">Operator</span>
-  <span class="o">.</span><span class="py">ofCrd</span><span class="o">[</span><span class="kt">IO</span>, <span class="kt">Kerb</span><span class="o">](</span><span class="n">cfg</span><span class="o">,</span> <span class="n">client</span><span class="o">,</span> <span class="k">new</span> <span class="nc">KerbController</span><span class="o">[</span><span class="kt">IO</span><span class="o">])</span>
+  <span class="o">.</span><span class="py">ofCrd</span><span class="o">[</span><span class="kt">IO</span>, <span class="kt">Kerb</span><span class="o">](</span><span class="n">cfg</span><span class="o">,</span> <span class="n">client</span><span class="o">,</span> <span class="o">(</span><span class="n">c</span><span class="k">:</span> <span class="kt">KubernetesClient</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="k">new</span> <span class="nc">KerbController</span><span class="o">[</span><span class="kt">IO</span><span class="o">](</span><span class="n">c</span><span class="o">))</span>
   <span class="o">.</span><span class="py">withReconciler</span><span class="o">(</span><span class="mf">1.</span><span class="n">minute</span><span class="o">)</span>
   <span class="o">.</span><span class="py">withRestart</span><span class="o">()</span>
 </code></pre></div></div>

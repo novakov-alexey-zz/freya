@@ -18,8 +18,8 @@
   <span class="c1">// for different namespace events. </span>
   <span class="c1">// The same namespace events will be dispatched in the same order they were originally received from Kubernetes. </span>
   <span class="n">concurrentController</span> <span class="k">=</span> <span class="kc">true</span><span class="o">,</span>
-  <span class="c1">// Check on startup whether current K8s is an OpenShift   </span>
-  <span class="n">checkK8sOnStartup</span> <span class="k">=</span> <span class="kc">true</span><span class="o">,</span> 
+  <span class="c1">// Check whether current K8s is an OpenShift on startup   </span>
+  <span class="n">checkOpenshiftOnStartup</span> <span class="k">=</span> <span class="kc">true</span><span class="o">,</span> 
   <span class="c1">// if None, then kind name is taken from case class name, i.e. Kerb</span>
   <span class="n">customKind</span> <span class="k">=</span> <span class="nc">Some</span><span class="o">(</span><span class="s">"Kerberos"</span><span class="o">),</span>
   <span class="c1">// deploy CRD on startup, if no CRD already exists in K8s</span>
@@ -50,7 +50,7 @@
   <span class="c1">// see doc in CrdConfig above</span>
   <span class="n">concurrentController</span> <span class="k">=</span> <span class="kc">true</span><span class="o">,</span>
   <span class="c1">// Check on startup whether current K8s is an OpenShift    </span>
-  <span class="n">checkK8sOnStartup</span> <span class="k">=</span> <span class="kc">true</span><span class="o">,</span> 
+  <span class="n">checkOpenshiftOnStartup</span> <span class="k">=</span> <span class="kc">true</span><span class="o">,</span> 
   <span class="c1">// if None, then `kind` name is a case class name, i.e. Kerb</span>
   <span class="n">customKind</span> <span class="k">=</span> <span class="nc">Some</span><span class="o">(</span><span class="s">"Kerberos"</span><span class="o">)</span>
 <span class="o">)</span>
