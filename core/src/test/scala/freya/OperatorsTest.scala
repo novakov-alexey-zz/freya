@@ -288,7 +288,7 @@ class OperatorsTest
         }
 
         //then
-        eventually(timeout(15.seconds), interval(50.millis)) {
+        eventually(timeout(60.seconds), interval(100.millis)) {
           val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).getOrElse(Nil)
           namespaceEvents should contain allElementsOf currentEvents
         }
