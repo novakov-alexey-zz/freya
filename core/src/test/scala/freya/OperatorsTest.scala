@@ -265,7 +265,7 @@ class OperatorsTest
     (0 until parallelNamespaces).toList.map { namespace =>
       IO {
         val ns = namespace.toString
-        val list = Gen.nonEmptyListOf(actionAndResourceGen(ns)).sample.toList.flatten
+        val list = Gen.choose(1, 20).flatMap(n => Gen.listOfN(n, actionAndResourceGen(ns))).sample.toList.flatten
         //when
         val currentEvents = list.zipWithIndex.map {
           case ((action, (anyCr, spec, _)), i) =>

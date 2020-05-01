@@ -6,7 +6,7 @@ position: 1
 ---
 # Freya
 
-![](https://github.com/novakov-alexey/freya/workflows/Scala%20CI/badge.svg?branch=master)
+[![Build Status](https://travis-ci.org/novakov-alexey/freya.svg?branch=master)](https://travis-ci.org/novakov-alexey/freya)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/b91f0a22195e499c9d6bafd097c69dd6)](https://www.codacy.com/manual/novakov.alex/freya?utm_source=github.com&utm_medium=referral&utm_content=novakov-alexey/freya&utm_campaign=Badge_Grade)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.github.novakov-alexey/freya-core_2.13/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.github.novakov-alexey/freya-core_2.13)
 <a href="https://typelevel.org/cats/"><img src="https://typelevel.org/cats/img/cats-badge-tiny.png" alt="Cats friendly" /></a> 
@@ -15,7 +15,7 @@ position: 1
 
 Freya is a Scala library to implement custom controllers for Kubernetes (K8s) easily. 
 An implementation of custom controller is also known as [Operator Pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/). 
-Freya is based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client) and 
+Freya based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernetes-client) and 
 inspired by [abstract-operator](https://github.com/jvm-operators/abstract-operator) Java library.
 
 Freya main features:
@@ -28,7 +28,7 @@ Freya main features:
 1. Auto-restart of custom controller upon k8s api-server disconnect.
 1. Auto-deployment of CRDs, no YAML files to be written.
 1. Auto-deployment of JSON Schema for CRD validation.
-1. Effect management and Functional Programming is powered by Cats-Effect.    
+1. Effect management and Functional Programming powered by Cats-Effect.    
 
 ## Examples	
 
