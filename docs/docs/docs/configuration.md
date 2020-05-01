@@ -59,7 +59,7 @@ ConfigMapConfig(
   // see doc in CrdConfig above
   concurrentController = true,
   // Check on startup whether current K8s is an OpenShift    
-  checkK8sOnStartup = true, 
+  checkOpenshiftOnStartup = true, 
   // if None, then `kind` name is a case class name, i.e. Kerb
   customKind = Some("Kerberos")
 )
