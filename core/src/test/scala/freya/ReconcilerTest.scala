@@ -29,7 +29,7 @@ class ReconcilerTest extends AnyFlatSpec with Matchers {
     //given
     val channels = createChannels
     val r =
-      new Reconciler[IO, Kerb, Status](0.millis, channels, IO.raiseError(new RuntimeException("test exception")))
+      new Reconciler[IO, Kerb, Status](0.millis, channels, IO.raiseError(TestException("test exception")))
     val io = r.run
     //when
     val res = IO.race(io, IO.sleep(1.minute)).unsafeRunSync()

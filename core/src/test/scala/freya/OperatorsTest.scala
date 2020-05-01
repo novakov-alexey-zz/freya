@@ -41,7 +41,6 @@ import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.jdk.CollectionConverters._
-import scala.util.control.NoStackTrace
 
 class OperatorsTest
     extends AnyPropSpec
@@ -266,7 +265,7 @@ class OperatorsTest
     (0 until parallelNamespaces).toList.map { namespace =>
       IO {
         val ns = namespace.toString
-        val list = Gen.nonEmptyListOf(actionAndResourceGen(ns)).suchThat(_.length <= 20).sample.toList.flatten
+        val list = Gen.nonEmptyListOf(actionAndResourceGen(ns)).sample.toList.flatten
         //when
         val currentEvents = list.zipWithIndex.map {
           case ((action, (anyCr, spec, _)), i) =>
@@ -597,8 +596,6 @@ class OperatorsTest
 
     cancelable.unsafeRunSync()
   }
-
-  case class TestException(msg: String) extends NoStackTrace
 
   property("Operator handles controller failures") {
     //given
