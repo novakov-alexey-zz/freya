@@ -38,7 +38,10 @@ object AnyCustomResource {
   val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
 
-  def gen[T: Arbitrary](kind: String, metaGen: Gen[ObjectMeta] = ObjectMetaTest.gen): Gen[(AnyCustomResource, T, Status)] =
+  def gen[T: Arbitrary](
+    kind: String,
+    metaGen: Gen[ObjectMeta] = ObjectMetaTest.gen
+  ): Gen[(AnyCustomResource, T, Status)] =
     for {
       spec <- arbitrary[T]
       meta <- metaGen
@@ -90,7 +93,7 @@ object Gens {
   def krb2: Gen[Kerb] =
     for {
       realm <- Gen.alphaUpperStr.suchThat(_.nonEmpty)
-      principals <- Gen.nonEmptyListOf(principal)
+      principals <- Gen.choose(1, 20).flatMap(n => Gen.listOfN(n, principal))
       failInTest <- Arbitrary.arbitrary[Boolean]
     } yield Kerb(realm, principals, failInTest)
 
