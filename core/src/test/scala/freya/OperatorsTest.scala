@@ -299,7 +299,7 @@ class OperatorsTest
           }
         }
       }
-    }.parSequence.unsafeRunSync()
+    }.sequence_.unsafeRunSync()
 
     controllerEvents.foreach {
       case (namespace, queue) =>
