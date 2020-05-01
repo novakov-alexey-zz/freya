@@ -277,7 +277,7 @@ class OperatorsTest
         //when
         val currentEvents = list.zipWithIndex.map {
           case ((action, (anyCr, spec, _)), i) =>
-            // mutate current spec to have an index test event ordering later
+            // mutate current spec to have an index to test event ordering
             val specWithIndex = spec.copy(index = i)
             anyCr.setSpec(StringProperty(mapper.writeValueAsString(specWithIndex)))
 
@@ -291,7 +291,8 @@ class OperatorsTest
         eventually(timeout(60.seconds), interval(100.millis)) {
           val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).getOrElse(Nil)
           withClue(
-            s"[received events in namespace `$ns` (size: ${namespaceEvents.length}) do not contain elements $currentEvents]"
+            s"[received events in namespace `$ns` (size: ${namespaceEvents.length}, " +
+              s"other keys: ${controllerEvents.keySet}) do not contain elements $currentEvents]"
           ) {
             namespaceEvents should contain allElementsOf currentEvents
           }
