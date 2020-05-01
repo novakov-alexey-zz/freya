@@ -87,7 +87,7 @@ object CM {
 }
 
 object Gens {
-  val nonEmptyString: Gen[String] = Gen.nonEmptyListOf[Char](Gen.alphaChar).map(_.mkString)
+  val nonEmptyString: Gen[String] = Gen.choose(0, 20).flatMap(n => Gen.listOfN[Char](n, Gen.alphaChar)).map(_.mkString)
   implicit lazy val arbBoolean: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
 
   def krb2: Gen[Kerb] =

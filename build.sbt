@@ -28,14 +28,12 @@ ThisBuild / description := "Kubernetes Operator library for Scala"
 ThisBuild / licenses := List("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 ThisBuild / homepage := Some(url("https://github.com/novakov-alexey/freya"))
 // Remove all additional repository other than Maven Central from POM
-ThisBuild / pomIncludeRepository := { _ =>
-  false
-}
+ThisBuild / pomIncludeRepository := { _ => false }
 ThisBuild / publishMavenStyle := true
 
 // Publishing config end /////////////////////////////////////////////////////////
 
-Test / fork := true
+ThisBuild / Test / fork := true
 
 releaseProcess := Seq.empty[ReleaseStep]
 releaseProcess ++= (if (sys.env.contains("RELEASE_VERSION_BUMP"))
@@ -94,7 +92,7 @@ lazy val docs = (project in file("docs"))
   .settings(moduleName := "docs")
   .settings(libraryDependencies += circeExtra)
   .settings(
-    Compile / scalacOptions  -= "-Wunused:imports",
+    Compile / scalacOptions -= "-Wunused:imports",
     publishArtifact := false,
     mdocIn := new File("docs/docs"),
     mdocVariables := Map(
