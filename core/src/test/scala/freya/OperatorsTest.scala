@@ -3,6 +3,7 @@ package freya
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, TimeUnit}
 
 import cats.Parallel
+import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
 import cats.implicits._
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -35,7 +36,7 @@ import org.scalatest.tagobjects.Slow
 import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
-import scala.collection.concurrent.TrieMap
+import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
@@ -242,14 +243,10 @@ class OperatorsTest
   property("Crd Operator dispatches same namespace events in original sequence", Slow) {
     //given
     val parallelNamespaces = 10
-    val controllerEvents = TrieMap.empty[String, ConcurrentLinkedQueue[(Action, Kerb, Metadata)]]
+    val controllerEvents = Ref.of[IO, Queue[(Action, Kerb, Metadata)]](Queue.empty).unsafeRunSync
     val controller = new CrdTestController[IO]() {
       override def save(action: Watcher.Action, spec: Kerb, meta: Metadata): IO[Unit] =
-        IO(
-          controllerEvents
-            .getOrElseUpdate(meta.namespace, new ConcurrentLinkedQueue[(Action, Kerb, Metadata)])
-            .add((action, spec, meta))
-        ).void
+        controllerEvents.update(_.enqueue((action, spec, meta)))
     }
     val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller, crdCfg)
 
@@ -280,23 +277,34 @@ class OperatorsTest
         }
 
         //then
-        eventually(timeout(2.minutes), interval(500.millis)) {
-          val namespaceEvents = controllerEvents.get(ns).map(_.asScala.toList).getOrElse(Nil)
-          withClue(
-            s"[received events in namespace `$ns` (size: ${namespaceEvents.length}, " +
-                s"other keys: ${controllerEvents.keySet}) do not contain elements $currentEvents]"
-          ) {
-            namespaceEvents should contain allElementsOf currentEvents
-          }
-        }
+        def loop(waitTime: FiniteDuration): IO[Unit] =
+          for {
+            namespaceEvents <- groupByNamespace(controllerEvents)
+            currentNamespaceEvents = namespaceEvents.get(ns).map(_.toList).getOrElse(Nil)
+            _ <- IO(currentNamespaceEvents should contain allElementsOf currentEvents).void.recoverWith { e =>
+              IO.sleep(1.second) *> {
+                if (waitTime > 0.seconds)
+                  loop(waitTime - 1.second)
+                else
+                  IO {
+                    System.err.println(
+                      s"[received events in namespace '$ns' (size: ${currentNamespaceEvents.length}, " +
+                          s"other keys: ${namespaceEvents.keys}) do not contain elements $currentEvents]"
+                    )
+                  } *> IO.raiseError(e)
+              }
+            }
+          } yield ()
+
+        loop(15.seconds)
       }
     }.parSequence_.unsafeRunSync()
 
-    controllerEvents.foreach {
+    groupByNamespace(controllerEvents).unsafeRunSync().foreach {
       case (namespace, queue) =>
-        queue.asScala.toList.foldLeft(0) {
+        queue.toList.foldLeft(0) {
           case (acc, (_, kerb, _)) =>
-            withClue(s"[namespace: $namespace, ${queue.asScala.toList.map(_._2.index)}] ") {
+            withClue(s"[namespace: $namespace, ${queue.toList.map(_._2.index)}] ") {
               acc should ===(kerb.index)
               acc + 1
             }
@@ -305,6 +313,9 @@ class OperatorsTest
 
     cancelable.unsafeRunSync()
   }
+
+  private def groupByNamespace(controllerEvents: Ref[IO, Queue[(Action, Kerb, Metadata)]]) =
+    controllerEvents.get.map(_.groupBy(_._3.namespace))
 
   private def checkStatus[T](status: mutable.Set[StatusUpdate[Status]], statusFlag: Boolean, meta: Metadata) = {
     val cr = StatusUpdate(meta, Status(statusFlag))

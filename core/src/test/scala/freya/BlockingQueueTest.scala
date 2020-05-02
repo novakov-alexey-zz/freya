@@ -1,7 +1,6 @@
 package freya
 
 import cats.effect.IO
-import cats.effect.concurrent.MVar
 import cats.implicits._
 import freya.watcher.BlockingQueue
 import org.scalatest.concurrent.Eventually
@@ -16,13 +15,13 @@ class BlockingQueueTest extends AnyPropSpec with Matchers with ScalaCheckPropert
   property("consumer receives all produced values") {
     forAll { (size: Int, name: String, produced: List[String]) =>
       whenever(size > 0 && produced.nonEmpty) {
-        val queue = BlockingQueue[IO, String](size, name, MVar.empty[IO, Unit].unsafeRunSync())
+        val queue = BlockingQueue.create[IO, String](size, name).unsafeRunSync()
         val consumed = ListBuffer.empty[String]
-        val producer = produced.map(queue.produce).sequence
+        val producer = produced.map(queue.produce).sequence_
         val consumer = queue.consume(s => IO(consumed += s) >> IO(consumed.length < produced.length))
         (producer, consumer).parMapN { (_, _) => () }.unsafeRunSync()
         consumed.length should ===(produced.length)
-        consumed should ===(produced)
+        consumed.toList should ===(produced)
       }
     }
   }

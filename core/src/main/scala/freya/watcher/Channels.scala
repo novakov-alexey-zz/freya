@@ -2,7 +2,6 @@ package freya.watcher
 
 import cats.Parallel
 import cats.effect.ConcurrentEffect
-import cats.effect.concurrent.MVar
 import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
 import freya.ExitCodes.ConsumerExitCode
@@ -17,7 +16,7 @@ object Channels {
 
 class Channels[F[_]: Parallel, T, U](
   concurrentController: Boolean,
-  newActionConsumer: (String, MVar[F, Unit], Option[FeedbackConsumerAlg[F, U]]) => ActionConsumer[F, T, U],
+  newActionConsumer: (String, Option[FeedbackConsumerAlg[F, U]]) => F[ActionConsumer[F, T, U]],
   newFeedbackConsumer: () => Option[FeedbackConsumerAlg[F, U]]
 )(implicit F: ConcurrentEffect[F])
     extends StrictLogging {
@@ -32,25 +31,21 @@ class Channels[F[_]: Parallel, T, U](
   private def registerConsumer(namespace: String): F[ActionConsumer[F, T, U]] =
     for {
       feedbackConsumer <- newFeedbackConsumer().pure[F]
-      notifyFlag <- MVar.empty[F, Unit]
-      (previous, newConsumer) <- F.delay {
-        val consumer = newActionConsumer(namespace, notifyFlag, feedbackConsumer)
-        val previous = actionConsumers.putIfAbsent(namespace, consumer)
-        (previous, consumer)
-      }
+      consumer <- newActionConsumer(namespace, feedbackConsumer)
+      previous <- F.delay(actionConsumers.putIfAbsent(namespace, consumer))
       consumer <- previous match {
         case Some(c) => c.pure[F]
         case None =>
           F.delay {
             val start = feedbackConsumer match {
-              case Some(feedback) => F.race(newConsumer.consume, feedback.consume).map(_.merge)
-              case None => newConsumer.consume
+              case Some(feedback) => F.race(consumer.consume, feedback.consume).map(_.merge)
+              case None => consumer.consume
             }
             runAsync[ConsumerExitCode](
               F.delay(logger.info(s"Action consumer for '$namespace' namespace was started")) *> start,
               ec => logger.debug(s"Action consumer for '$namespace' namespace was stopped with exit code: $ec")
             )
-            newConsumer
+            consumer
           }
       }
     } yield consumer

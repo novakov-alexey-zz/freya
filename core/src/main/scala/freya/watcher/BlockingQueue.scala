@@ -1,34 +1,55 @@
 package freya.watcher
 
-import java.util.concurrent.ConcurrentLinkedQueue
-
-import cats.effect.Sync
-import cats.effect.concurrent.MVar
+import cats.effect.concurrent.{MVar, Ref}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 
+import scala.collection.immutable.Queue
+
 object BlockingQueue {
-  def apply[F[_]: Sync, A](size: Int, name: String, signal: MVar[F, Unit]): BlockingQueue[F, A] =
-    new BlockingQueue[F, A](name, size, new ConcurrentLinkedQueue[A](), signal)
+  def create[F[_]: Concurrent, A](size: Int, name: String): F[BlockingQueue[F, A]] =
+    for {
+      signal <- MVar.empty[F, Unit]
+      queue <- Ref.of(Queue.empty[A])
+    } yield new BlockingQueue[F, A](name, size, queue, signal)
+
 }
 
 private[freya] class BlockingQueue[F[_], A](
   name: String,
   size: Int,
-  queue: ConcurrentLinkedQueue[A],
+  queue: Ref[F, Queue[A]],
   signal: MVar[F, Unit]
 )(implicit F: Sync[F])
     extends LazyLogging {
 
-  private[freya] def consume(c: A => F[Boolean]): F[Unit] =
-    if (!queue.isEmpty)
-      c(queue.poll()).flatMap(continue => F.whenA(continue)(consume(c)))
-    else signal.take >> consume(c)
-
   private[freya] def produce(a: A): F[Unit] =
-    if (queue.size() < size)
-      F.delay(queue.add(a)) >> signal.tryPut(()).void
-    else
-      F.delay(logger.debug(s"Queue $name is full(${queue.size}), waiting for free space")) >> signal
-        .put(()) >> produce(a)
+    for {
+      (added, length) <- queue.modify { q =>
+        if (q.length < size) {
+          val uq = q.enqueue(a)
+          (uq, (true, uq.length))
+        } else
+          (q, (false, q.length))
+      }
+      _ <- if (added) signal.tryPut(()).void
+      else
+        F.delay(logger.debug(s"Queue $name is full($length), waiting for free space")) *>
+          signal.put(()) *> produce(a)
+    } yield ()
+
+  private[freya] def consume(c: A => F[Boolean]): F[Unit] =
+    for {
+      elem <- queue.modify { q =>
+        if (q.nonEmpty) {
+          val (elem, uq) = q.dequeue
+          uq -> Some(elem)
+        } else q -> None
+      }
+      _ <- elem match {
+        case Some(e) => c(e).flatMap(continue => F.whenA(continue)(consume(c)))
+        case _ => signal.take *> consume(c)
+      }
+    } yield ()
 }

@@ -56,9 +56,7 @@ object Operator extends LazyLogging {
     helper: CrdHelperMaker[F, T, U],
     consumer: FeedbackConsumerMaker[F, U]
   ): Operator[F, T, U] =
-    ofCrd[F, T, U](cfg, client)(
-      (h: CrdHelper[F, T, U]) => (_: KubernetesClient) => controller(h)
-    )
+    ofCrd[F, T, U](cfg, client)((h: CrdHelper[F, T, U]) => (_: KubernetesClient) => controller(h))
 
   def ofCrd[F[_]: Timer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
     cfg: CrdConfig,
@@ -107,9 +105,9 @@ object Operator extends LazyLogging {
     cfg: CrdConfig
   )(implicit feedbackConsumer: FeedbackConsumerMaker[F, U]) = {
     val makeConsumer =
-      (namespace: String, notifyFlag: MVar[F, Unit], feedback: Option[FeedbackConsumerAlg[F, U]]) => {
-        val queue = BlockingQueue[F, Action[T, U]](cfg.eventQueueSize, namespace, notifyFlag)
-        new ActionConsumer[F, T, U](namespace, ctl, cfg.getKind[T], queue, feedback)
+      (namespace: String, feedback: Option[FeedbackConsumerAlg[F, U]]) => {
+        val queue = BlockingQueue.create[F, Action[T, U]](cfg.eventQueueSize, namespace)
+        queue.map(q => new ActionConsumer[F, T, U](namespace, ctl, cfg.getKind[T], q, feedback))
       }
     val makeFeedbackConsumer = () => feedbackConsumer.make(client, crd, feedbackChannel).some
     new Channels(cfg.concurrentController, makeConsumer, makeFeedbackConsumer)
@@ -142,14 +140,10 @@ object Operator extends LazyLogging {
       controller = makeController(helper)
       channels = {
         val makeConsumer =
-          (namespace: String, signal: MVar[F, Unit], feedback: Option[FeedbackConsumerAlg[F, Unit]]) =>
-            new ActionConsumer[F, T, Unit](
-              namespace,
-              controller,
-              cfg.getKind[T],
-              BlockingQueue[F, Action[T, Unit]](cfg.eventQueueSize, namespace, signal),
-              feedback
-            )
+          (namespace: String, feedback: Option[FeedbackConsumerAlg[F, Unit]]) => {
+            val queue = BlockingQueue.create[F, Action[T, Unit]](cfg.eventQueueSize, namespace)
+            queue.map(q => new ActionConsumer[F, T, Unit](namespace, controller, cfg.getKind[T], q, feedback))
+          }
         new Channels[F, T, Unit](cfg.concurrentController, makeConsumer, () => None)
       }
       context = ConfigMapWatcherContext(

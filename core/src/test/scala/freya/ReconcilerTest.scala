@@ -1,7 +1,6 @@
 package freya
 
 import cats.effect.IO
-import cats.effect.concurrent.MVar
 import freya.internal.Reconciler
 import freya.models.Resource
 import freya.watcher.AbstractWatcher.Action
@@ -38,13 +37,9 @@ class ReconcilerTest extends AnyFlatSpec with Matchers {
   }
 
   private def createChannels: Channels[IO, Kerb, Status] = {
-    new Channels(
-      true,
-      (namespace: String, signal: MVar[IO, Unit], feedback: Option[FeedbackConsumerAlg[IO, Status]]) => {
-        val q = BlockingQueue[IO, Action[Kerb, Status]](5, namespace, signal)
-        new ActionConsumer[IO, Kerb, Status](namespace, null, "", q, feedback)
-      },
-      () => None
-    )
+    new Channels(true, (namespace: String, feedback: Option[FeedbackConsumerAlg[IO, Status]]) => {
+      val queue = BlockingQueue.create[IO, Action[Kerb, Status]](5, namespace)
+      queue.map(q => new ActionConsumer[IO, Kerb, Status](namespace, null, "", q, feedback))
+    }, () => None)
   }
 }
