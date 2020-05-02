@@ -304,7 +304,10 @@ class OperatorsTest
       case (namespace, queue) =>
         queue.toList.foldLeft(0) {
           case (acc, (_, kerb, _)) =>
-            withClue(s"[namespace: $namespace, ${queue.toList.map(_._2.index)}] ") {
+            withClue(s"[namespace: $namespace, ${queue.toList.map {
+              case (_, spec, _) =>
+                spec.index
+            }}] ") {
               acc should ===(kerb.index)
               acc + 1
             }
@@ -315,7 +318,10 @@ class OperatorsTest
   }
 
   private def groupByNamespace(controllerEvents: Ref[IO, Queue[(Action, Kerb, Metadata)]]) =
-    controllerEvents.get.map(_.groupBy(_._3.namespace))
+    controllerEvents.get.map(_.groupBy {
+      case (_, _, meta) =>
+        meta.namespace
+    })
 
   private def checkStatus[T](status: mutable.Set[StatusUpdate[Status]], statusFlag: Boolean, meta: Metadata) = {
     val cr = StatusUpdate(meta, Status(statusFlag))

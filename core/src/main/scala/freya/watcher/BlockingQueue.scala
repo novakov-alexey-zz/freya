@@ -13,24 +13,18 @@ object BlockingQueue {
       signal <- MVar.empty[F, Unit]
       queue <- Ref.of(Queue.empty[A])
     } yield new BlockingQueue[F, A](name, size, queue, signal)
-
 }
 
-private[freya] class BlockingQueue[F[_], A](
-  name: String,
-  size: Int,
-  queue: Ref[F, Queue[A]],
-  signal: MVar[F, Unit]
-)(implicit F: Sync[F])
-    extends LazyLogging {
+private[freya] class BlockingQueue[F[_], A](name: String, capacity: Int, queue: Ref[F, Queue[A]], signal: MVar[F, Unit])(
+  implicit F: Sync[F]
+) extends LazyLogging {
 
   private[freya] def produce(a: A): F[Unit] =
     for {
       (added, length) <- queue.modify { q =>
-        if (q.length < size) {
-          val uq = q.enqueue(a)
-          (uq, (true, uq.length))
-        } else
+        if (q.length < capacity)
+          (q.enqueue(a), (true, q.length))
+        else
           (q, (false, q.length))
       }
       _ <- if (added) signal.tryPut(()).void
@@ -41,14 +35,9 @@ private[freya] class BlockingQueue[F[_], A](
 
   private[freya] def consume(c: A => F[Boolean]): F[Unit] =
     for {
-      elem <- queue.modify { q =>
-        if (q.nonEmpty) {
-          val (elem, uq) = q.dequeue
-          uq -> Some(elem)
-        } else q -> None
-      }
+      elem <- queue.modify(q => q.dequeueOption.map { case (a, q) => q -> a.some }.getOrElse(q -> None))
       _ <- elem match {
-        case Some(e) => c(e).flatMap(continue => F.whenA(continue)(consume(c)))
+        case Some(e) => c(e).flatMap(continue => F.whenA(continue)(signal.tryTake *> consume(c)))
         case _ => signal.take *> consume(c)
       }
     } yield ()

@@ -39,7 +39,7 @@ class ReconcilerTest extends AnyFlatSpec with Matchers {
   private def createChannels: Channels[IO, Kerb, Status] = {
     new Channels(true, (namespace: String, feedback: Option[FeedbackConsumerAlg[IO, Status]]) => {
       val queue = BlockingQueue.create[IO, Action[Kerb, Status]](5, namespace)
-      queue.map(q => new ActionConsumer[IO, Kerb, Status](namespace, null, "", q, feedback))
+      queue.map(q => new ActionConsumer[IO, Kerb, Status](namespace, new CrdTestController, "", q, feedback))
     }, () => None)
   }
 }
