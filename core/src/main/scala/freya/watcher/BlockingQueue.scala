@@ -22,9 +22,10 @@ private[freya] class BlockingQueue[F[_], A](name: String, capacity: Int, queue: 
   private[freya] def produce(a: A): F[Unit] =
     for {
       (added, length) <- queue.modify { q =>
-        if (q.length < capacity)
-          (q.enqueue(a), (true, q.length))
-        else
+        if (q.length < capacity) {
+          val uq = q.enqueue(a)
+          (uq, (true, uq.length))
+        } else
           (q, (false, q.length))
       }
       _ <- if (added) signal.tryPut(()).void
@@ -37,8 +38,11 @@ private[freya] class BlockingQueue[F[_], A](name: String, capacity: Int, queue: 
     for {
       elem <- queue.modify(q => q.dequeueOption.map { case (a, q) => q -> a.some }.getOrElse(q -> None))
       _ <- elem match {
-        case Some(e) => c(e).flatMap(continue => F.whenA(continue)(signal.tryTake *> consume(c)))
+        case Some(e) => c(e).flatMap(continue => signal.tryTake *> F.whenA(continue)(consume(c)))
         case _ => signal.take *> consume(c)
       }
     } yield ()
+
+  private[freya] def length: F[Int] =
+    queue.get.map(_.length)
 }

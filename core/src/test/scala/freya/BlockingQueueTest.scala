@@ -12,7 +12,11 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 
-class BlockingQueueTest extends AnyPropSpec with Matchers with ScalaCheckPropertyChecks with Eventually {
+class BlockingQueueTest
+    extends AnyPropSpec
+    with Matchers
+    with ScalaCheckPropertyChecks
+    with Eventually {
 
   property("consumer receives all producer's values running in parallel") {
     forAll(Gen.choose(1, 100), Gen.alphaLowerStr, Gen.nonEmptyListOf(Gen.alphaNumStr)) {
@@ -33,8 +37,16 @@ class BlockingQueueTest extends AnyPropSpec with Matchers with ScalaCheckPropert
       val consumed = ListBuffer.empty[String]
       val producer = produced.map(queue.produce).sequence_
       val consumer = queue.consume(s => drain(produced.length, consumed, s))
-      producer.unsafeRunSync()
-      consumer.unsafeRunSync()
+      producer.unsafeRunAsyncAndForget()
+
+      def loop(waitTime: FiniteDuration): IO[Unit] =
+        queue.length.flatMap { length =>
+          if (length < produced.length && waitTime > 0.seconds) IO.sleep(1.second) *> loop(waitTime - 1.second)
+          else IO.unit
+        }
+
+      (loop(5.seconds) *> consumer).unsafeRunSync()
+
       check(produced, consumed)
     }
   }
