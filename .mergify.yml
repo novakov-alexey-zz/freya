@@ -1,7 +1,7 @@
 pull_request_rules:
   - name: automatic merge for Scala Steward pull requests
     conditions:
-      - author=scala-steward[bot]
+      - author=scala-steward
       - status-success=Travis CI - Pull Request
     actions:
       merge:
