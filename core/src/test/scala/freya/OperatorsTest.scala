@@ -21,7 +21,7 @@ import freya.resource.ConfigMapParser
 import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.watcher.FeedbackConsumer.FeedbackChannel
 import freya.watcher._
-import io.fabric8.kubernetes.api.model.ConfigMap
+import io.fabric8.kubernetes.api.model.{ConfigMap, ListOptions}
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client._
@@ -75,6 +75,9 @@ class OperatorsTest
       }
 
       override def watch(resourceVersion: String, watcher: Watcher[U]): Watch =
+        watch(watcher)
+
+      override def watch(options: ListOptions, watcher: Watcher[U]): Watch =
         watch(watcher)
     }
 

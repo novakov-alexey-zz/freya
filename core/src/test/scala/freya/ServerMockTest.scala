@@ -4,7 +4,7 @@ import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
 import freya.internal.crd.{AnyCrDoneable, AnyCrList}
-import freya.internal.kubeapi.MetadataApi
+import freya.internal.kubeapi.{CrdApi, MetadataApi}
 import freya.resource.ConfigMapParser
 import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
@@ -51,7 +51,7 @@ class ServerMockTest
     val crd = client.customResourceDefinitions.withName("kerbs.io.github.novakov-alexey").get()
     val krbClient = client
       .customResources(
-        crd,
+        CrdApi.toCrdContext(crd),
         classOf[AnyCustomResource],
         classOf[AnyCrList],
         classOf[AnyCrDoneable]

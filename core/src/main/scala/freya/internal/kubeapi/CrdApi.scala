@@ -86,7 +86,7 @@ private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinit
   private lazy val context = CrdApi.toCrdContext(crd)
 
   def resourcesIn[T](ns: K8sNamespace): Filtered = {
-    val _crs = client.customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
+    val _crs = client.customResources(context, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
     if (AllNamespaces == ns) _crs.inAnyNamespace else _crs.inNamespace(ns.value)
   }
 
