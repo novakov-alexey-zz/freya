@@ -246,7 +246,7 @@ class OperatorsTest
   property("Crd Operator dispatches same namespace events in original sequence", Slow) {
     //given
     val parallelNamespaces = 10
-    val controllerEvents = Ref.of[IO, Queue[(Action, Kerb, Metadata)]](Queue.empty).unsafeRunSync
+    val controllerEvents = Ref.of[IO, Queue[(Action, Kerb, Metadata)]](Queue.empty).unsafeRunSync()
     val controller = new CrdTestController[IO]() {
       override def save(action: Watcher.Action, spec: Kerb, meta: Metadata): IO[Unit] =
         controllerEvents.update(_.enqueue((action, spec, meta)))

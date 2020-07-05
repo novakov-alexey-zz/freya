@@ -24,7 +24,7 @@ class OperatorUtilsTest extends AsyncFlatSpec with Matchers with BeforeAndAfter 
       val client = server.getClient
       OperatorUtils.checkIfOnOpenshift[IO](client.getMasterUrl).map {
         case (isOpenShift, _) => isOpenShift should ===(true)
-      }.unsafeRunSync
+      }.unsafeRunSync()
     }
 
   it should "return false on K8s" in {
@@ -32,6 +32,6 @@ class OperatorUtilsTest extends AsyncFlatSpec with Matchers with BeforeAndAfter 
       val client = server.getClient
       OperatorUtils.checkIfOnOpenshift[IO](client.getMasterUrl).map {
         case (isOpenShift, _) => isOpenShift should ===(false)
-      }.unsafeRunSync
+      }.unsafeRunSync()
     }
 }
