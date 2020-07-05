@@ -5,7 +5,7 @@ import sbtrelease.ReleaseStateTransformations._
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
 ThisBuild / name := "freya"
-ThisBuild / scalaVersion := "2.13.1"
+ThisBuild / scalaVersion := "2.13.3"
 ThisBuild / organization := "io.github.novakov-alexey"
 ThisBuild / watchBeforeCommand := Watch.clearScreen
 
