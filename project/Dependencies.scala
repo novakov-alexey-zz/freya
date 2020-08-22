@@ -17,7 +17,7 @@ object Dependencies extends AutoPlugin {
       val jacksonJsonSchemaV               = "1.0.39"
       val logbackClassicVersion            = "1.3.0-alpha4"
       val scalaLoggingVersion              = "3.9.2"
-      val scalaTestVersion                 = "3.2.1"
+      val scalaTestVersion                 = "3.2.2"
       val scalaTestCheckVersion            = "3.1.0.0-RC2"
       val scalaCheckVersion                = "1.14.3"
       val scalaJsonSchemaV                 = "0.2.3"
