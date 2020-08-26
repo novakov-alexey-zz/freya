@@ -5,10 +5,10 @@ import java.lang
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
 import freya.internal.crd.{AnyCrDoneable, AnyCrList}
-import freya.internal.kubeapi.CrdApi.{statusUpdateJson, Filtered, StatusUpdate}
+import freya.internal.kubeapi.CrdApi.{Filtered, StatusUpdate, statusUpdateJson}
 import freya.watcher.AnyCustomResource
 import freya.{JsonWriter, K8sNamespace, Metadata}
-import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent}
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent}
 import io.fabric8.kubernetes.client.dsl.FilterWatchListMultiDeletable
 import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch, Watcher}

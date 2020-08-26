@@ -9,7 +9,7 @@ import freya.JsonWriter
 import freya.internal.kubeapi.CrdApi
 import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.watcher.FeedbackConsumer.FeedbackChannel
-import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 
 trait FeedbackConsumerAlg[F[_], T] {
@@ -21,10 +21,12 @@ object FeedbackConsumer {
   type FeedbackChannel[F[_], T] = MVar[F, Either[Unit, StatusUpdate[T]]]
 }
 
-class FeedbackConsumer[F[_], T](client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, T])(
-  implicit F: Effect[F],
-  writer: JsonWriter[T]
-) extends FeedbackConsumerAlg[F, T]
+class FeedbackConsumer[F[_], T](
+  client: KubernetesClient,
+  crd: CustomResourceDefinition,
+  channel: FeedbackChannel[F, T]
+)(implicit F: Effect[F], writer: JsonWriter[T])
+    extends FeedbackConsumerAlg[F, T]
     with LazyLogging {
   private val crdApi = new CrdApi(client, crd)
 

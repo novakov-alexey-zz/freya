@@ -8,7 +8,7 @@ import freya.models.{CustomResource, Resource, ResourcesList}
 import freya.resource.{ConfigMapParser, Labels}
 import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.ConfigMap
-import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
 
 import scala.util.Try

@@ -42,6 +42,11 @@ sealed abstract class Configuration(
 
 object Configuration {
 
+  object CrdConfig {
+    // TODO: abstract CRD to let a user to switch between v1beta and v1
+    val crdApiVersion: String = "apiextensions.k8s.io/v1beta1"
+  }
+
   final case class CrdConfig(
     override val namespace: K8sNamespace,
     override val prefix: String,
@@ -53,8 +58,7 @@ object Configuration {
     deployCrd: Boolean = true,
     shortNames: List[String] = List.empty[String],
     pluralName: String = "",
-    additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty,
-    crdApiVersion: String = "apiextensions.k8s.io/v1beta1"
+    additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
   ) extends Configuration(prefix, namespace, customKind, eventQueueSize, concurrentController) {
 
     def kindPluralCaseInsensitive[T: JsonReader]: String = {

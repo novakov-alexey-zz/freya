@@ -17,7 +17,7 @@ import freya.resource.{ConfigMapParser, CrdParser, Labels}
 import freya.watcher.AbstractWatcher.{Action, CloseableWatcher}
 import freya.watcher.FeedbackConsumer.FeedbackChannel
 import freya.watcher._
-import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
 import io.fabric8.kubernetes.client._
 
 import scala.concurrent.duration.{DurationLong, FiniteDuration}

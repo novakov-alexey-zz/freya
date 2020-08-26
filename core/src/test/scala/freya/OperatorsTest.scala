@@ -21,8 +21,8 @@ import freya.resource.ConfigMapParser
 import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.watcher.FeedbackConsumer.FeedbackChannel
 import freya.watcher._
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
 import io.fabric8.kubernetes.api.model.{ConfigMap, ListOptions}
-import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
 import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.dsl.Watchable

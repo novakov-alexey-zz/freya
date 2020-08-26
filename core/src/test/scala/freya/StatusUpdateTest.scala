@@ -8,7 +8,7 @@ import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.json.circe._
 import freya.resource.CirceCodecs
 import freya.watcher.{AnyCustomResource, StringProperty}
-import io.fabric8.kubernetes.api.model.apiextensions.{CustomResourceDefinition, CustomResourceDefinitionBuilder}
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.{CustomResourceDefinition, CustomResourceDefinitionBuilder}
 import io.fabric8.kubernetes.api.model.{HasMetadata, ObjectMetaBuilder}
 import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.dsl.{NonNamespaceOperation, Resource}

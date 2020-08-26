@@ -10,7 +10,7 @@ import freya.internal.kubeapi.CrdApi
 import freya.models.Resource
 import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.{Controller, K8sNamespace}
-import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
 

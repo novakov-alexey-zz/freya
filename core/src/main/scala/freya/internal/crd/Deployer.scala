@@ -10,7 +10,7 @@ import freya.internal.kubeapi.CrdApi
 import freya.watcher.AnyCustomResource
 import freya.{AdditionalPrinterColumn, JsonReader}
 import io.fabric8.kubernetes.api.model.HasMetadata
-import io.fabric8.kubernetes.api.model.apiextensions._
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1._
 import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.client.{CustomResourceList, KubernetesClient, KubernetesClientException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
@@ -94,7 +94,7 @@ private[freya] object Deployer extends LazyLogging {
         cfg.shortNames,
         cfg.kindPluralCaseInsensitive[T],
         cfg.version,
-        cfg.crdApiVersion
+        CrdConfig.crdApiVersion
       )
       .withNewSubresources()
       .withStatus(new CustomResourceSubresourceStatusBuilder().build())

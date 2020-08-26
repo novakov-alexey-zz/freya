@@ -4,7 +4,7 @@ import java.io.IOException
 
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.typesafe.scalalogging.LazyLogging
-import io.fabric8.kubernetes.api.model.apiextensions.JSONSchemaProps
+import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.JSONSchemaProps
 
 import scala.util.Try
 
