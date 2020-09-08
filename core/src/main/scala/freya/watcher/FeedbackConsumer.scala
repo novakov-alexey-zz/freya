@@ -1,7 +1,7 @@
 package freya.watcher
 
 import cats.effect.Effect
-import cats.effect.concurrent.MVar
+import cats.effect.concurrent.MVar2
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes.{ConsumerExitCode, FeedbackExitCode}
@@ -18,7 +18,7 @@ trait FeedbackConsumerAlg[F[_], T] {
 }
 
 object FeedbackConsumer {
-  type FeedbackChannel[F[_], T] = MVar[F, Either[Unit, StatusUpdate[T]]]
+  type FeedbackChannel[F[_], T] = MVar2[F, Either[Unit, StatusUpdate[T]]]
 }
 
 class FeedbackConsumer[F[_], T](

@@ -1,7 +1,7 @@
 package freya.watcher
 
 import cats.Parallel
-import cats.effect.concurrent.MVar
+import cats.effect.concurrent.MVar2
 import cats.effect.{Effect, Sync, Timer}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
@@ -21,7 +21,7 @@ final case class CrdWatcherContext[F[_]: Effect, T, U](
   convertCr: AnyCustomResource => Resource[T, U],
   client: KubernetesClient,
   crd: CustomResourceDefinition,
-  stopFlag: MVar[F, ConsumerExitCode]
+  stopFlag: MVar2[F, ConsumerExitCode]
 )
 
 class CustomResourceWatcher[F[_]: Effect: Parallel: Timer, T, U](context: CrdWatcherContext[F, T, U])

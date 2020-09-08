@@ -1,6 +1,6 @@
 package freya.watcher
 
-import cats.effect.concurrent.{MVar, Ref}
+import cats.effect.concurrent.{MVar, MVar2, Ref}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
@@ -15,9 +15,13 @@ object BlockingQueue {
     } yield new BlockingQueue[F, A](name, size, queue, signal)
 }
 
-private[freya] class BlockingQueue[F[_], A](name: String, capacity: Int, queue: Ref[F, Queue[A]], signal: MVar[F, Unit])(
-  implicit F: Sync[F]
-) extends LazyLogging {
+private[freya] class BlockingQueue[F[_], A](
+  name: String,
+  capacity: Int,
+  queue: Ref[F, Queue[A]],
+  signal: MVar2[F, Unit]
+)(implicit F: Sync[F])
+    extends LazyLogging {
 
   private[freya] def produce(a: A): F[Unit] =
     for {
@@ -28,10 +32,11 @@ private[freya] class BlockingQueue[F[_], A](name: String, capacity: Int, queue: 
         } else
           (q, (false, q.length))
       }
-      _ <- if (added) signal.tryPut(()).void
-      else
-        F.delay(logger.debug(s"Queue $name is full($length), waiting for free space")) *>
-          signal.put(()) *> produce(a)
+      _ <-
+        if (added) signal.tryPut(()).void
+        else
+          F.delay(logger.debug(s"Queue $name is full($length), waiting for free space")) *>
+            signal.put(()) *> produce(a)
     } yield ()
 
   private[freya] def consume(c: A => F[Boolean]): F[Unit] =

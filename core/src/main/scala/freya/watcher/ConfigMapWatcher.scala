@@ -1,7 +1,7 @@
 package freya.watcher
 
 import cats.Parallel
-import cats.effect.concurrent.MVar
+import cats.effect.concurrent.MVar2
 import cats.effect.{Effect, Sync, Timer}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
@@ -23,7 +23,7 @@ final case class ConfigMapWatcherContext[F[_]: Effect, T](
   convert: ConfigMap => Resource[T, Unit],
   client: KubernetesClient,
   selector: (String, String),
-  stopFlag: MVar[F, ConsumerExitCode]
+  stopFlag: MVar2[F, ConsumerExitCode]
 )
 
 class ConfigMapWatcher[F[_]: Effect: Parallel: Timer, T](context: ConfigMapWatcherContext[F, T])
