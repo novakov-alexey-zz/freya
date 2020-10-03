@@ -5,20 +5,20 @@ import java.lang
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
 import freya.internal.crd.{AnyCrDoneable, AnyCrList}
-import freya.internal.kubeapi.CrdApi.{Filtered, StatusUpdate, statusUpdateJson}
+import freya.internal.kubeapi.CrdApi.{statusUpdateJson, Filtered, StatusUpdate}
 import freya.watcher.AnyCustomResource
 import freya.{JsonWriter, K8sNamespace, Metadata}
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent}
 import io.fabric8.kubernetes.client.dsl.FilterWatchListMultiDeletable
 import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext
-import io.fabric8.kubernetes.client.{KubernetesClient, Watch, Watcher}
+import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 object CrdApi {
   type Filtered =
-    FilterWatchListMultiDeletable[AnyCustomResource, AnyCrList, lang.Boolean, Watch, Watcher[AnyCustomResource]]
+    FilterWatchListMultiDeletable[AnyCustomResource, AnyCrList, lang.Boolean, Watch]
 
   final case class StatusUpdate[T](meta: Metadata, status: T)
 
@@ -79,7 +79,7 @@ object CrdApi {
       .withPlural(crd.getSpec.getNames.getPlural)
       .withScope(crd.getSpec.getScope)
       .withVersion(crd.getSpec.getVersion)
-      .build()  
+      .build()
 }
 
 private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinition) extends LazyLogging {
@@ -114,8 +114,8 @@ private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinit
 
     logger.debug(s"custom resource metadata: $maybeMetadata")
 
-    maybeMetadata.collect {
-      case m: java.util.LinkedHashMap[_, _] => m.asScala.toMap.asInstanceOf[Map[String, AnyRef]]
+    maybeMetadata.collect { case m: java.util.LinkedHashMap[_, _] =>
+      m.asScala.toMap.asInstanceOf[Map[String, AnyRef]]
     }.getOrElse(Map.empty[String, AnyRef])
       .get("resourceVersion")
       .map(_.asInstanceOf[String])
