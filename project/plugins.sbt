@@ -1,4 +1,4 @@
-addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.1.13")
+addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.1.14")
 addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.5.1")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.6.1")
 addSbtPlugin("com.jsuereth" % "sbt-pgp" % "2.0.1")
