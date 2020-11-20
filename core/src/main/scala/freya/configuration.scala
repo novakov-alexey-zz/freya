@@ -14,7 +14,6 @@ object Retry {
   final case class Infinite(minDelay: FiniteDuration = 1.second, maxDelay: FiniteDuration = 60.seconds) extends Retry
 }
 
-final case class Metadata(name: String, namespace: String, resourceVersion: String, uid: String)
 final case class AdditionalPrinterColumn(name: String, columnType: String, jsonPath: String)
 
 sealed abstract class Configuration(

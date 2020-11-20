@@ -1,5 +1,6 @@
 import cats.effect.{CancelToken, ContextShift, ExitCode, IO, Timer}
 import freya.internal.kubeapi.MetadataApi
+import freya.models.Metadata
 import freya.resource.ConfigMapParser
 import freya.yaml.jackson._
 import io.fabric8.kubernetes.api.model.ConfigMap

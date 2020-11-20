@@ -2,6 +2,7 @@ package freya
 
 import java.util.concurrent.ConcurrentLinkedQueue
 
+import freya.models.Metadata
 import io.fabric8.kubernetes.client.Watcher.Action
 
 import scala.collection.mutable

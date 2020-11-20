@@ -3,8 +3,9 @@ package freya.resource
 import cats.effect.Sync
 import com.typesafe.scalalogging.LazyLogging
 import freya.internal.kubeapi.MetadataApi
+import freya.models.Metadata
 import freya.resource.ConfigMapParser.SpecificationKey
-import freya.{Metadata, YamlReader}
+import freya.YamlReader
 import io.fabric8.kubernetes.api.model.ConfigMap
 
 import scala.jdk.CollectionConverters._

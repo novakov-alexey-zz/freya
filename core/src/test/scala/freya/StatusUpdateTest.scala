@@ -6,6 +6,7 @@ import freya.internal.crd.{AnyCrDoneable, AnyCrList}
 import freya.internal.kubeapi.CrdApi
 import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.json.circe._
+import freya.models.Metadata
 import freya.resource.CirceCodecs
 import freya.watcher.{AnyCustomResource, StringProperty}
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.{CustomResourceDefinition, CustomResourceDefinitionBuilder}
@@ -16,6 +17,8 @@ import io.fabric8.kubernetes.client.utils.Serialization
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
 import org.scalatest.DoNotDiscover
 import org.scalatest.flatspec.AnyFlatSpec
+
+import scala.jdk.CollectionConverters.MapHasAsScala
 
 @DoNotDiscover
 class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
@@ -84,7 +87,13 @@ class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
     val crdApi = new CrdApi(client, crd)
     crdApi.updateStatus(
       StatusUpdate(
-        Metadata("test-kerb", "test", cr.getMetadata.getResourceVersion, cr.getMetadata.getUid),
+        Metadata(
+          "test-kerb",
+          "test",
+          cr.getMetadata.getLabels.asScala.toMap,
+          cr.getMetadata.getResourceVersion,
+          cr.getMetadata.getUid
+        ),
         Status(true)
       )
     )

@@ -3,7 +3,7 @@ package freya
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import freya.models.{CustomResource, NewStatus}
+import freya.models.{CustomResource, Metadata, NewStatus}
 import io.fabric8.kubernetes.client.Watcher.Action
 
 import scala.concurrent.duration.{FiniteDuration, _}

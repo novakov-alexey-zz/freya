@@ -10,6 +10,13 @@ object models {
   type NewStatus[U] = Option[U]
   type NoStatus = NewStatus[Unit]
 
+  final case class Metadata(
+    name: String,
+    namespace: String,
+    labels: Map[String, String],
+    resourceVersion: String,
+    uid: String
+  )
   final case class CustomResource[T, U](metadata: Metadata, spec: T, status: NewStatus[U])
 }
 

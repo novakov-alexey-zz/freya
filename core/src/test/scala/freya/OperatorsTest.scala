@@ -16,7 +16,7 @@ import freya.generators.arbitrary
 import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.internal.kubeapi.MetadataApi
 import freya.json.jackson._
-import freya.models.{CustomResource, NewStatus, Resource, ResourcesList}
+import freya.models.{CustomResource, Metadata, NewStatus, Resource, ResourcesList}
 import freya.resource.ConfigMapParser
 import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.watcher.FeedbackConsumer.FeedbackChannel

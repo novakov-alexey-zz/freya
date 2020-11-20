@@ -6,7 +6,7 @@ import freya.Configuration.CrdConfig
 import freya.K8sNamespace.{AllNamespaces, Namespace}
 import freya.internal.crd.{AnyCrDoneable, AnyCrList, Deployer}
 import freya.internal.kubeapi.MetadataApi
-import freya.models.{CustomResource, Resource}
+import freya.models.{CustomResource, Metadata, Resource}
 import freya.resource.{ConfigMapParser, CrdParser}
 import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.NamespaceBuilder
