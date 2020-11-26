@@ -5,12 +5,12 @@ import java.lang
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
 import freya.internal.crd.{AnyCrDoneable, AnyCrList}
-import freya.internal.kubeapi.CrdApi.{Filtered, StatusUpdate, statusUpdateJson}
+import freya.internal.kubeapi.CrdApi.{Filtered, FilteredMulti, StatusUpdate, statusUpdateJson}
 import freya.models.Metadata
 import freya.watcher.AnyCustomResource
 import freya.{JsonWriter, K8sNamespace}
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent}
-import io.fabric8.kubernetes.client.dsl.FilterWatchListMultiDeletable
+import io.fabric8.kubernetes.client.dsl.{FilterWatchListDeletable, FilterWatchListMultiDeletable}
 import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext
 import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
 
@@ -18,8 +18,10 @@ import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 object CrdApi {
-  type Filtered =
+  type FilteredMulti =
     FilterWatchListMultiDeletable[AnyCustomResource, AnyCrList, lang.Boolean, Watch]
+
+  type Filtered = FilterWatchListDeletable[AnyCustomResource, AnyCrList, lang.Boolean, Watch]
 
   final case class StatusUpdate[T](meta: Metadata, status: T)
 
@@ -86,10 +88,16 @@ object CrdApi {
 private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinition) extends LazyLogging {
   private lazy val context = CrdApi.toCrdContext(crd)
 
-  def resourcesIn[T](ns: K8sNamespace): Filtered = {
-    val _crs = client.customResources(context, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
+  def resourcesWithLabels[T](labels: Map[String, String]): Filtered =
+    customResourceOperation.withLabels(labels.asJava)
+
+  def resourcesIn[T](ns: K8sNamespace): FilteredMulti = {
+    val _crs = customResourceOperation
     if (AllNamespaces == ns) _crs.inAnyNamespace else _crs.inNamespace(ns.value)
   }
+
+  private def customResourceOperation[T] =
+    client.customResources(context, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
 
   def updateStatus[T: JsonWriter](su: StatusUpdate[T]): Unit = {
     val resourceProperties = Try(

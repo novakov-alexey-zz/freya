@@ -266,7 +266,7 @@ class Operator[F[_], T: Reader, U] private (
     kind: String,
     namespace: K8sNamespace
   ): F[ReconcilerExitCode] = {
-    val r = new Reconciler[F, T, U](interval, pipe.channels, F.delay(pipe.helper.currentResources))
+    val r = new Reconciler[F, T, U](interval, pipe.channels, F.delay(pipe.helper.currentResources()))
     F.delay(logger.info(s"${gr}Starting reconciler $kind$xx in namespace '$namespace' with $interval interval")) *>
       r.run.guaranteeCase {
         case Canceled => F.delay(logger.debug("Reconciler was canceled!"))

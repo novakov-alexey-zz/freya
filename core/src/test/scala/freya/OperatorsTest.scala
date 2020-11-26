@@ -339,7 +339,7 @@ class OperatorsTest
     val testResources = new mutable.ArrayBuffer[Resource[Kerb, Status]]()
     implicit val helper: CrdHelperMaker[IO, Kerb, Status] = (context: CrdHelperContext) =>
       new CrdHelper[IO, Kerb, Status](context) {
-        override def currentResources: Either[Throwable, ResourcesList[Kerb, Status]] =
+        override def currentResources(namespace: K8sNamespace): Either[Throwable, ResourcesList[Kerb, Status]] =
           Right(testResources.toList)
       }
 
@@ -377,7 +377,7 @@ class OperatorsTest
     val testResources = new mutable.ArrayBuffer[Resource[Kerb, Unit]]()
     implicit val helper: ConfigMapHelperMaker[IO, Kerb] = (context: ConfigMapHelperContext) =>
       new ConfigMapHelper[IO, Kerb](context) {
-        override def currentResources: Either[Throwable, ResourcesList[Kerb, Unit]] =
+        override def currentResources(namespace: K8sNamespace): Either[Throwable, ResourcesList[Kerb, Unit]] =
           Right(testResources.toList)
       }
 

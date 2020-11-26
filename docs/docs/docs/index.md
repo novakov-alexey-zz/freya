@@ -227,7 +227,7 @@ val controller = (helper: CrdHelper[IO, Kerb, NoStatus]) =>
   new Controller[IO, Kerb, NoStatus] {
 
     override def onInit(): IO[Unit] =
-      helper.currentResources.fold(
+      helper.currentResources().fold(
         IO.raiseError, // refusing to process
         r =>
             IO(r.foreach {

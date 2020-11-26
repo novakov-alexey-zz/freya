@@ -20,9 +20,9 @@ private[freya] class ConfigMapApi(client: KubernetesClient) {
     else _cms.inNamespace(ns.value)
   }
 
-  def list(cms: FilteredN, selector: Map[String, String]): List[ConfigMap] =
-    cms.withLabels(selector.asJava).list.getItems.asScala.toList
+  def list(cms: FilteredN, labels: Map[String, String]): List[ConfigMap] =
+    cms.withLabels(labels.asJava).list.getItems.asScala.toList
 
-  def select(cms: FilteredN, selector: (String, String)): Filtered =
-    cms.withLabels(Map(selector).asJava)
+  def select(cms: FilteredN, labels: (String, String)): Filtered =
+    cms.withLabels(Map(labels).asJava)
 }

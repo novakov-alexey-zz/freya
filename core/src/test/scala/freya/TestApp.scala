@@ -68,7 +68,7 @@ object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
       new Controller[IO, Kerb, Status] {
 
         override def onInit(): IO[Unit] =
-          helper.currentResources.fold(
+          helper.currentResources().fold(
             IO.raiseError,
             r =>
               IO(r.foreach {

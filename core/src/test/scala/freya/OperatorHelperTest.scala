@@ -59,7 +59,7 @@ class OperatorHelperTest
     val context = ConfigMapHelperContext(cfg, client, None, parser)
     val helper = new ConfigMapHelper[IO, Kerb](context)
 
-    val maps = helper.currentResources
+    val maps = helper.currentResources()
     maps should ===(Right(List.empty))
 
     val currentCms = mutable.ArrayBuffer.empty[Resource[Kerb, Unit]]
@@ -76,7 +76,7 @@ class OperatorHelperTest
 
       currentCms += Right(CustomResource(meta, spec, None))
       //then
-      helper.currentResources.map(_.toSet) should ===(Right(currentCms.toSet))
+      helper.currentResources().map(_.toSet) should ===(Right(currentCms.toSet))
     }
   }
 
@@ -97,7 +97,7 @@ class OperatorHelperTest
     //when
     krbClient.inNamespace(testNs.value).delete()
 
-    val maps = helper.currentResources
+    val maps = helper.currentResources()
     //then
     maps should be(Right(Map.empty))
 
@@ -116,7 +116,7 @@ class OperatorHelperTest
       currentCrds += (meta -> spec)
       //then
       eventually {
-        helper.currentResources should be(Right(currentCrds))
+        helper.currentResources() should be(Right(currentCrds))
       }
     }
 
