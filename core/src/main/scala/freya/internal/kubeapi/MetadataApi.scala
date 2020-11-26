@@ -8,5 +8,11 @@ import scala.jdk.CollectionConverters.MapHasAsScala
 private[freya] object MetadataApi {
 
   def translate(meta: ObjectMeta): Metadata =
-    Metadata(meta.getName, meta.getNamespace, meta.getLabels.asScala.toMap, meta.getResourceVersion, meta.getUid)
+    Metadata(
+      meta.getName,
+      meta.getNamespace,
+      Option(meta.getLabels).map(_.asScala.toMap).getOrElse(Map.empty),
+      meta.getResourceVersion,
+      meta.getUid
+    )
 }
