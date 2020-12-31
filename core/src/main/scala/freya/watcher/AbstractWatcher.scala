@@ -1,7 +1,5 @@
 package freya.watcher
 
-import java.io.Closeable
-
 import cats.effect.Effect
 import cats.effect.concurrent.MVar2
 import cats.implicits._
@@ -12,10 +10,10 @@ import freya.errors.{OperatorError, WatcherClosedError}
 import freya.internal.OperatorUtils
 import freya.models.CustomResource
 import freya.watcher.actions._
-import io.fabric8.kubernetes.client.Watcher
+import io.fabric8.kubernetes.client.{Watcher, WatcherException}
 
+import java.io.Closeable
 import scala.collection.mutable
-import io.fabric8.kubernetes.client.WatcherException
 
 object AbstractWatcher {
   type CloseableWatcher = Closeable

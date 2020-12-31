@@ -12,8 +12,7 @@ import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.{Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
-import io.fabric8.kubernetes.client.{KubernetesClient, Watcher}
-import io.fabric8.kubernetes.client.WatcherException
+import io.fabric8.kubernetes.client.{KubernetesClient, Watcher, WatcherException}
 
 final case class CrdWatcherContext[F[_]: Effect, T, U](
   ns: K8sNamespace,
@@ -48,9 +47,8 @@ class CustomResourceWatcher[F[_]: Effect: Parallel: Timer, T, U](context: CrdWat
       override def eventReceived(action: Watcher.Action, cr: AnyCustomResource): Unit = {
         logger.debug(s"Custom resource in namespace '${cr.getMetadata.getNamespace}' was $action\nCR spec:\n$cr")
 
-        val converted = context.convertCr(cr).leftMap[OperatorError] {
-          case (t, resource) =>
-            ParseResourceError(action, t, resource)
+        val converted = context.convertCr(cr).leftMap[OperatorError] { case (t, resource) =>
+          ParseResourceError(action, t, resource)
         }
         enqueueAction(cr.getMetadata.getNamespace, action, converted)
 
