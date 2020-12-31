@@ -12,9 +12,8 @@ import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.{CmController, Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.dsl.Watchable
-import io.fabric8.kubernetes.client.{KubernetesClient, Watcher}
+import io.fabric8.kubernetes.client.{KubernetesClient, Watcher, WatcherException}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
-import io.fabric8.kubernetes.client.WatcherException
 
 final case class ConfigMapWatcherContext[F[_]: Effect, T](
   namespace: K8sNamespace,
@@ -53,9 +52,8 @@ class ConfigMapWatcher[F[_]: Effect: Parallel: Timer, T](context: ConfigMapWatch
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
         if (context.controller.isSupported(cm)) {
           logger.debug(s"ConfigMap in namespace $targetNamespace was $action\nConfigMap:\n$cm\n")
-          val converted = context.convert(cm).leftMap[OperatorError] {
-            case (t, resource) =>
-              ParseResourceError(action, t, resource)
+          val converted = context.convert(cm).leftMap[OperatorError] { case (t, resource) =>
+            ParseResourceError(action, t, resource)
           }
           enqueueAction(cm.getMetadata.getNamespace, action, converted)
         } else logger.debug(s"Unsupported ConfigMap skipped: ${cm.toString}")

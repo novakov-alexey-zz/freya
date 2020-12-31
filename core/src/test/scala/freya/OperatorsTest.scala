@@ -352,8 +352,6 @@ class OperatorsTest
 
     forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) {
       case (anyCr, spec, status) =>
-        //val kerb = transformToString(anyCr)
-
         val meta = MetadataApi.translate(anyCr.getMetadata)
         testResources += Right(CustomResource(meta, spec, status.some))
         //then
@@ -524,8 +522,8 @@ class OperatorsTest
   private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T]) = {
     singleWatcher.foreach { w =>
       val raiseException = arbitrary[Boolean].sample.getOrElse(fail("failed to generate boolean"))
-      val ex = if (raiseException) new WatcherException("test exception") else null
-      w.onClose(ex)
+      val ex = if (raiseException) Some(new WatcherException("test exception")) else None
+      w.onClose(ex.orNull)
     }
     eventually {
       //then

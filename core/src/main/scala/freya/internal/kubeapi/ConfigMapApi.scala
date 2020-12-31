@@ -3,11 +3,10 @@ package freya.internal.kubeapi
 import freya.K8sNamespace
 import freya.K8sNamespace.AllNamespaces
 import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapList}
+import io.fabric8.kubernetes.client.KubernetesClient
+import io.fabric8.kubernetes.client.dsl.{FilterWatchListDeletable, FilterWatchListMultiDeletable}
 
 import scala.jdk.CollectionConverters._
-import io.fabric8.kubernetes.client.dsl.FilterWatchListMultiDeletable
-import io.fabric8.kubernetes.client.KubernetesClient
-import io.fabric8.kubernetes.client.dsl.FilterWatchListDeletable
 
 private[freya] class ConfigMapApi(client: KubernetesClient) {
   type FilteredN = FilterWatchListMultiDeletable[ConfigMap, ConfigMapList]
