@@ -5,6 +5,7 @@ metadata:
   namespace: test
   labels:
     io.myorg.kerboperator/kind: Kerb
+    io.myorg.kerboperator/version: v1
 data:
   config: |
     realm: EXAMPLE.COM

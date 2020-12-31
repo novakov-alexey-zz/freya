@@ -12,9 +12,10 @@ import freya.errors.{OperatorError, WatcherClosedError}
 import freya.internal.OperatorUtils
 import freya.models.CustomResource
 import freya.watcher.actions._
-import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
+import io.fabric8.kubernetes.client.Watcher
 
 import scala.collection.mutable
+import io.fabric8.kubernetes.client.WatcherException
 
 object AbstractWatcher {
   type CloseableWatcher = Closeable
@@ -48,12 +49,12 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
   private def runSync[A](f: F[A]): A =
     F.toIO(f).unsafeRunSync()
 
-  protected def onClose(e: KubernetesClientException): Unit = {
+  protected def onClose(e: WatcherException): Unit = {
     val error = if (e != null) {
       F.delay(logger.error(s"Watcher closed with exception in namespace '$namespace'", e)) *>
         e.some.pure[F]
     } else {
-      F.delay(logger.warn(s"Watcher closed in namespace '$namespace''")) *> none[KubernetesClientException].pure[F]
+      F.delay(logger.warn(s"Watcher closed in namespace '$namespace''")) *> none[WatcherException].pure[F]
     }
     runSync(for {
       e <- error

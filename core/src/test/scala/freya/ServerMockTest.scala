@@ -3,7 +3,7 @@ package freya
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
-import freya.internal.crd.{AnyCrDoneable, AnyCrList}
+import freya.internal.crd.AnyCrList
 import freya.internal.kubeapi.{CrdApi, MetadataApi}
 import freya.resource.ConfigMapParser
 import freya.watcher.AnyCustomResource
@@ -48,14 +48,9 @@ class ServerMockTest
     val controller = new CrdTestController[IO]
     val operator = Operator.ofCrd[IO, Kerb, Status](cfg, IO.pure(client), controller).run
     val cancelable = startOperator(operator)
-    val crd = client.customResourceDefinitions.withName("kerbs.io.github.novakov-alexey").get()
+    val crd = client.apiextensions.v1beta1.customResourceDefinitions.withName("kerbs.io.github.novakov-alexey").get()
     val krbClient = client
-      .customResources(
-        CrdApi.toCrdContext(crd),
-        classOf[AnyCustomResource],
-        classOf[AnyCrList],
-        classOf[AnyCrDoneable]
-      )
+      .customResources(CrdApi.toCrdContext(crd), classOf[AnyCustomResource], classOf[AnyCrList])
 
     forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](cfg.getKind)) { case (action, (cr, spec, _)) =>
       val ns = new NamespaceBuilder().withNewMetadata.withName(cr.getMetadata.getNamespace).endMetadata.build

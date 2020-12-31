@@ -12,8 +12,9 @@ import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.{CmController, Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.client.dsl.Watchable
-import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.fabric8.kubernetes.client.{KubernetesClient, Watcher}
 import io.fabric8.kubernetes.internal.KubernetesDeserializer
+import io.fabric8.kubernetes.client.WatcherException
 
 final case class ConfigMapWatcherContext[F[_]: Effect, T](
   namespace: K8sNamespace,
@@ -22,7 +23,7 @@ final case class ConfigMapWatcherContext[F[_]: Effect, T](
   channels: Channels[F, T, Unit],
   convert: ConfigMap => Resource[T, Unit],
   client: KubernetesClient,
-  selector: (String, String),
+  selector: Map[String, String],
   stopFlag: MVar2[F, ConsumerExitCode]
 )
 
@@ -45,7 +46,7 @@ class ConfigMapWatcher[F[_]: Effect: Parallel: Timer, T](context: ConfigMapWatch
     }
 
   protected[freya] def registerWatcher(
-    watchable: Watchable[Watch, Watcher[ConfigMap]]
+    watchable: Watchable[Watcher[ConfigMap]]
   ): F[(CloseableWatcher, F[ConsumerExitCode])] = {
 
     val startWatcher = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
@@ -60,7 +61,7 @@ class ConfigMapWatcher[F[_]: Effect: Parallel: Timer, T](context: ConfigMapWatch
         } else logger.debug(s"Unsupported ConfigMap skipped: ${cm.toString}")
       }
 
-      override def onClose(e: KubernetesClientException): Unit =
+      override def onClose(e: WatcherException): Unit =
         ConfigMapWatcher.super.onClose(e)
     }))
 

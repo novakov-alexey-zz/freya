@@ -1,6 +1,5 @@
 package freya.resource
 
-import cats.effect.Sync
 import cats.implicits._
 import freya.watcher.{AnyCustomResource, StringProperty}
 import freya.{CustomResourceParser, JsonReader}
@@ -8,8 +7,7 @@ import freya.{CustomResourceParser, JsonReader}
 import scala.util.{Failure, Success, Try}
 
 private[freya] object CrdParser {
-  def apply[F[_]: Sync](): F[CrdParser] =
-    Sync[F].delay(new CrdParser)
+  def apply(): CrdParser = new CrdParser
 }
 
 private[freya] class CrdParser extends CustomResourceParser {

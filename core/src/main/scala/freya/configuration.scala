@@ -18,6 +18,7 @@ final case class AdditionalPrinterColumn(name: String, columnType: String, jsonP
 
 sealed abstract class Configuration(
   val prefix: String,
+  val version: String,
   val namespace: K8sNamespace = AllNamespaces,
   val customKind: Option[String] = None,
   val eventQueueSize: Int,
@@ -51,14 +52,14 @@ object Configuration {
     override val prefix: String,
     override val eventQueueSize: Int = 10,
     override val concurrentController: Boolean = true,
-    version: String = "v1",
+    override val version: String = "v1",
     override val checkOpenshiftOnStartup: Boolean = true,
     override val customKind: Option[String] = None,
     deployCrd: Boolean = true,
     shortNames: List[String] = List.empty[String],
     pluralName: String = "",
     additionalPrinterColumns: List[AdditionalPrinterColumn] = List.empty
-  ) extends Configuration(prefix, namespace, customKind, eventQueueSize, concurrentController) {
+  ) extends Configuration(prefix, version, namespace, customKind, eventQueueSize, concurrentController) {
 
     def kindPluralCaseInsensitive[T: JsonReader]: String = {
       if (pluralName.isEmpty) getKind + "s" else pluralName
@@ -70,9 +71,10 @@ object Configuration {
     override val prefix: String,
     override val eventQueueSize: Int = 10,
     override val concurrentController: Boolean = true,
+    override val version: String = "v1",
     override val checkOpenshiftOnStartup: Boolean = true,
     override val customKind: Option[String] = None
-  ) extends Configuration(prefix, namespace, customKind, eventQueueSize, concurrentController)
+  ) extends Configuration(prefix, version, namespace, customKind, eventQueueSize, concurrentController)
 
 }
 sealed trait K8sNamespace {

@@ -12,7 +12,8 @@ import freya.watcher.AbstractWatcher.CloseableWatcher
 import freya.{Controller, K8sNamespace}
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
 import io.fabric8.kubernetes.client.dsl.Watchable
-import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watch, Watcher}
+import io.fabric8.kubernetes.client.{KubernetesClient, Watcher}
+import io.fabric8.kubernetes.client.WatcherException
 
 final case class CrdWatcherContext[F[_]: Effect, T, U](
   ns: K8sNamespace,
@@ -40,7 +41,7 @@ class CustomResourceWatcher[F[_]: Effect: Parallel: Timer, T, U](context: CrdWat
   }
 
   protected[freya] def registerWatcher(
-    watchable: Watchable[Watch, Watcher[AnyCustomResource]]
+    watchable: Watchable[Watcher[AnyCustomResource]]
   ): F[(CloseableWatcher, F[ConsumerExitCode])] = {
     val startWatcher = Sync[F].delay(watchable.watch(new Watcher[AnyCustomResource]() {
 
@@ -56,7 +57,7 @@ class CustomResourceWatcher[F[_]: Effect: Parallel: Timer, T, U](context: CrdWat
         logger.debug(s"action enqueued: $action")
       }
 
-      override def onClose(e: KubernetesClientException): Unit =
+      override def onClose(e: WatcherException): Unit =
         CustomResourceWatcher.super.onClose(e)
     }))
 

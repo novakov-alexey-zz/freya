@@ -56,7 +56,7 @@ class OperatorsTest
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkOpenshiftOnStartup = false)
   val configMapCfg: ConfigMapConfig = ConfigMapConfig(AllNamespaces, prefix, checkOpenshiftOnStartup = false)
   val client = new DefaultKubernetesClient()
-  val cmParser: ConfigMapParser = ConfigMapParser[IO]().unsafeRunSync()
+  val cmParser: ConfigMapParser = ConfigMapParser()
 
   val mapper = new ObjectMapper
   mapper.registerModule(DefaultScalaModule)
@@ -64,10 +64,10 @@ class OperatorsTest
   def client[F[_]: Sync]: F[KubernetesClient] =
     Sync[F].pure(client)
 
-  def makeWatchable[T, U]: (Watchable[Watch, Watcher[U]], mutable.Set[Watcher[U]]) = {
+  def makeWatchable[T, U]: (Watchable[Watcher[U]], mutable.Set[Watcher[U]]) = {
     val singleWatcher = concurrentHashSet[Watcher[U]]
 
-    val watchable = new Watchable[Watch, Watcher[U]] {
+    val watchable = new Watchable[Watcher[U]] {
       override def watch(watcher: Watcher[U]): Watch = {
         singleWatcher += watcher
 
@@ -85,7 +85,7 @@ class OperatorsTest
   }
 
   implicit def cmWatch[F[_]: ConcurrentEffect: Timer: Parallel, T](
-    implicit watchable: Watchable[Watch, Watcher[ConfigMap]]
+    implicit watchable: Watchable[Watcher[ConfigMap]]
   ): ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) =>
       new ConfigMapWatcher(context) {
@@ -94,7 +94,7 @@ class OperatorsTest
       }
 
   implicit def crdWatch[F[_]: ConcurrentEffect: Timer: Parallel, T, U](
-    implicit watchable: Watchable[Watch, Watcher[AnyCustomResource]]
+    implicit watchable: Watchable[Watcher[AnyCustomResource]]
   ): CrdWatchMaker[F, T, U] =
     (context: CrdWatcherContext[F, T, U]) =>
       new CustomResourceWatcher(context) {
@@ -116,7 +116,7 @@ class OperatorsTest
   ): (Operator[F, Kerb, Unit], mutable.Set[Watcher[ConfigMap]]) = {
     import freya.yaml.jackson._
     val (fakeWatchable, singleWatcher) = makeWatchable[Kerb, ConfigMap]
-    implicit val watchable: Watchable[Watch, Watcher[ConfigMap]] = fakeWatchable
+    implicit val watchable: Watchable[Watcher[ConfigMap]] = fakeWatchable
 
     Operator.ofConfigMap[F, Kerb](configMapCfg, client[F], controller) -> singleWatcher
   }
@@ -129,7 +129,7 @@ class OperatorsTest
     cfg: CrdConfig = crdCfg
   ): (Operator[F, T, Status], mutable.Set[Watcher[AnyCustomResource]], mutable.Set[StatusUpdate[Status]]) = {
     val (fakeWatchable, singleWatcher) = makeWatchable[T, AnyCustomResource]
-    implicit val watchable: Watchable[Watch, Watcher[AnyCustomResource]] = fakeWatchable
+    implicit val watchable: Watchable[Watcher[AnyCustomResource]] = fakeWatchable
 
     val status = mutable.Set.empty[StatusUpdate[Status]]
     implicit val feedbackConsumer: FeedbackConsumerMaker[F, Status] = testFeedbackConsumer[F](status)
@@ -504,7 +504,7 @@ class OperatorsTest
       }
     }
 
-    singleWatcher.foreach(_.onClose(new KubernetesClientException("test")))
+    singleWatcher.foreach(_.onClose(new WatcherException("test")))
 
     eventually {
       exitCode.isCompleted should ===(true)
@@ -524,7 +524,7 @@ class OperatorsTest
   private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T]) = {
     singleWatcher.foreach { w =>
       val raiseException = arbitrary[Boolean].sample.getOrElse(fail("failed to generate boolean"))
-      val ex = if (raiseException) new KubernetesClientException("test exception") else null
+      val ex = if (raiseException) new WatcherException("test exception") else null
       w.onClose(ex)
     }
     eventually {

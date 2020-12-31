@@ -2,7 +2,7 @@ package freya
 
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import freya.internal.crd.{AnyCrDoneable, AnyCrList}
+import freya.internal.crd.AnyCrList
 import freya.internal.kubeapi.CrdApi
 import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.json.circe._
@@ -26,16 +26,15 @@ class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
   private[freya] def createWatch(
     kerbClient: NonNamespaceOperation[
       AnyCustomResource,
-      AnyCrList,
-      AnyCrDoneable,
-      Resource[AnyCustomResource, AnyCrDoneable]
+      AnyCrList,      
+      Resource[AnyCustomResource]
     ]
   ): Watch = {
     kerbClient.watch(new Watcher[AnyCustomResource]() {
       override def eventReceived(action: Watcher.Action, resource: AnyCustomResource): Unit =
         println(s"received: $action for $resource")
 
-      override def onClose(cause: KubernetesClientException): Unit =
+      override def onClose(cause: WatcherException): Unit =
         println(s"watch is closed, $cause")
     })
   }
@@ -76,7 +75,7 @@ class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
     val client = new DefaultKubernetesClient()
 
     val kerbClient = client
-      .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
+      .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList])
       .inNamespace("test")
     val watch = createWatch(kerbClient)
 

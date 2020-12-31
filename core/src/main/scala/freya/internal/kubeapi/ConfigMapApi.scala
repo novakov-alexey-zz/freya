@@ -1,18 +1,17 @@
 package freya.internal.kubeapi
 
-import java.lang
-
 import freya.K8sNamespace
 import freya.K8sNamespace.AllNamespaces
 import io.fabric8.kubernetes.api.model.{ConfigMap, ConfigMapList}
-import io.fabric8.kubernetes.client.dsl.{FilterWatchListDeletable, FilterWatchListMultiDeletable}
-import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
 
 import scala.jdk.CollectionConverters._
+import io.fabric8.kubernetes.client.dsl.FilterWatchListMultiDeletable
+import io.fabric8.kubernetes.client.KubernetesClient
+import io.fabric8.kubernetes.client.dsl.FilterWatchListDeletable
 
 private[freya] class ConfigMapApi(client: KubernetesClient) {
-  type FilteredN = FilterWatchListMultiDeletable[ConfigMap, ConfigMapList, lang.Boolean, Watch]
-  type Filtered = FilterWatchListDeletable[ConfigMap, ConfigMapList, lang.Boolean, Watch]
+  type FilteredN = FilterWatchListMultiDeletable[ConfigMap, ConfigMapList]
+  type Filtered = FilterWatchListDeletable[ConfigMap, ConfigMapList]
 
   def in(ns: K8sNamespace): FilteredN = {
     val _cms = client.configMaps
@@ -23,6 +22,6 @@ private[freya] class ConfigMapApi(client: KubernetesClient) {
   def list(cms: FilteredN, labels: Map[String, String]): List[ConfigMap] =
     cms.withLabels(labels.asJava).list.getItems.asScala.toList
 
-  def select(cms: FilteredN, labels: (String, String)): Filtered =
-    cms.withLabels(Map(labels).asJava)
+  def select(cms: FilteredN, labels: Map[String, String]): Filtered =
+    cms.withLabels(labels.asJava)
 }

@@ -4,7 +4,7 @@ import cats.effect.IO
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.{AllNamespaces, Namespace}
-import freya.internal.crd.{AnyCrDoneable, AnyCrList, Deployer}
+import freya.internal.crd.{AnyCrList, Deployer}
 import freya.internal.kubeapi.MetadataApi
 import freya.models.{CustomResource, Metadata, Resource}
 import freya.resource.{ConfigMapParser, CrdParser}
@@ -92,7 +92,7 @@ class OperatorHelperTest
     val context = CrdHelperContext(cfg, client, None, crd, parser)
     val helper = new CrdHelper[IO, Kerb, Status](context)
     val krbClient = client
-      .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
+      .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList])
 
     //when
     krbClient.inNamespace(testNs.value).delete()

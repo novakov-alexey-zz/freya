@@ -7,7 +7,7 @@ import freya.internal.OperatorUtils
 import freya.internal.kubeapi.CrdApi.Filtered
 import freya.internal.kubeapi.{ConfigMapApi, CrdApi, MetadataApi}
 import freya.models.{CustomResource, Resource, ResourcesList}
-import freya.resource.{ConfigMapParser, Labels}
+import freya.resource.{ConfigMapParser, ConfigMapLabels}
 import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
@@ -33,7 +33,7 @@ object ConfigMapHelperMaker {
     (context: ConfigMapHelperContext) => new ConfigMapHelper[F, T](context)
 }
 
-sealed abstract class AbstractHelper[F[_], T: Reader, U](val client: KubernetesClient, val cfg: Configuration) {
+sealed abstract class ResourceHelper[F[_], T: Reader, U](val client: KubernetesClient, val cfg: Configuration) {
   val kind: String = cfg.getKind
   val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(client.getNamespace, cfg.namespace)
 
@@ -56,9 +56,9 @@ object ConfigMapHelper {
 }
 
 class ConfigMapHelper[F[_], T: YamlReader](val context: ConfigMapHelperContext)
-    extends AbstractHelper[F, T, Unit](context.client, context.cfg) {
+    extends ResourceHelper[F, T, Unit](context.client, context.cfg) {
 
-  val selector: Map[String, String] = Map(Labels.forKind(cfg.getKind, cfg.prefix))
+  val selector: Map[String, String] = ConfigMapLabels.forKind(cfg.getKind, cfg.prefix, cfg.version)
   private val cmApi = new ConfigMapApi(client)
 
   def currentResources(namespace: K8sNamespace = targetNamespace): Either[Throwable, ResourcesList[T, Unit]] = {
@@ -109,7 +109,7 @@ object CrdHelper {
 }
 
 class CrdHelper[F[_], T: JsonReader, U: JsonReader](val context: CrdHelperContext)
-    extends AbstractHelper[F, T, U](context.client, context.cfg) {
+    extends ResourceHelper[F, T, U](context.client, context.cfg) {
   private val crdApi = new CrdApi(client, context.crd)
 
   def currentResources(namespace: K8sNamespace = targetNamespace): Either[Throwable, ResourcesList[T, U]] = {

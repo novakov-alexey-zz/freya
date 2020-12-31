@@ -1,10 +1,8 @@
 package freya.internal.kubeapi
 
-import java.lang
-
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
-import freya.internal.crd.{AnyCrDoneable, AnyCrList}
+import freya.internal.crd.AnyCrList
 import freya.internal.kubeapi.CrdApi.{Filtered, FilteredMulti, StatusUpdate, statusUpdateJson}
 import freya.models.Metadata
 import freya.watcher.AnyCustomResource
@@ -12,24 +10,25 @@ import freya.{JsonWriter, K8sNamespace}
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent}
 import io.fabric8.kubernetes.client.dsl.{FilterWatchListDeletable, FilterWatchListMultiDeletable}
 import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext
-import io.fabric8.kubernetes.client.{KubernetesClient, Watch}
+import io.fabric8.kubernetes.client.KubernetesClient
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 object CrdApi {
   type FilteredMulti =
-    FilterWatchListMultiDeletable[AnyCustomResource, AnyCrList, lang.Boolean, Watch]
+    FilterWatchListMultiDeletable[AnyCustomResource, AnyCrList]
 
-  type Filtered = FilterWatchListDeletable[AnyCustomResource, AnyCrList, lang.Boolean, Watch]
+  type Filtered = FilterWatchListDeletable[AnyCustomResource, AnyCrList]
 
   final case class StatusUpdate[T](meta: Metadata, status: T)
 
+  // TODO: abstract CRD to let a user to switch between v1beta and v1
   def list(client: KubernetesClient): List[CustomResourceDefinition] =
-    client.customResourceDefinitions.list.getItems.asScala.toList
+    client.apiextensions.v1beta1.customResourceDefinitions.list.getItems.asScala.toList
 
   def createOrReplace(client: KubernetesClient, crd: CustomResourceDefinition): CustomResourceDefinition =
-    client.customResourceDefinitions.createOrReplace(crd)
+    client.apiextensions.v1beta1.customResourceDefinitions.createOrReplace(crd)
 
   def getCrdBuilder(
     prefix: String,
@@ -97,7 +96,7 @@ private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinit
   }
 
   private def customResourceOperation[T] =
-    client.customResources(context, classOf[AnyCustomResource], classOf[AnyCrList], classOf[AnyCrDoneable])
+    client.customResources(context, classOf[AnyCustomResource], classOf[AnyCrList])
 
   def updateStatus[T: JsonWriter](su: StatusUpdate[T]): Unit = {
     val resourceProperties = Try(

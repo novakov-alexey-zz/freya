@@ -13,7 +13,7 @@ import freya.Retry.{Infinite, Times}
 import freya.internal.AnsiColors._
 import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.internal.{OperatorUtils, Reconciler}
-import freya.resource.{ConfigMapParser, CrdParser, Labels}
+import freya.resource.{ConfigMapParser, CrdParser, ConfigMapLabels}
 import freya.watcher.AbstractWatcher.{Action, CloseableWatcher}
 import freya.watcher.FeedbackConsumer.FeedbackChannel
 import freya.watcher._
@@ -29,8 +29,8 @@ object Operator extends LazyLogging {
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: KubernetesClient => Controller[F, T, Unit]
-  )(
-    implicit watch: CrdWatchMaker[F, T, Unit],
+  )(implicit
+    watch: CrdWatchMaker[F, T, Unit],
     helper: CrdHelperMaker[F, T, Unit],
     consumer: FeedbackConsumerMaker[F, Unit]
   ): Operator[F, T, Unit] =
@@ -40,8 +40,8 @@ object Operator extends LazyLogging {
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: Controller[F, T, U]
-  )(
-    implicit watch: CrdWatchMaker[F, T, U],
+  )(implicit
+    watch: CrdWatchMaker[F, T, U],
     helper: CrdHelperMaker[F, T, U],
     consumer: FeedbackConsumerMaker[F, U]
   ): Operator[F, T, U] =
@@ -51,8 +51,8 @@ object Operator extends LazyLogging {
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: CrdHelper[F, T, U] => Controller[F, T, U]
-  )(
-    implicit watch: CrdWatchMaker[F, T, U],
+  )(implicit
+    watch: CrdWatchMaker[F, T, U],
     helper: CrdHelperMaker[F, T, U],
     consumer: FeedbackConsumerMaker[F, U]
   ): Operator[F, T, U] =
@@ -61,8 +61,8 @@ object Operator extends LazyLogging {
   def ofCrd[F[_]: Timer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
     cfg: CrdConfig,
     client: F[KubernetesClient]
-  )(controller: CrdHelper[F, T, U] => KubernetesClient => Controller[F, T, U])(
-    implicit F: ConcurrentEffect[F],
+  )(controller: CrdHelper[F, T, U] => KubernetesClient => Controller[F, T, U])(implicit
+    F: ConcurrentEffect[F],
     watch: CrdWatchMaker[F, T, U],
     crdHelper: CrdHelperMaker[F, T, U],
     deployer: CrdDeployer[F],
@@ -73,7 +73,7 @@ object Operator extends LazyLogging {
       c <- client
       isOpenShift <- checkEnvAndConfig[F, T](c, cfg)
       crd <- deployer.deployCrd[T](c, cfg, isOpenShift)
-      parser <- CrdParser()
+      parser = CrdParser()
       stopFlag <- MVar[F].empty[ConsumerExitCode]
       feedbackChannel <- MVar[F].empty[Either[Unit, StatusUpdate[U]]]
       helper = {
@@ -122,8 +122,8 @@ object Operator extends LazyLogging {
 
   def ofConfigMap[F[_]: Timer: Parallel, T: YamlReader](cfg: ConfigMapConfig, client: F[KubernetesClient])(
     makeController: ConfigMapHelper[F, T] => CmController[F, T]
-  )(
-    implicit F: ConcurrentEffect[F],
+  )(implicit
+    F: ConcurrentEffect[F],
     watchMaker: ConfigMapWatchMaker[F, T],
     helperMaker: ConfigMapHelperMaker[F, T]
   ): Operator[F, T, Unit] = {
@@ -132,7 +132,7 @@ object Operator extends LazyLogging {
       k8sClient <- client
       isOpenShift <- checkEnvAndConfig(k8sClient, cfg)
       stopChannel <- MVar[F].empty[ConsumerExitCode]
-      parser <- ConfigMapParser()
+      parser = ConfigMapParser()
       helper = {
         val context = ConfigMapHelperContext(cfg, k8sClient, isOpenShift, parser)
         helperMaker.make(context)
@@ -153,7 +153,7 @@ object Operator extends LazyLogging {
         channels,
         ConfigMapHelper.convertCm[T](parser),
         k8sClient,
-        Labels.forKind(cfg.getKind, cfg.prefix),
+        ConfigMapLabels.forKind(cfg.getKind, cfg.prefix, cfg.version),
         stopChannel
       )
       w <- F.delay(watchMaker.make(context).watch)
@@ -163,7 +163,7 @@ object Operator extends LazyLogging {
   }
 
   private def createPipeline[F[_]: ConcurrentEffect, T, U](
-    helper: AbstractHelper[F, T, U],
+    helper: ResourceHelper[F, T, U],
     controller: Controller[F, T, U],
     watcher: F[(CloseableWatcher, F[ConsumerExitCode])],
     channels: Channels[F, T, U]
@@ -181,7 +181,7 @@ object Operator extends LazyLogging {
 }
 
 private case class OperatorPipeline[F[_], T, U](
-  helper: AbstractHelper[F, T, U],
+  helper: ResourceHelper[F, T, U],
   consumer: F[(CloseableWatcher, F[ConsumerExitCode])],
   channels: Channels[F, T, U],
   onInit: F[Unit]
@@ -193,18 +193,18 @@ class Operator[F[_], T: Reader, U] private (
 )(implicit F: ConcurrentEffect[F], T: Timer[F])
     extends LazyLogging {
 
+  val helper: F[ResourceHelper[F, T, U]] = pipeline.map(_.helper)
+
   def run: F[ExitCode] =
     Resource
-      .make(start) {
-        case (_, consumer) =>
-          F.delay(consumer.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx"))
+      .make(start) { case (_, consumer) =>
+        F.delay(consumer.close()) *> F.delay(logger.info(s"${re}Operator stopped$xx"))
       }
-      .use {
-        case (signal, _) => signal
+      .use { case (signal, _) =>
+        signal
       }
-      .recoverWith {
-        case e =>
-          F.delay(logger.error("Got error while running an operator", e)) *> ExitCode.Error.pure[F]
+      .recoverWith { case e =>
+        F.delay(logger.error("Got error while running an operator", e)) *> ExitCode.Error.pure[F]
       }
 
   def withReconciler(interval: FiniteDuration): Operator[F, T, U] =
@@ -241,6 +241,7 @@ class Operator[F[_], T: Reader, U] private (
     (for {
       pipe <- pipeline
 
+      _ = CustomResourceAnnotations.set(pipe.helper.cfg.prefix, "v1")
       kind = pipe.helper.cfg.getKind
       namespace = pipe.helper.targetNamespace
 
@@ -252,12 +253,11 @@ class Operator[F[_], T: Reader, U] private (
           logger
             .info(s"${gr}Operator $kind was started$xx in namespace '$namespace'")
         )
-      workers = reconcilerInterval.fold(consumer)(
-        i => F.race(consumer, runReconciler(i, pipe, kind, namespace)).map(_.merge)
+      workers = reconcilerInterval.fold(consumer)(i =>
+        F.race(consumer, runReconciler(i, pipe, kind, namespace)).map(_.merge)
       )
-    } yield (workers, closableWatcher)).onError {
-      case ex: Throwable =>
-        F.delay(logger.error(s"Could not to start operator", ex))
+    } yield (workers, closableWatcher)).onError { case ex: Throwable =>
+      F.delay(logger.error(s"Could not to start operator", ex))
     }
 
   private def runReconciler(

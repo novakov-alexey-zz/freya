@@ -1,11 +1,10 @@
 package freya.resource
 
-import cats.effect.Sync
 import com.typesafe.scalalogging.LazyLogging
+import freya.YamlReader
 import freya.internal.kubeapi.MetadataApi
 import freya.models.Metadata
 import freya.resource.ConfigMapParser.SpecificationKey
-import freya.YamlReader
 import io.fabric8.kubernetes.api.model.ConfigMap
 
 import scala.jdk.CollectionConverters._
@@ -14,8 +13,7 @@ import scala.util.{Failure, Success, Try}
 private[freya] object ConfigMapParser {
   val SpecificationKey = "config"
 
-  def apply[F[_]: Sync](): F[ConfigMapParser] =
-    Sync[F].delay(new ConfigMapParser)
+  def apply(): ConfigMapParser = new ConfigMapParser
 }
 
 private[freya] class ConfigMapParser extends LazyLogging {
