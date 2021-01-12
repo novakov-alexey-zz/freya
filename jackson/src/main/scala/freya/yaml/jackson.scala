@@ -2,7 +2,7 @@ package freya.yaml
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.YamlReader
 
 import scala.reflect.ClassTag
@@ -11,7 +11,7 @@ import scala.util.Try
 object jackson {
 
   implicit def jacksonYamlReader[T: ClassTag]: YamlReader[T] = new YamlReader[T] {
-    val mapper = new ObjectMapper(new YAMLFactory()) with ScalaObjectMapper
+    val mapper = new ObjectMapper(new YAMLFactory())
     mapper.registerModule(DefaultScalaModule)
 
     private val clazz: Class[T] =

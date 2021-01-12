@@ -2,7 +2,7 @@ package freya
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-import com.fasterxml.jackson.module.scala.{DefaultScalaModule, ScalaObjectMapper}
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.generators.arbitrary
 import freya.resource.ConfigMapParser
 import freya.watcher._
@@ -63,7 +63,7 @@ object WatcherAction {
 }
 
 object CM {
-  val mapper = new ObjectMapper(new YAMLFactory()) with ScalaObjectMapper
+  val mapper = new ObjectMapper(new YAMLFactory())
   mapper.registerModule(DefaultScalaModule)
 
   def gen[T](implicit A: Arbitrary[T]): Gen[ConfigMap] = gen[T](Map.empty[String, String])
