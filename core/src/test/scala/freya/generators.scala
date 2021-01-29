@@ -49,10 +49,10 @@ object AnyCustomResource {
       val r = new AnyCustomResource
       r.setApiVersion("io.github.novakov-alexey/v1")
       r.setKind(kind)
-      r.setSpec(StringProperty(mapper.writeValueAsString(spec)))
+      r.setSpec(mapper.writeValueAsString(spec))
       r.setMetadata(meta)
       val status = Status()
-      r.setStatus(StringProperty(mapper.writeValueAsString(status)))
+      r.setStatus(mapper.writeValueAsString(status))
       (r, spec, status)
     }
 }

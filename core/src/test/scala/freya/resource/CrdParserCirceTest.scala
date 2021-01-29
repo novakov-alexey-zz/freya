@@ -1,7 +1,7 @@
 package freya.resource
 
 import freya.json.circe._
-import freya.watcher.{AnyCustomResource, StringProperty}
+import freya.watcher.AnyCustomResource
 import freya.{Kerb, Status}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
@@ -22,7 +22,7 @@ class CrdParserCirceTest extends AnyPropSpec with ScalaCheckPropertyChecks with 
   property("CrdParser returns error result when spec is invalid") {
     forAll { s: String =>
       val anyCr = new AnyCustomResource()
-      anyCr.setSpec(StringProperty(s))
+      anyCr.setSpec(s)
       val parsed = parser.parse[Kerb, Status](anyCr)
       parsed.isLeft should ===(true)
     }

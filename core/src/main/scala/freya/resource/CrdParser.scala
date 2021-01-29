@@ -1,7 +1,7 @@
 package freya.resource
 
 import cats.implicits._
-import freya.watcher.{AnyCustomResource, StringProperty}
+import freya.watcher.AnyCustomResource
 import freya.{CustomResourceParser, JsonReader}
 
 import scala.util.{Failure, Success, Try}
@@ -21,9 +21,9 @@ private[freya] class CrdParser extends CustomResourceParser {
       }
     } yield (spec, status)
 
-  private def parseProperty[T: JsonReader](property: StringProperty, name: String) = {
+  private def parseProperty[T: JsonReader](property: String, name: String) = {
     val read = implicitly[JsonReader[T]]
-    val parsed = read.fromString(property.value)
+    val parsed = read.fromString(property)
     lazy val clazz = read.targetClass
 
     parsed match {
