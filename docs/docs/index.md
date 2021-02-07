@@ -1,6 +1,7 @@
 ---
 title: Overview
 slug: /
+custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/index.md
 ---
 
 [![Build Status](https://travis-ci.org/novakov-alexey/freya.svg?branch=master)](https://travis-ci.org/novakov-alexey/freya)
