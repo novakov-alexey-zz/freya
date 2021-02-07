@@ -1,6 +1,6 @@
 ---
 title: Configuration
-# position: 4
+custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/configuration.md
 ---
 
 <!-- ## Configuration -->

@@ -1,6 +1,6 @@
 ---
 title: CRD Operator
-# position: 2
+custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/crd-operator.md
 ---
 
 <!-- # Table of Contents

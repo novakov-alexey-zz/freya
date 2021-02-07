@@ -1,9 +1,7 @@
 ---
 title: Resource parsing
-# position: 4
+custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/resource-parsing.md
 ---
-
-<!-- # Resource Parsing -->
 
 Custom resources or ConfigMaps are parsed into a user defined case class(es). Besides parsing, Freya converts
 a user defined case class for status into a JSON string.

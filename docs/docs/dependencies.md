@@ -1,8 +1,7 @@
 ---
 title: Dependencies
+custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/dependencies.md
 ---
-
-<!-- # Dependencies -->
 
 ## fabric8 kubernetes-client
 

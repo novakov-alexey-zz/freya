@@ -1,6 +1,6 @@
 ---
 title: ConfigMap Operator
-# position: 3
+custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/configmap-operator.md
 ---
 
 

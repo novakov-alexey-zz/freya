@@ -1,9 +1,7 @@
 ---
 title: Reconcile events
-# position: 5
+custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/reconcile-events.md
 ---
-
-<!-- # Reconcile events -->
 
 Freya can start your operator with parallel reconciler thread, which is puling current 
 resources (CRs or ConfigMaps) at specified time interval. This feature allows to pro-actively check
