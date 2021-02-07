@@ -51,6 +51,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
+      - uses: actions/setup-java@v1
+      - name: Compile documentation
+        run: sbt docs/mdoc
       - uses: actions/setup-node@v1
         with:
           node-version: '12.x'
@@ -66,10 +69,7 @@ jobs:
           Host github.com
           HostName github.com
           IdentityFile ~/.ssh/id_rsa
-          EOT
-      - name: Compile documentation
-        uses: actions/setup-java@v1
-        run: sbt docs/mdoc
+          EOT      
       - name: Release to GitHub Pages
         env:
           USE_SSH: true
