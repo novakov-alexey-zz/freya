@@ -1,8 +1,8 @@
 module.exports = {
   title: 'Freya',
   tagline: 'Kubernetes Operator library for Scala',
-  url: 'https://novakov-alexey.github.io/freya/',
-  baseUrl: '/',
+  url: 'https://novakov-alexey.github.io/freya',
+  baseUrl: '/freya/',
   onBrokenLinks: 'log',
   onBrokenMarkdownLinks: 'warn',
   favicon: 'img/favicon.png',
