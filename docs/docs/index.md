@@ -1,17 +1,16 @@
 ---
-layout: home
-title: Home
-section: home
-position: 1
+title: Overview
+slug: /
 ---
-# Freya
 
 [![Build Status](https://travis-ci.org/novakov-alexey/freya.svg?branch=master)](https://travis-ci.org/novakov-alexey/freya)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/b91f0a22195e499c9d6bafd097c69dd6)](https://www.codacy.com/manual/novakov.alex/freya?utm_source=github.com&utm_medium=referral&utm_content=novakov-alexey/freya&utm_campaign=Badge_Grade)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.github.novakov-alexey/freya-core_2.13/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.github.novakov-alexey/freya-core_2.13)
 <a href="https://typelevel.org/cats/"><img src="https://typelevel.org/cats/img/cats-badge-tiny.png" alt="Cats friendly" /></a> 
+<br/>
+<br/>
 
-<img src="https://novakov-alexey.github.io/freya/img/freya_logo.png" alt="freya_logo" width="200"/>
+<img src="/img/freya_logo.png" alt="freya_logo" width="200"/>
 
 Freya is a Scala library to implement custom controllers for Kubernetes (K8s) easily. 
 An implementation of custom controller is also known as [Operator Pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/). 
@@ -55,8 +54,3 @@ Jackson:
 ```scala
 "io.github.novakov-alexey" %% "freya-jackson" % "@VERSION@"
 ```
-
-## Documentation
-
-Microsite: [https://novakov-alexey.github.io/freya/docs/](https://novakov-alexey.github.io/freya/docs/)
-

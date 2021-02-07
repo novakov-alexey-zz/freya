@@ -62,19 +62,19 @@ lazy val `core` = (project in file("core"))
     addCompilerPlugin(betterMonadicFor),
     publishArtifact in Test := false,
     libraryDependencies ++= Seq(
-          k8sClient,
-          k8sModel,
-          k8sServerMock % Test,
-          catsEffect,
-          scalaLogging,
-          circeGeneric % Test,
-          scalaTest % Test,
-          scalaCheck % Test,
-          scalaTestCheck % Test,
-          logbackClassic % Test,
-          jacksonJsonSchema % Test,
-          scalaJsonSchema % Test
-        ),
+      k8sClient,
+      k8sModel,
+      k8sServerMock % Test,
+      catsEffect,
+      scalaLogging,
+      circeGeneric % Test,
+      scalaTest % Test,
+      scalaCheck % Test,
+      scalaTestCheck % Test,
+      logbackClassic % Test,
+      jacksonJsonSchema % Test,
+      scalaJsonSchema % Test
+    ),
     git.useGitDescribe := true
   )
   .dependsOn(`api`, `jackson` % "test", `circe` % "test")
@@ -88,52 +88,19 @@ lazy val `circe` = (project in file("circe"))
   .settings(moduleName := "freya-circe", libraryDependencies ++= Seq(circeCore, circeParser, circeYaml))
   .dependsOn(`api`)
 
-lazy val docs = (project in file("docs"))
-  .settings(moduleName := "docs")
+lazy val docs = project
+  .settings(moduleName := "freya-docs")
   .settings(libraryDependencies += circeExtra)
   .settings(
     Compile / scalacOptions -= "-Wunused:imports",
     publishArtifact := false,
-    mdocIn := new File("docs/docs"),
+    mdocIn := file("docs/docs"),
     mdocVariables := Map(
-          "VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>")
-        ),
-    micrositeExtraMdFilesOutput := new File("./docs/docs"),
-    micrositeExtraMdFiles := Map(
-          file("README.md") -> ExtraMdFileConfig(
-                "index.md",
-                "home",
-                Map("title" -> "Home", "section" -> "home", "position" -> "1")
-              )
-        ),
-    micrositeName := "Freya",
-    micrositeAuthor := "Alexey Novakov",
-    micrositeTwitterCreator := "@alexey_novakov",
-    micrositeTwitter := "@freya-scala",
-    micrositeGithubOwner := "novakov-alexey",
-    micrositeGithubRepo := "freya",
-    micrositeHighlightLanguages ++= Seq("yaml", "json", "yml"),
-    micrositeBaseUrl := "/freya",
-    micrositeUrl := "https://novakov-alexey.github.io/freya/",
-    micrositeGitterChannelUrl := "freya-scala/community",
-    micrositeDocumentationUrl := "/freya/docs",
-    micrositeHighlightTheme := "atelier-sulphurpool-light",
-    micrositeTheme := "pattern",
-    micrositeDataDirectory := (resourceDirectory in Compile).value / "microsite" / "data",
-    micrositePalette := Map(
-          "brand-primary" -> "#3E92CC",
-          "brand-secondary" -> "#0A2463",
-          "brand-tertiary" -> "#070890",
-          "gray-dark" -> "#3A3A3A",
-          "gray" -> "#7B7B7E",
-          "gray-light" -> "#E5E5E6",
-          "gray-lighter" -> "#F4F3F4",
-          "white-color" -> "#FFFFFF"
-        )
+      "VERSION" -> git.gitDescribedVersion.value.flatMap(_.split("-").headOption).getOrElse("<version>")
+    )
   )
   .dependsOn(`core` % "compile->test")
-  .enablePlugins(MicrositesPlugin)
-  .enablePlugins(MdocPlugin)
+  .enablePlugins(MdocPlugin, DocusaurusPlugin)
 
 lazy val generateSchema = taskKey[Unit]("Generate JSON Schema")
 generateSchema := (runMain in Test).toTask("freya.ScalaJsonSchema").value

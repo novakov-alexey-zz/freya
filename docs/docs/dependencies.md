@@ -1,12 +1,10 @@
 ---
-layout: docs
 title: Dependencies
-permalink: docs/dependencies/
 ---
 
-# Dependencies
+<!-- # Dependencies -->
 
-## fabric8 
+## fabric8 kubernetes-client
 
 Freya depends on two fabric8 modules such as `kubernetes-client` and `kubernetes-model`. Client, which needs to
 be passed as parameter to Freya operator is not going to be closed upon controller close event or restarts. 

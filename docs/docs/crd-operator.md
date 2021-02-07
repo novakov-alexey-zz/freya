@@ -1,18 +1,16 @@
 ---
-layout: docs
 title: CRD Operator
-permalink: docs/
-position: 2
+# position: 2
 ---
 
-# Table of Contents
+<!-- # Table of Contents
 1. [Implementation Steps with Freya](#implementation-steps-with-freya)
 2. [Event Dispatching](#event-dispatching)
 3. [Restart Configuration](#restart-configuration)
 4. [Deploy CRD Manually](#deploy-crd-manually)
 5. [CRD Helper](#crd-helper)
 
-# CRD Operator
+# CRD Operator -->
 
 Further in the documentation, _Controller_ and _Operator_ definitions are used as synonymous.
 
@@ -82,13 +80,17 @@ class KerbController[F[_]](implicit F: ConcurrentEffect[F])
   extends Controller[F, Kerb, Status] with LazyLogging {
 
   override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    F.delay(logger.info(s"new Krb added: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
+    F.delay(
+      logger.info(s"new Krb added: ${krb.spec}, ${krb.metadata}")
+    ) *> F.pure(Some(Status(true)))
 
   override def onDelete(krb: CustomResource[Kerb, Status]): F[Unit] =
     F.delay(logger.info(s"Krb deleted: ${krb.spec}, ${krb.metadata}"))
 
   override def onModify(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
-    F.delay(logger.info(s"Krb modified: ${krb.spec}, ${krb.metadata}")) *> F.pure(Some(Status(true)))
+    F.delay(
+        logger.info(s"Krb modified: ${krb.spec}, ${krb.metadata}")
+    ) *> F.pure(Some(Status(true)))
   
   override def onInit(): F[Unit] =
     F.delay(logger.info(s"init completed"))
@@ -139,7 +141,7 @@ connection. Running Operator is watching for events:
 
 ## Event Dispatching
 
-<img src="https://novakov-alexey.github.io/freya/img/freya_runtime.png" alt="freya_runtime" width="700"/>
+![Freya Runtime](/img/freya_runtime.png)
 
 Freya dispatches api-server events concurrently accross different namespaces, but in original order within the same namespace. Supplied controller will be called concurrently, thus any state variables of the controller needs to be thread-safe or atomic. In order to use single-threaded dispatch, one can set `false` to `Configuration#concurrentController`. 
 
@@ -231,8 +233,10 @@ val controller = (helper: CrdHelper[IO, Kerb, NoStatus]) =>
         IO.raiseError, // refusing to process
         r =>
             IO(r.foreach {
-                case Left((error, r)) => println(s"Failed to parse CR instances $r, error = $error")
-                case Right(resource) => println(s"current ${cfg.getKind} CRs: ${resource.spec}")
+                case Left((error, r)) => 
+                  println(s"Failed to parse CR instances $r, error = $error")
+                case Right(resource) => 
+                  println(s"current ${cfg.getKind} CRs: ${resource.spec}")
             })
       )
   }

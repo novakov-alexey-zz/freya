@@ -1,11 +1,9 @@
 ---
-layout: docs
 title: Reconcile events
-permalink: docs/reconcile-events/
-position: 5
+# position: 5
 ---
 
-# Reconcile events
+<!-- # Reconcile events -->
 
 Freya can start your operator with parallel reconciler thread, which is puling current 
 resources (CRs or ConfigMaps) at specified time interval. This feature allows to pro-actively check
@@ -45,7 +43,9 @@ implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
 // override reconcile method
 
-class KerbController[F[_]](@unused client: KubernetesClient)(implicit F: ConcurrentEffect[F]) 
+class KerbController[F[_]](@unused client: KubernetesClient)(
+  implicit F: ConcurrentEffect[F]
+) 
   extends Controller[F, Kerb, Unit] with LazyLogging {
 
   override def reconcile(krb: CustomResource[Kerb, Unit]): F[NoStatus] =

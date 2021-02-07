@@ -1,11 +1,9 @@
 ---
-layout: docs
 title: Resource parsing
-permalink: docs/resource-parsing/
-position: 4
+# position: 4
 ---
 
-# Resource Parsing
+<!-- # Resource Parsing -->
 
 Custom resources or ConfigMaps are parsed into a user defined case class(es). Besides parsing, Freya converts
 a user defined case class for status into a JSON string.
@@ -59,7 +57,8 @@ Circe can derive its decoder/encoders automatically, when using its `generic` mo
 
 ```scala mdoc
 import freya.json.circe._
-// this import will derive required decoders/encoders for your spec and status case classes
+// this import will derive required decoders/encoders 
+// for your spec and status case classes
 import io.circe.generic.auto._ 
 ```
 
@@ -87,7 +86,10 @@ import Password.{Static, Random}
 
 @JsonTypeInfo(use = Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes(
-  Array(new Type(value = classOf[Static], name = "static"), new Type(value = classOf[Random], name = "random"))
+  Array(
+    new Type(value = classOf[Static], name = "static"), 
+    new Type(value = classOf[Random], name = "random")
+  )
 )
 sealed trait Password
 object Password {
@@ -97,7 +99,10 @@ object Password {
 
 @JsonTypeInfo(use = Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes(
-  Array(new Type(value = classOf[Keytab], name = "Keytab"), new Type(value = classOf[KeytabAndPassword], name = "KeytabAndPassword"))
+  Array(
+    new Type(value = classOf[Keytab], name = "Keytab"), 
+    new Type(value = classOf[KeytabAndPassword], name = "KeytabAndPassword")
+  )
 )
 sealed trait Secret {
   val name: String
@@ -107,9 +112,15 @@ object Secret {
   final case class KeytabAndPassword(name: String) extends Secret
 }
 
-final case class Principal(name: String, password: Password, keytab: String, secret: Secret)
+final case class Principal(
+  name: String, password: Password, 
+  keytab: String, secret: Secret
+)
 final case class Krb(realm: String, principals: List[Principal])
-final case class Status(processed: Boolean, lastPrincipalCount: Int, totalPrincipalCount: Int, error: String = "")
+final case class Status(
+  processed: Boolean, lastPrincipalCount: Int, 
+  totalPrincipalCount: Int, error: String = ""
+)
 ```
 
 ### Circe 
@@ -126,16 +137,23 @@ sealed trait Secret {
 final case class Keytab(name: String) extends Secret
 final case class KeytabAndPassword(name: String) extends Secret
 
-final case class Principal(name: String, password: Password = Random(), keytab: String, secret: Secret)
+final case class Principal(
+  name: String, password: Password = Random(), 
+  keytab: String, secret: Secret
+)
 final case class Krb(realm: String, principals: List[Principal])
-final case class Status(processed: Boolean, lastPrincipalCount: Int, totalPrincipalCount: Int, error: String = "")
+final case class Status(
+  processed: Boolean, lastPrincipalCount: Int, 
+  totalPrincipalCount: Int, error: String = ""
+)
 ```
 
 
 Circe provides generic-extras module to cope with above hierarchy of case classes:
 
 ```scala
-// note: it is separate Circe module, called generic-extras, which has its own version.
+// note: it is separate Circe module called generic-extras, 
+// which has its own version.
 "io.circe" %% "circe-generic-extras" % circeExtrasVersion
 ```
 
@@ -154,10 +172,12 @@ trait Codecs {
     Configuration.default.withDiscriminator("type").withDefaults
 
   implicit val decodePassword: Decoder[Password] =
-    List[Decoder[Password]](Decoder[Static].widen, Decoder.const(Random()).widen).reduceLeft(_.or(_))
+    List[Decoder[Password]](Decoder[Static].widen, Decoder.const(Random()).widen)
+      .reduceLeft(_.or(_))
 
   implicit val decodeSecret: Decoder[Secret] =
-    List[Decoder[Secret]](Decoder[Keytab].widen, Decoder[KeytabAndPassword].widen).reduceLeft(_.or(_))
+    List[Decoder[Secret]](Decoder[Keytab].widen, Decoder[KeytabAndPassword].widen)
+      .reduceLeft(_.or(_))
 }
 ```
 

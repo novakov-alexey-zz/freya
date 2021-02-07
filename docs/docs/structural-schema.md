@@ -1,11 +1,9 @@
 ---
-layout: docs
 title: Structural Schema
-permalink: docs/structural-schema
-position: 6
+# position: 6
 ---
 
-# Structural Schema
+<!-- # Structural Schema -->
 
 In order to deploy Structural Schema, aka. JSON Schema, put JSON file in CLASSPATH at `schema/<kind>.{json|js}` path. 
 Freya deploys JSON schema together with CR definition automatically during the Operator startup, 

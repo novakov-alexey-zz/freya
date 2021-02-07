@@ -1,12 +1,10 @@
 ---
-layout: docs
 title: ConfigMap Operator
-permalink: docs/configmap-operator/
-position: 3
+# position: 3
 ---
 
 
-# ConfigMap Operator
+<!-- # ConfigMap Operator -->
 
 Please first look at CRD Operator documentation. It contains more common information, which is applicable to ConfigMap
 operator too.
@@ -87,7 +85,7 @@ object KerbCmOperator extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
     
-    // ... the same API as for Crd Operator, but with own configuration and constructor
+    // the same API as for Crd Operator, but with own configuration and constructor
     val cfg = ConfigMapConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 
     Operator
