@@ -52,4 +52,4 @@ Jackson:
 
 ## Documentation
 
-Microsite: [https://novakov-alexey.github.io/freya/docs/](https://novakov-alexey.github.io/freya/docs/)
+Microsite: [https://novakov-alexey.github.io/freya/docs/](https://novakov-alexey.github.io/freya/)
