@@ -1,25 +1,25 @@
 module.exports = {
-  title: 'Freya',
-  tagline: 'Kubernetes Operator library for Scala',
-  url: 'https://novakov-alexey.github.io/freya',
-  baseUrl: '/freya/',
-  onBrokenLinks: 'log',
-  onBrokenMarkdownLinks: 'warn',
-  favicon: 'img/favicon.png',
-  organizationName: 'novakov-alexey', // Usually your GitHub org/user name.
-  projectName: 'freya', // Usually your repo name.
+  title: "Freya",
+  tagline: "Kubernetes Operator library for Scala",
+  url: "https://novakov-alexey.github.io/freya",
+  baseUrl: "/freya/",
+  onBrokenLinks: "log",
+  onBrokenMarkdownLinks: "warn",
+  favicon: "img/favicon.png",
+  organizationName: "novakov-alexey", // Usually your GitHub org/user name.
+  projectName: "freya", // Usually your repo name.
   themeConfig: {
     navbar: {
-      title: 'Freya',
+      title: "Freya",
       logo: {
-        alt: 'Freya Logo',
-        src: 'img/navbar_brand.svg',
+        alt: "Freya Logo",
+        src: "img/navbar_brand.svg",
       },
-      items: [        
+      items: [
         {
-          href: 'https://github.com/novakov-alexey/freya',
-          label: 'GitHub',
-          position: 'right',
+          href: "https://github.com/novakov-alexey/freya",
+          label: "GitHub",
+          position: "right",
         },
       ],
     },
@@ -84,9 +84,8 @@ module.exports = {
           path: "../docs/target/mdoc",
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
-          editUrl:
-            'https://github.com/novakov-alexey/freya/edit/master/website/',
-          routeBasePath: '/'
+          editUrl: "https://github.com/novakov-alexey/freya/edit/master/website/",
+          routeBasePath: "/"
         },
         // blog: {
         //   showReadingTime: true,
@@ -99,5 +98,5 @@ module.exports = {
         },
       },
     ],
-  ], 
+  ],
 };
