@@ -13,16 +13,16 @@ Freya based on [fabric8 kubernetes client](https://github.com/fabric8io/kubernet
 inspired by [abstract-operator](https://github.com/jvm-operators/abstract-operator) Java library.
 
 Freya main features:
-1\. Two options to implement your Kubernetes Operator:
-    \- Custom Resource Definition (CRD) based
-    \- ConfigMap based
-1\. Scala Case Classes as Kubernetes resource specification. 
+1. Two options to implement your Kubernetes Operator:
+    - Custom Resource Definition (CRD) based
+    - ConfigMap based
+1. Scala Case Classes as Kubernetes resource specification. 
     Serialization and deserialization of case classes is done by Freya using
     Circe or Jackson Scala Module library.
-1\. Auto-restart of custom controller upon k8s api-server disconnect.
-1\. Auto-deployment of CRDs, no YAML files to be written.
-1\. Auto-deployment of JSON Schema for CRD validation.
-1\. Effect management and Functional Programming powered by Cats-Effect.    
+1. Auto-restart of custom controller upon k8s api-server disconnect.
+1. Auto-deployment of CRDs, no YAML files to be written.
+1. Auto-deployment of JSON Schema for CRD validation.
+1. Effect management and Functional Programming powered by Cats-Effect.    
 
 ## Examples
 
