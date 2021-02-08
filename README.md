@@ -24,9 +24,9 @@ Freya main features:
 1. Auto-deployment of JSON Schema for CRD validation.
 1. Effect management and Functional Programming powered by Cats-Effect.    
 
-## Examples	
+## Examples
 
--   Kerberos Operator: [https://github.com/novakov-alexey/krb-operator](https://github.com/novakov-alexey/krb-operator) 
+-   Kerberos Operator: <https://github.com/novakov-alexey/krb-operator> 
 
 ## SBT dependency
 
@@ -41,11 +41,13 @@ Second module has two options: circe or jackson. One of them needs to be added i
 dependencies to be able to read custom resource JSON/YAML text or write resource status as JSON
 
 Circe:
+
 ```scala
 "io.github.novakov-alexey" %% "freya-circe" % "@VERSION@" 
 ```
 
 Jackson:
+
 ```scala
 "io.github.novakov-alexey" %% "freya-jackson" % "@VERSION@"
 ```
