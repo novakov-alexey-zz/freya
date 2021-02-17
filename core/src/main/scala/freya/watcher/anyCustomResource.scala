@@ -19,6 +19,10 @@ object CustomResourceAnnotations {
       override def annotationType(): Class[_ <: Annotation] = classOf[Group]
     }
     val targetVersion = new Version {
+      override def served() = true
+
+      override def storage() = true
+
       override def value(): String = version
 
       override def annotationType(): Class[_ <: Annotation] = classOf[Version]

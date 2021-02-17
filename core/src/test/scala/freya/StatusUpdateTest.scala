@@ -74,8 +74,7 @@ class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
 
     val client = new DefaultKubernetesClient()
 
-    val kerbClient = client
-      .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList])
+    val kerbClient = client.customResources(classOf[AnyCustomResource], classOf[AnyCrList])
       .inNamespace("test")
     val watch = createWatch(kerbClient)
 

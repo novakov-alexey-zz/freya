@@ -96,7 +96,7 @@ private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinit
   }
 
   private def customResourceOperation[T] =
-    client.customResources(context, classOf[AnyCustomResource], classOf[AnyCrList])
+    client.customResources(classOf[AnyCustomResource], classOf[AnyCrList])
 
   def updateStatus[T: JsonWriter](su: StatusUpdate[T]): Unit = {
     val resourceProperties = Try(

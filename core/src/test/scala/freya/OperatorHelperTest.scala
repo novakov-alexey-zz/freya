@@ -91,8 +91,7 @@ class OperatorHelperTest
     val crd = Deployer.deployCrd[IO, Kerb](client, cfg, None).unsafeRunSync()
     val context = CrdHelperContext(cfg, client, None, crd, parser)
     val helper = new CrdHelper[IO, Kerb, Status](context)
-    val krbClient = client
-      .customResources(crd, classOf[AnyCustomResource], classOf[AnyCrList])
+    val krbClient = client.customResources(classOf[AnyCustomResource], classOf[AnyCrList])
 
     //when
     krbClient.inNamespace(testNs.value).delete()
