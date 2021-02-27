@@ -1,4 +1,3 @@
-import microsites.ExtraMdFileConfig
 import sbt.url
 import sbtrelease.ReleaseStateTransformations._
 
