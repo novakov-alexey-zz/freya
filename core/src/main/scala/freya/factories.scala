@@ -1,7 +1,6 @@
 package freya
 
-import cats.Parallel
-import cats.effect.{Effect, Sync, Timer}
+import cats.effect.{Effect, Sync}
 import freya.Configuration.CrdConfig
 import freya.ExitCodes.ConsumerExitCode
 import freya.internal.crd.Deployer
@@ -20,7 +19,7 @@ trait CrdWatchMaker[F[_], T, U] {
 }
 
 object CrdWatchMaker {
-  implicit def crd[F[_]: Effect: Parallel: Timer, T, U]: CrdWatchMaker[F, T, U] =
+  implicit def crd[F[_]: Effect, T, U]: CrdWatchMaker[F, T, U] =
     (context: CrdWatcherContext[F, T, U]) => new CustomResourceWatcher(context)
 }
 
@@ -29,7 +28,7 @@ trait ConfigMapWatchMaker[F[_], T] {
 }
 
 object ConfigMapWatchMaker {
-  implicit def cm[F[_]: Effect: Parallel: Timer, T]: ConfigMapWatchMaker[F, T] =
+  implicit def cm[F[_]: Effect, T]: ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) => new ConfigMapWatcher(context)
 }
 

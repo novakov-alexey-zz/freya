@@ -86,7 +86,7 @@ private[freya] object Deployer extends LazyLogging {
       }
     } yield crd
 
-  private def createBuilder[F[_]: Sync, T: JsonReader](cfg: CrdConfig, jsonSchema: Option[JSONSchemaProps]) = {
+  private def createBuilder[F[_], T: JsonReader](cfg: CrdConfig, jsonSchema: Option[JSONSchemaProps]) = {
     val baseBuilder = CrdApi
       .getCrdBuilder(
         cfg.prefix,
@@ -115,7 +115,7 @@ private[freya] object Deployer extends LazyLogging {
     (baseBuilder, builderWithSchema)
   }
 
-  private def addColumns[F[_]: Sync, T](
+  private def addColumns[F[_], T](
     additionalPrinterColumns: List[AdditionalPrinterColumn],
     crdBuilder: CustomResourceDefinitionFluent.SpecNested[CustomResourceDefinitionBuilder]
   ) = {

@@ -36,7 +36,7 @@ object Operator extends LazyLogging {
   ): Operator[F, T, Unit] =
     ofCrd[F, T, Unit](cfg, client)((_: CrdHelper[F, T, Unit]) => controller)
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
+  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader, U: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: Controller[F, T, U]
@@ -47,7 +47,7 @@ object Operator extends LazyLogging {
   ): Operator[F, T, U] =
     ofCrd[F, T, U](cfg, client)((_: CrdHelper[F, T, U]) => (_: KubernetesClient) => controller)
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
+  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader, U: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: CrdHelper[F, T, U] => Controller[F, T, U]
@@ -58,7 +58,7 @@ object Operator extends LazyLogging {
   ): Operator[F, T, U] =
     ofCrd[F, T, U](cfg, client)((h: CrdHelper[F, T, U]) => (_: KubernetesClient) => controller(h))
 
-  def ofCrd[F[_]: Timer: Parallel, T: JsonReader, U: JsonReader: JsonWriter](
+  def ofCrd[F[_]: Timer: Parallel, T: JsonReader, U: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient]
   )(controller: CrdHelper[F, T, U] => KubernetesClient => Controller[F, T, U])(implicit
@@ -97,7 +97,7 @@ object Operator extends LazyLogging {
     new Operator[F, T, U](pipeline)
   }
 
-  private def createChannels[F[_]: Timer: Parallel: ConcurrentEffect, T: JsonReader, U: JsonReader: JsonWriter](
+  private def createChannels[F[_]: Parallel: ConcurrentEffect, T: JsonReader, U](
     feedbackChannel: FeedbackChannel[F, U],
     client: KubernetesClient,
     crd: CustomResourceDefinition,
@@ -162,7 +162,7 @@ object Operator extends LazyLogging {
     new Operator[F, T, Unit](pipeline)
   }
 
-  private def createPipeline[F[_]: ConcurrentEffect, T, U](
+  private def createPipeline[F[_], T, U](
     helper: ResourceHelper[F, T, U],
     controller: Controller[F, T, U],
     watcher: F[(CloseableWatcher, F[ConsumerExitCode])],

@@ -4,7 +4,7 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, TimeUnit}
 
 import cats.Parallel
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, Sync, Timer}
+import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
 import cats.implicits._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -84,7 +84,7 @@ class OperatorsTest
     (watchable, singleWatcher)
   }
 
-  implicit def cmWatch[F[_]: ConcurrentEffect: Timer: Parallel, T](
+  implicit def cmWatch[F[_]: ConcurrentEffect, T](
     implicit watchable: Watchable[Watcher[ConfigMap]]
   ): ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) =>
@@ -93,7 +93,7 @@ class OperatorsTest
           registerWatcher(watchable)
       }
 
-  implicit def crdWatch[F[_]: ConcurrentEffect: Timer: Parallel, T, U](
+  implicit def crdWatch[F[_]: ConcurrentEffect, T, U](
     implicit watchable: Watchable[Watcher[AnyCustomResource]]
   ): CrdWatchMaker[F, T, U] =
     (context: CrdWatcherContext[F, T, U]) =>
@@ -111,7 +111,7 @@ class OperatorsTest
       Sync[F].pure(new CustomResourceDefinition())
   }
 
-  def configMapOperator[F[_]: ConcurrentEffect: Timer: ContextShift: Parallel](
+  def configMapOperator[F[_]: ConcurrentEffect: Timer: Parallel](
     controller: CmController[F, Kerb]
   ): (Operator[F, Kerb, Unit], mutable.Set[Watcher[ConfigMap]]) = {
     import freya.yaml.jackson._
@@ -124,7 +124,7 @@ class OperatorsTest
   private def concurrentHashSet[T]: mutable.Set[T] =
     java.util.Collections.newSetFromMap(new ConcurrentHashMap[T, java.lang.Boolean]).asScala
 
-  def crdOperator[F[_]: ConcurrentEffect: Timer: ContextShift: Parallel, T: JsonReader](
+  def crdOperator[F[_]: ConcurrentEffect: Timer: Parallel, T: JsonReader](
     controller: Controller[F, T, Status],
     cfg: CrdConfig = crdCfg
   ): (Operator[F, T, Status], mutable.Set[Watcher[AnyCustomResource]], mutable.Set[StatusUpdate[Status]]) = {
@@ -138,7 +138,7 @@ class OperatorsTest
     (operator, singleWatcher, status)
   }
 
-  private def testFeedbackConsumer[F[_]: ConcurrentEffect: Timer: ContextShift](
+  private def testFeedbackConsumer[F[_]: ConcurrentEffect](
     status: mutable.Set[StatusUpdate[Status]]
   ): FeedbackConsumerMaker[F, Status] = {
     (client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, Status]) =>
