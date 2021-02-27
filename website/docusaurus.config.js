@@ -6,8 +6,8 @@ module.exports = {
   onBrokenLinks: "log",
   onBrokenMarkdownLinks: "warn",
   favicon: "img/favicon.png",
-  organizationName: "novakov-alexey", // Usually your GitHub org/user name.
-  projectName: "freya", // Usually your repo name.
+  organizationName: "novakov-alexey",
+  projectName: "freya", 
   themeConfig: {
     navbar: {
       title: "Freya",
@@ -24,56 +24,12 @@ module.exports = {
       ],
     },
     footer: {
-      style: 'dark',
-      links: [
-        // {
-        //   title: 'Docs',
-        //   items: [
-        //     {
-        //       label: 'Style Guide',
-        //       to: 'docs/',
-        //     },
-        //     {
-        //       label: 'Second Doc',
-        //       to: 'docs/doc2/',
-        //     },
-        //   ],
-        // },
-        // {
-        //   title: 'Community',
-        //   items: [
-        //     {
-        //       label: 'Stack Overflow',
-        //       href: 'https://stackoverflow.com/questions/tagged/docusaurus',
-        //     },
-        //     {
-        //       label: 'Discord',
-        //       href: 'https://discordapp.com/invite/docusaurus',
-        //     },
-        //     {
-        //       label: 'Twitter',
-        //       href: 'https://twitter.com/docusaurus',
-        //     },
-        //   ],
-        // },
-        // {
-        //   title: 'More',
-        //   items: [
-        //     // {
-        //     //   label: 'Blog',
-        //     //   to: 'blog',
-        //     // },
-        //     {
-        //       label: 'GitHub',
-        //       href: 'https://github.com/facebook/docusaurus',
-        //     },
-        //   ],
-        // },
-      ],
+      style: "dark",
+      links: [],
       copyright: `Copyright © ${new Date().getFullYear()} Freya. Built with Docusaurus.`,
     },
     prism: {
-      additionalLanguages: ['scala'],
+      additionalLanguages: ["scala"],
     },
   },
   presets: [
@@ -82,8 +38,7 @@ module.exports = {
       {
         docs: {
           path: "../docs/target/mdoc",
-          sidebarPath: require.resolve("./sidebars.js"),
-          // Please change this to your repo.
+          sidebarPath: require.resolve("./sidebars.js"),          
           editUrl: "https://github.com/novakov-alexey/freya/edit/master/website/",
           routeBasePath: "/"
         },
