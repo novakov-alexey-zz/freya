@@ -1,4 +1,4 @@
-name: Scala CI
+name: Build Status
 
 on:
   pull_request:
