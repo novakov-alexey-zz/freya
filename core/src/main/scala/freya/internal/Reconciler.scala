@@ -21,7 +21,7 @@ private[freya] class Reconciler[F[_], T, U](
     extends LazyLogging {
 
   def run: F[ReconcilerExitCode] =
-    F.suspend {
+    F.defer {
       for {
         _ <- T.sleep(delay)
         _ <- F.delay(logger.debug("Reconciler is running >>>>"))
