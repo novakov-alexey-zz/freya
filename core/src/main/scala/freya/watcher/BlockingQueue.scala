@@ -1,11 +1,12 @@
 package freya.watcher
 
-import cats.effect.concurrent.{MVar, MVar2, Ref}
+import cats.effect.concurrent.{MVar, MVar2}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 
 import scala.collection.immutable.Queue
+import cats.effect.Ref
 
 object BlockingQueue {
   def create[F[_]: Concurrent, A](size: Int, name: String): F[BlockingQueue[F, A]] =

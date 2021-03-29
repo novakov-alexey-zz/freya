@@ -3,8 +3,7 @@ package freya
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, TimeUnit}
 
 import cats.Parallel
-import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync, Timer}
+import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync}
 import cats.implicits._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -42,6 +41,7 @@ import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.jdk.CollectionConverters._
+import cats.effect.{ Ref, Temporal }
 
 class OperatorsTest
     extends AnyPropSpec
@@ -50,7 +50,7 @@ class OperatorsTest
     with Checkers
     with ScalaCheckPropertyChecks
     with BeforeAndAfter {
-  implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
+  implicit val timer: Temporal[IO] = IO.timer(ExecutionContext.global)
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkOpenshiftOnStartup = false)
@@ -111,7 +111,7 @@ class OperatorsTest
       Sync[F].pure(new CustomResourceDefinition())
   }
 
-  def configMapOperator[F[_]: ConcurrentEffect: Timer: Parallel](
+  def configMapOperator[F[_]: ConcurrentEffect: Temporal: Parallel](
     controller: CmController[F, Kerb]
   ): (Operator[F, Kerb, Unit], mutable.Set[Watcher[ConfigMap]]) = {
     import freya.yaml.jackson._
@@ -124,7 +124,7 @@ class OperatorsTest
   private def concurrentHashSet[T]: mutable.Set[T] =
     java.util.Collections.newSetFromMap(new ConcurrentHashMap[T, java.lang.Boolean]).asScala
 
-  def crdOperator[F[_]: ConcurrentEffect: Timer: Parallel, T: JsonReader](
+  def crdOperator[F[_]: ConcurrentEffect: Temporal: Parallel, T: JsonReader](
     controller: Controller[F, T, Status],
     cfg: CrdConfig = crdCfg
   ): (Operator[F, T, Status], mutable.Set[Watcher[AnyCustomResource]], mutable.Set[StatusUpdate[Status]]) = {
