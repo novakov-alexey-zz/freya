@@ -1,6 +1,6 @@
 package freya
 
-import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
+import cats.effect.{ConcurrentEffect, ExitCode, IO, IOApp}
 import cats.syntax.apply._
 import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.{ConfigMapConfig, CrdConfig}
