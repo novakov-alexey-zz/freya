@@ -21,6 +21,8 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
 import scala.collection.mutable
+import io.fabric8.kubernetes.client.KubernetesClient
+import io.fabric8.kubernetes.api.model.ConfigMap
 
 class OperatorHelperTest
     extends AnyPropSpec
@@ -68,16 +70,22 @@ class OperatorHelperTest
 
     forAll(CM.gen[Kerb](helper.selector)) { cm =>
       //when
-      cm.getMetadata.setNamespace(ns.value)
-      client.configMaps().inNamespace(cm.getMetadata.getNamespace).create(cm)
+      val createdCm = createConfigMap(client, cm, ns)
 
-      val meta = MetadataApi.translate(cm.getMetadata)
-      val spec = parseCM(parser, cm)
+      val meta = MetadataApi.translate(createdCm.getMetadata)
+      val spec = parseCM(parser, createdCm)
 
       currentCms += Right(CustomResource(meta, spec, None))
       //then
-      helper.currentResources().map(_.toSet) should ===(Right(currentCms.toSet))
+      val currentResources = helper.currentResources().map(_.toSet)
+      currentResources should ===(Right(currentCms.toSet))
     }
+  }
+
+  def createConfigMap(client: KubernetesClient, cm: ConfigMap, ns: K8sNamespace) = {
+    cm.getMetadata.setNamespace(ns.value)
+    client.configMaps().inNamespace(cm.getMetadata.getNamespace).create(cm)
+    client.configMaps().inNamespace(cm.getMetadata.getNamespace).withName(cm.getMetadata().getName()).get()
   }
 
   ignore("Crd helper should return current CRDs") {

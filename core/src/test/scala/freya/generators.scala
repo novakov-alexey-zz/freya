@@ -18,7 +18,11 @@ object generators {
 
 object ObjectMetaTest {
   def apply(name: String, namespace: String, labels: Map[String, String]): ObjectMeta =
-    new ObjectMetaBuilder().withName(name).withNamespace(namespace).withLabels(labels.asJava).build()
+    new ObjectMetaBuilder()
+      .withName(name)
+      .withNamespace(namespace)
+      .withLabels(labels.asJava)
+      .build()
 
   val maxStrGen: Int => Gen[String] = (max: Int) =>
     Gen.alphaLowerStr.map(str => if (str.length <= max) str else str.substring(0, max)).suchThat(_.nonEmpty)
