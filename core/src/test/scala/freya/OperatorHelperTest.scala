@@ -77,8 +77,10 @@ class OperatorHelperTest
 
       currentCms += Right(CustomResource(meta, spec, None))
       //then
-      val currentResources = helper.currentResources().map(_.toSet)
-      currentResources should ===(Right(currentCms.toSet))
+      eventually {
+        val currentResources = helper.currentResources().map(_.toSet)
+        currentResources should ===(Right(currentCms.toSet))
+      }
     }
   }
 
