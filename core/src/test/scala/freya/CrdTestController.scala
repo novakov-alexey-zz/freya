@@ -1,16 +1,17 @@
 package freya
 
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.ConcurrentEffect
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.models.{CustomResource, Metadata, NewStatus}
 import io.fabric8.kubernetes.client.Watcher.Action
 
 import scala.concurrent.duration.{FiniteDuration, _}
+import cats.effect.Temporal
 
 class CrdTestController[F[_]](delay: FiniteDuration = 0.seconds)(
   implicit override val F: ConcurrentEffect[F],
-  T: Timer[F]
+  T: Temporal[F]
 ) extends Controller[F, Kerb, Status]
     with LazyLogging
     with ControllerState {

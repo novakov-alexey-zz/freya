@@ -4,7 +4,7 @@ import cats.Parallel
 import cats.effect.ExitCase.Canceled
 import cats.effect.concurrent.MVar
 import cats.effect.syntax.all._
-import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync, Timer}
+import cats.effect.{ConcurrentEffect, ExitCode, Resource, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.{ConfigMapConfig, CrdConfig}
@@ -22,10 +22,11 @@ import io.fabric8.kubernetes.client._
 
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 import scala.util.Random
+import cats.effect.Temporal
 
 object Operator extends LazyLogging {
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader](
+  def ofCrd[F[_]: ConcurrentEffect: Temporal: CrdDeployer: Parallel, T: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: KubernetesClient => Controller[F, T, Unit]
@@ -36,7 +37,7 @@ object Operator extends LazyLogging {
   ): Operator[F, T, Unit] =
     ofCrd[F, T, Unit](cfg, client)((_: CrdHelper[F, T, Unit]) => controller)
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader, U: JsonReader](
+  def ofCrd[F[_]: ConcurrentEffect: Temporal: CrdDeployer: Parallel, T: JsonReader, U: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: Controller[F, T, U]
@@ -47,7 +48,7 @@ object Operator extends LazyLogging {
   ): Operator[F, T, U] =
     ofCrd[F, T, U](cfg, client)((_: CrdHelper[F, T, U]) => (_: KubernetesClient) => controller)
 
-  def ofCrd[F[_]: ConcurrentEffect: Timer: CrdDeployer: Parallel, T: JsonReader, U: JsonReader](
+  def ofCrd[F[_]: ConcurrentEffect: Temporal: CrdDeployer: Parallel, T: JsonReader, U: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient],
     controller: CrdHelper[F, T, U] => Controller[F, T, U]
@@ -58,7 +59,7 @@ object Operator extends LazyLogging {
   ): Operator[F, T, U] =
     ofCrd[F, T, U](cfg, client)((h: CrdHelper[F, T, U]) => (_: KubernetesClient) => controller(h))
 
-  def ofCrd[F[_]: Timer: Parallel, T: JsonReader, U: JsonReader](
+  def ofCrd[F[_]: Temporal: Parallel, T: JsonReader, U: JsonReader](
     cfg: CrdConfig,
     client: F[KubernetesClient]
   )(controller: CrdHelper[F, T, U] => KubernetesClient => Controller[F, T, U])(implicit
@@ -113,14 +114,14 @@ object Operator extends LazyLogging {
     new Channels(cfg.concurrentController, makeConsumer, makeFeedbackConsumer)
   }
 
-  def ofConfigMap[F[_]: ConcurrentEffect: Timer: Parallel, T: YamlReader](
+  def ofConfigMap[F[_]: ConcurrentEffect: Temporal: Parallel, T: YamlReader](
     cfg: ConfigMapConfig,
     client: F[KubernetesClient],
     controller: CmController[F, T]
   )(implicit watchMaker: ConfigMapWatchMaker[F, T], helper: ConfigMapHelperMaker[F, T]): Operator[F, T, Unit] =
     ofConfigMap[F, T](cfg, client)((_: ConfigMapHelper[F, T]) => controller)
 
-  def ofConfigMap[F[_]: Timer: Parallel, T: YamlReader](cfg: ConfigMapConfig, client: F[KubernetesClient])(
+  def ofConfigMap[F[_]: Temporal: Parallel, T: YamlReader](cfg: ConfigMapConfig, client: F[KubernetesClient])(
     makeController: ConfigMapHelper[F, T] => CmController[F, T]
   )(implicit
     F: ConcurrentEffect[F],
@@ -190,7 +191,7 @@ private case class OperatorPipeline[F[_], T, U](
 class Operator[F[_], T: Reader, U] private (
   pipeline: F[OperatorPipeline[F, T, U]],
   reconcilerInterval: Option[FiniteDuration] = None
-)(implicit F: ConcurrentEffect[F], T: Timer[F])
+)(implicit F: ConcurrentEffect[F], T: Temporal[F])
     extends LazyLogging {
 
   val helper: F[ResourceHelper[F, T, U]] = pipeline.map(_.helper)
@@ -210,10 +211,10 @@ class Operator[F[_], T: Reader, U] private (
   def withReconciler(interval: FiniteDuration): Operator[F, T, U] =
     new Operator[F, T, U](pipeline, Some(interval))
 
-  def withRestart(retry: Retry = Infinite())(implicit T: Timer[F]): F[ExitCode] =
+  def withRestart(retry: Retry = Infinite())(implicit T: Temporal[F]): F[ExitCode] =
     run.flatMap(loop(_, retry))
 
-  private def loop(ec: ExitCode, retry: Retry)(implicit T: Timer[F]): F[ExitCode] = {
+  private def loop(ec: ExitCode, retry: Retry)(implicit T: Temporal[F]): F[ExitCode] = {
     val (canRestart, delay, nextRetry, remaining) = retry match {
       case Times(maxRetries, delay, multiplier) =>
         (

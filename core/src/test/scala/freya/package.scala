@@ -1,4 +1,4 @@
-import cats.effect.{CancelToken, ContextShift, ExitCode, IO, Timer}
+import cats.effect.{CancelToken, ExitCode, IO}
 import freya.internal.kubeapi.MetadataApi
 import freya.models.Metadata
 import freya.resource.ConfigMapParser
@@ -7,10 +7,11 @@ import io.fabric8.kubernetes.api.model.ConfigMap
 import org.scalacheck.{Arbitrary, Gen}
 
 import scala.concurrent.ExecutionContext
+import cats.effect.Temporal
 
 package object freya {
   implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-  implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
+  implicit val timer: Temporal[IO] = IO.timer(ExecutionContext.global)
   implicit lazy val arbInfoClass: Arbitrary[Kerb] = Arbitrary(Gens.krb2)
   implicit lazy val arbBoolean: Arbitrary[Boolean] = Arbitrary(Gen.oneOf(true, false))
 
