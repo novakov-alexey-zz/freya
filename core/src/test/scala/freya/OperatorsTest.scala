@@ -50,7 +50,8 @@ class OperatorsTest
     with Eventually
     with Checkers
     with ScalaCheckPropertyChecks
-    with BeforeAndAfter with LazyLogging {
+    with BeforeAndAfter
+    with LazyLogging {
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkOpenshiftOnStartup = false)
@@ -518,7 +519,9 @@ class OperatorsTest
     forAll(Gen.const(1)) { _ => operator.run.unsafeRunSync() should ===(ExitCode.Error) }
   }
 
-  private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T]) = {
+  private def closeCurrentWatcher[T](singleWatcher: mutable.Set[Watcher[T]], currentWatcher: Watcher[T])(implicit
+    pos: source.Position
+  ) = {
     singleWatcher.foreach { w =>
       val raiseException = arbitrary[Boolean].sample.getOrElse(fail("failed to generate boolean"))
       val ex = if (raiseException) Some(new WatcherException("test exception")) else None
