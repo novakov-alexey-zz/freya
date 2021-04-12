@@ -529,7 +529,7 @@ class OperatorsTest
     }
     eventually {
       //then
-      singleWatcher.size should ===(1)
+      singleWatcher.size should be(1)
       currentWatcher should !==(
         getWatcherOrFail(singleWatcher)
       ) // waiting until the Set with single watcher is updated with new watcher after Operator restart

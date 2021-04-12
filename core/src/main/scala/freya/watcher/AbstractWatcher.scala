@@ -14,6 +14,7 @@ import io.fabric8.kubernetes.client.{Watcher, WatcherException}
 
 import java.io.Closeable
 import scala.collection.mutable
+import scala.util.Try
 
 private[watcher] final case class AbstractWatcherContext[F[_], T, U](
   namespace: K8sNamespace,
@@ -51,7 +52,12 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
     runSync(context.channels.getOrCreateConsumer(namespace).flatMap(_.putAction(action)))
 
   private def runSync[A](f: F[A]): A =
-    context.dispatcher.unsafeRunSync(f)
+    Try(context.dispatcher.unsafeRunSync(f)).toEither match {
+      case Left(t) =>
+        logger.error("Failed to evaluate passed effect synchronously", t)
+        throw t
+      case Right(a) => a
+    }
 
   protected def onClose(e: WatcherException): Unit = {
     val error = if (e != null) {

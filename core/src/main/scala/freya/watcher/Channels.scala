@@ -4,13 +4,13 @@ import cats.Parallel
 import cats.effect.Async
 import cats.effect.std.Dispatcher
 
-import scala.concurrent.ExecutionContext.Implicits.global //TODO: replace with correct ExecutionContext
+import scala.concurrent.ExecutionContext.Implicits.global
 import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.OperatorError
 import freya.watcher.actions.WatcherAction
-
+import scala.util.Try
 import scala.collection.concurrent.TrieMap
 
 object Channels {
@@ -58,8 +58,12 @@ class Channels[F[_]: Parallel, T, U](
     actionConsumers.values.map(_.putAction(action)).toList.parSequence.void
 
   private def runAsync[A](f: F[A], fa: A => Unit): Unit =
-    dispatcher
-      .unsafeToFuture(f.map(fa))
-      .failed
-      .foreach { t => logger.error("Could not evaluate effect", t) }
+    Try(dispatcher.unsafeToFuture(f.map(fa))).toEither match {
+      case Right(fu) =>
+        fu.failed.foreach { t => logger.error("Evaluated effect failed. Ignoring...", t) }
+      case Left(t) =>
+        logger.error("Failed to run passed effect asynchronously", t)
+        throw t
+    }
+
 }

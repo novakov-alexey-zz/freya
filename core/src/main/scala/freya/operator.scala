@@ -202,10 +202,8 @@ class Operator[F[_], T: Reader, U] private (
 )(implicit F: Async[F])
     extends LazyLogging {
 
-  private val dispatcher = Dispatcher[F]
-
   def stop: F[ExitCode] =
-    dispatcher.use { dispatcher =>
+    Dispatcher[F].use { dispatcher =>
       for {
         pipe <- pipeline(dispatcher)
         (watcher, _) <- pipe.consumer
