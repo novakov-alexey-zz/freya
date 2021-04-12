@@ -482,7 +482,7 @@ class OperatorsTest
     val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
 
     //when
-    val exitCode = operator.withRestart(Times(maxRestarts, 0.seconds)).unsafeToFuture()
+    val exitCode = startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
     var currentWatcher = eventually {
       getWatcherOrFail(singleWatcher)
     }
@@ -491,7 +491,7 @@ class OperatorsTest
       //when
       closeCurrentWatcher(singleWatcher, currentWatcher)
       currentWatcher = getWatcherOrFail(singleWatcher)
-      singleWatcher.foreach(_.eventReceived(action, cm))
+      currentWatcher.eventReceived(action, cm)
 
       //then
       val (meta, spec) = getSpecAndMeta(cm)
@@ -502,10 +502,10 @@ class OperatorsTest
       }
     }
 
-    singleWatcher.foreach(_.onClose(new WatcherException("test")))
+    currentWatcher.onClose(TestException("test"))
 
     eventually {
-      exitCode.isCompleted should ===(true)
+      exitCode.isCompleted should be(true)
       val ec = Await.result(exitCode, 0.second)
       ec should ===(ExitCodes.ActionConsumerExitCode)
     }
