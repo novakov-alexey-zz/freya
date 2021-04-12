@@ -1,7 +1,7 @@
 package freya.watcher
 
-import cats.effect.Effect
-import cats.effect.concurrent.MVar2
+import cats.effect.Async
+import cats.effect.std.{Dispatcher, Queue}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes.ConsumerExitCode
@@ -15,6 +15,14 @@ import io.fabric8.kubernetes.client.{Watcher, WatcherException}
 import java.io.Closeable
 import scala.collection.mutable
 
+private[watcher] final case class AbstractWatcherContext[F[_], T, U](
+  namespace: K8sNamespace,
+  clientNamespace: String,
+  channels: Channels[F, T, U],
+  stopFlag: Queue[F, ConsumerExitCode],
+  dispatcher: Dispatcher[F]
+)
+
 object AbstractWatcher {
   type CloseableWatcher = Closeable
   type Action[T, U] = Either[OperatorError, OperatorAction[T, U]]
@@ -22,15 +30,13 @@ object AbstractWatcher {
 }
 
 abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
-  namespace: K8sNamespace,
-  channels: Channels[F, T, U],
-  stopFlag: MVar2[F, ConsumerExitCode],
-  clientNamespace: String
-)(implicit F: Effect[F])
+  context: AbstractWatcherContext[F, T, U]
+)(implicit F: Async[F])
     extends LazyLogging
     with WatcherMaker[F] {
 
-  protected val targetNamespace: K8sNamespace = OperatorUtils.targetNamespace(clientNamespace, namespace)
+  protected val targetNamespace: K8sNamespace =
+    OperatorUtils.targetNamespace(context.clientNamespace, context.namespace)
 
   protected final def enqueueAction(
     namespace: String,
@@ -42,22 +48,22 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
   }
 
   private def putActionBlocking(namespace: String, action: Either[OperatorError, WatcherAction[T, U]]): Unit =
-    runSync(channels.getOrCreateConsumer(namespace).flatMap(_.putAction(action)))
+    runSync(context.channels.getOrCreateConsumer(namespace).flatMap(_.putAction(action)))
 
   private def runSync[A](f: F[A]): A =
-    F.toIO(f).unsafeRunSync()
+    context.dispatcher.unsafeRunSync(f)
 
   protected def onClose(e: WatcherException): Unit = {
     val error = if (e != null) {
-      F.delay(logger.error(s"Watcher closed with exception in namespace '$namespace'", e)) *>
+      F.delay(logger.error(s"Watcher closed with exception in namespace '${context.namespace}'", e)) *>
         e.some.pure[F]
     } else {
-      F.delay(logger.warn(s"Watcher closed in namespace '$namespace''")) *> none[WatcherException].pure[F]
+      F.delay(logger.warn(s"Watcher closed in namespace '${context.namespace}''")) *> none[WatcherException].pure[F]
     }
     runSync(for {
       e <- error
-      _ <- channels.putForAll(Left(WatcherClosedError(e)))
-      _ <- stopFlag.put(ExitCodes.ActionConsumerExitCode)
+      _ <- context.channels.putForAll(Left(WatcherClosedError(e)))
+      _ <- context.stopFlag.offer(ExitCodes.ActionConsumerExitCode)
     } yield ())
   }
 }

@@ -1,12 +1,13 @@
 package freya
 
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, TimeUnit}
-
 import cats.Parallel
-import cats.effect.{ConcurrentEffect, ExitCode, IO, Sync}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, ExitCode, IO, Ref, Sync}
 import cats.implicits._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.{ConfigMapConfig, CrdConfig}
 import freya.ExitCodes.ConsumerExitCode
 import freya.K8sNamespace.{AllNamespaces, Namespace}
@@ -27,6 +28,7 @@ import io.fabric8.kubernetes.client._
 import io.fabric8.kubernetes.client.dsl.Watchable
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
+import org.scalactic.source
 import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
@@ -39,9 +41,8 @@ import scala.collection.immutable.Queue
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.Await
 import scala.jdk.CollectionConverters._
-import cats.effect.{ Ref, Temporal }
 
 class OperatorsTest
     extends AnyPropSpec
@@ -49,8 +50,7 @@ class OperatorsTest
     with Eventually
     with Checkers
     with ScalaCheckPropertyChecks
-    with BeforeAndAfter {
-  implicit val timer: Temporal[IO] = IO.timer(ExecutionContext.global)
+    with BeforeAndAfter with LazyLogging {
   implicit val patienceCfg: PatienceConfig = PatienceConfig(scaled(Span(5, Seconds)), scaled(Span(50, Millis)))
 
   val crdCfg: CrdConfig = CrdConfig(Namespace("test"), prefix, checkOpenshiftOnStartup = false)
@@ -84,17 +84,15 @@ class OperatorsTest
     (watchable, singleWatcher)
   }
 
-  implicit def cmWatch[F[_]: ConcurrentEffect, T](
-    implicit watchable: Watchable[Watcher[ConfigMap]]
-  ): ConfigMapWatchMaker[F, T] =
+  implicit def cmWatch[F[_]: Async, T](implicit watchable: Watchable[Watcher[ConfigMap]]): ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) =>
       new ConfigMapWatcher(context) {
         override def watch: F[(CloseableWatcher, F[ConsumerExitCode])] =
           registerWatcher(watchable)
       }
 
-  implicit def crdWatch[F[_]: ConcurrentEffect, T, U](
-    implicit watchable: Watchable[Watcher[AnyCustomResource]]
+  implicit def crdWatch[F[_]: Async, T, U](implicit
+    watchable: Watchable[Watcher[AnyCustomResource]]
   ): CrdWatchMaker[F, T, U] =
     (context: CrdWatcherContext[F, T, U]) =>
       new CustomResourceWatcher(context) {
@@ -103,7 +101,7 @@ class OperatorsTest
       }
 
   implicit def crdDeployer[F[_]: Sync]: CrdDeployer[F] = new CrdDeployer[F] {
-    override def deployCrd[T: JsonReader](
+    override def deploy[T: JsonReader](
       client: KubernetesClient,
       cfg: CrdConfig,
       isOpenShift: Option[Boolean]
@@ -111,7 +109,7 @@ class OperatorsTest
       Sync[F].pure(new CustomResourceDefinition())
   }
 
-  def configMapOperator[F[_]: ConcurrentEffect: Temporal: Parallel](
+  def configMapOperator[F[_]: Async: Parallel](
     controller: CmController[F, Kerb]
   ): (Operator[F, Kerb, Unit], mutable.Set[Watcher[ConfigMap]]) = {
     import freya.yaml.jackson._
@@ -124,7 +122,7 @@ class OperatorsTest
   private def concurrentHashSet[T]: mutable.Set[T] =
     java.util.Collections.newSetFromMap(new ConcurrentHashMap[T, java.lang.Boolean]).asScala
 
-  def crdOperator[F[_]: ConcurrentEffect: Temporal: Parallel, T: JsonReader](
+  def crdOperator[F[_]: Async: Parallel, T: JsonReader](
     controller: Controller[F, T, Status],
     cfg: CrdConfig = crdCfg
   ): (Operator[F, T, Status], mutable.Set[Watcher[AnyCustomResource]], mutable.Set[StatusUpdate[Status]]) = {
@@ -138,7 +136,7 @@ class OperatorsTest
     (operator, singleWatcher, status)
   }
 
-  private def testFeedbackConsumer[F[_]: ConcurrentEffect](
+  private def testFeedbackConsumer[F[_]: Async](
     status: mutable.Set[StatusUpdate[Status]]
   ): FeedbackConsumerMaker[F, Status] = {
     (client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, Status]) =>
@@ -162,28 +160,30 @@ class OperatorsTest
     val (operator, singleWatcher, status) = crdOperator[IO, Kerb](controller)
     val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
 
     //then
-    controller.initialized should ===(true)
-
-    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) {
-      case (action, (anyCr, spec, _)) =>
-        //when
-        singleWatcher.foreach(_.eventReceived(action, anyCr))
-
-        val meta = MetadataApi.translate(anyCr.getMetadata)
-        allEvents += ((action, spec, meta))
-        //then
-        eventually {
-          controller.events.asScala.toList should ===(allEvents)
-        }
-        eventually {
-          if (action != Watcher.Action.DELETED) checkStatus(status, spec.failInTest, meta)
-        }
+    eventually {
+      controller.initialized should ===(true)
     }
+    var currentWatcher = eventually {
+      getWatcherOrFail(singleWatcher)
+    }
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) { case (action, (anyCr, spec, _)) =>
+      //when
+      currentWatcher = getWatcherOrFail(singleWatcher)
+      currentWatcher.eventReceived(action, anyCr)
 
-    cancelable.unsafeRunSync()
+      val meta = MetadataApi.translate(anyCr.getMetadata)
+      allEvents += ((action, spec, meta))
+      //then
+      eventually {
+        controller.events.asScala.toList should ===(allEvents)
+      }
+      eventually {
+        if (action != Watcher.Action.DELETED) checkStatus(status, spec.failInTest, meta)
+      }
+    }
   }
 
   property("Crd Operator dispatches different namespace events concurrently") {
@@ -215,7 +215,11 @@ class OperatorsTest
     val (operator, singleWatcher, _) = crdOperator[IO, Kerb](controller, crdCfg.copy(concurrentController = concurrent))
     val allEvents = new ConcurrentLinkedQueue[(Watcher.Action, Kerb, Metadata)]()
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
+    val currentWatcher = eventually {
+      getWatcherOrFail(singleWatcher)
+    }
+
     val start = System.currentTimeMillis()
     //then
     forAll(
@@ -223,13 +227,12 @@ class OperatorsTest
       AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb]),
       workers(PosInt.ensuringValid(parallelNamespaces)),
       minSuccessful(PosInt.ensuringValid(parallelNamespaces))
-    ) {
-      case (action, (anyCr, spec, _)) =>
-        //when
-        singleWatcher.foreach(_.eventReceived(action, anyCr))
+    ) { case (action, (anyCr, spec, _)) =>
+      //when
+      currentWatcher.eventReceived(action, anyCr)
 
-        val meta = MetadataApi.translate(anyCr.getMetadata)
-        allEvents.add((action, spec, meta))
+      val meta = MetadataApi.translate(anyCr.getMetadata)
+      allEvents.add((action, spec, meta))
     }
     //then
     eventually {
@@ -239,7 +242,7 @@ class OperatorsTest
 
     val duration = FiniteDuration(finish - start, TimeUnit.MILLISECONDS)
     println(s"Actual Duration: $duration")
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
     duration
   }
 
@@ -260,23 +263,22 @@ class OperatorsTest
       } yield (a, r)
 
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
     //then
     (0 until parallelNamespaces).toList.map { namespace =>
       IO {
         val ns = namespace.toString
         val list = Gen.choose(1, 20).flatMap(n => Gen.listOfN(n, actionAndResourceGen(ns))).sample.toList.flatten
         //when
-        val currentEvents = list.zipWithIndex.map {
-          case ((action, (anyCr, spec, _)), i) =>
-            // mutate current spec to have an index to test event ordering
-            val specWithIndex = spec.copy(index = i)
-            anyCr.setSpec(mapper.writeValueAsString(specWithIndex))
+        val currentEvents = list.zipWithIndex.map { case ((action, (anyCr, spec, _)), i) =>
+          // mutate current spec to have an index to test event ordering
+          val specWithIndex = spec.copy(index = i)
+          anyCr.setSpec(mapper.writeValueAsString(specWithIndex))
 
-            singleWatcher.foreach(_.eventReceived(action, anyCr))
+          singleWatcher.foreach(_.eventReceived(action, anyCr))
 
-            val meta = MetadataApi.translate(anyCr.getMetadata)
-            (action, specWithIndex, meta)
+          val meta = MetadataApi.translate(anyCr.getMetadata)
+          (action, specWithIndex, meta)
         }
 
         //then
@@ -292,7 +294,7 @@ class OperatorsTest
                   IO {
                     System.err.println(
                       s"[received events in namespace '$ns' (size: ${currentNamespaceEvents.length}, " +
-                          s"other keys: ${namespaceEvents.keys}) do not contain elements $currentEvents]"
+                        s"other keys: ${namespaceEvents.keys}) do not contain elements $currentEvents]"
                     )
                   } *> IO.raiseError(e)
               }
@@ -303,27 +305,23 @@ class OperatorsTest
       }
     }.parSequence_.unsafeRunSync()
 
-    groupByNamespace(controllerEvents).unsafeRunSync().foreach {
-      case (namespace, queue) =>
-        queue.toList.foldLeft(0) {
-          case (acc, (_, kerb, _)) =>
-            withClue(s"[namespace: $namespace, ${queue.toList.map {
-              case (_, spec, _) =>
-                spec.index
-            }}] ") {
-              acc should ===(kerb.index)
-              acc + 1
-            }
+    groupByNamespace(controllerEvents).unsafeRunSync().foreach { case (namespace, queue) =>
+      queue.toList.foldLeft(0) { case (acc, (_, kerb, _)) =>
+        withClue(s"[namespace: $namespace, ${queue.toList.map { case (_, spec, _) =>
+          spec.index
+        }}] ") {
+          acc should ===(kerb.index)
+          acc + 1
         }
+      }
     }
 
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 
   private def groupByNamespace(controllerEvents: Ref[IO, Queue[(Action, Kerb, Metadata)]]) =
-    controllerEvents.get.map(_.groupBy {
-      case (_, _, meta) =>
-        meta.namespace
+    controllerEvents.get.map(_.groupBy { case (_, _, meta) =>
+      meta.namespace
     })
 
   private def checkStatus[T](status: mutable.Set[StatusUpdate[Status]], statusFlag: Boolean, meta: Metadata) = {
@@ -348,22 +346,19 @@ class OperatorsTest
 
     val operator = Operator.ofCrd[IO, Kerb, Status](crdCfg, client[IO], controller).withReconciler(1.millis)
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
 
-    forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) {
-      case (anyCr, spec, status) =>
-        val meta = MetadataApi.translate(anyCr.getMetadata)
-        testResources += Right(CustomResource(meta, spec, status.some))
-        //then
-        eventually {
-          controller.reconciledEvents should contain((spec, meta))
-        }
-        eventually {
-          checkStatus(statusSet, spec.failInTest, meta)
-        }
+    forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { case (anyCr, spec, status) =>
+      val meta = MetadataApi.translate(anyCr.getMetadata)
+      testResources += Right(CustomResource(meta, spec, status.some))
+      //then
+      eventually {
+        controller.reconciledEvents should contain((spec, meta))
+      }
+      eventually {
+        checkStatus(statusSet, spec.failInTest, meta)
+      }
     }
-
-    cancelable.unsafeRunSync()
   }
 
   property("ConfigMap Operator gets event from reconciler process") {
@@ -381,7 +376,7 @@ class OperatorsTest
 
     val operator = Operator.ofConfigMap[IO, Kerb](configMapCfg, client[IO], controller).withReconciler(1.millis)
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
 
     forAll(CM.gen[Kerb]) { cm =>
       val (meta, spec) = getSpecAndMeta(cm)
@@ -391,8 +386,6 @@ class OperatorsTest
         controller.reconciledEvents should contain((spec, meta))
       }
     }
-
-    cancelable.unsafeRunSync()
   }
 
   property("Crd Operator handles different events on restarts") {
@@ -402,8 +395,12 @@ class OperatorsTest
     val maxRestarts = PosInt(20)
     val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
     //when
-    val cancelable = startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
-    var oldWatcher = getWatcherOrFail(singleWatcher)
+
+    startOperator(operator.withRestart(Times(maxRestarts, 0.seconds)))
+
+    var oldWatcher = eventually {
+      getWatcherOrFail(singleWatcher)
+    }
 
     //then
     controller.initialized should ===(true)
@@ -413,24 +410,22 @@ class OperatorsTest
       AnyCustomResource.gen[Kerb](crdCfg.getKind),
       arbitrary[Boolean],
       minSuccessful(maxRestarts)
-    ) {
-      case (action, (anyCr, spec, _), close) =>
-        //when
-        if (close)
-          closeCurrentWatcher[AnyCustomResource](singleWatcher, oldWatcher)
+    ) { case (action, (anyCr, spec, _), close) =>
+      //when
+      if (close)
+        closeCurrentWatcher[AnyCustomResource](singleWatcher, oldWatcher)
 
-        oldWatcher = getWatcherOrFail(singleWatcher)
-        singleWatcher.foreach(_.eventReceived(action, anyCr))
+      oldWatcher = getWatcherOrFail(singleWatcher)
+      singleWatcher.foreach(_.eventReceived(action, anyCr))
 
-        val meta = MetadataApi.translate(anyCr.getMetadata)
-        allEvents += ((action, spec, meta))
-        //then
-        eventually {
-          controller.events.asScala.toList should ===(allEvents)
-        }
+      val meta = MetadataApi.translate(anyCr.getMetadata)
+      allEvents += ((action, spec, meta))
+      //then
+      eventually {
+        controller.events.asScala.toList should ===(allEvents)
+      }
     }
-
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 
   property("ConfigMap Operator handles different events on restarts") {
@@ -441,8 +436,10 @@ class OperatorsTest
     val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
 
     //when
-    val cancelable = startOperator(operator.withRestart(Infinite(0.seconds, 1.seconds)))
-    var currentWatcher = getWatcherOrFail(singleWatcher)
+    startOperator(operator.withRestart(Infinite(0.seconds, 1.seconds)))
+    var currentWatcher = eventually {
+      getWatcherOrFail(singleWatcher)
+    }
 
     //then
     controller.initialized should ===(true)
@@ -464,7 +461,7 @@ class OperatorsTest
       }
     }
 
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 
   private def getSpecAndMeta(cm: ConfigMap) = {
@@ -473,7 +470,7 @@ class OperatorsTest
     (meta, spec)
   }
 
-  private def getWatcherOrFail[T](set: mutable.Set[Watcher[T]]): Watcher[T] =
+  private def getWatcherOrFail[T](set: mutable.Set[Watcher[T]])(implicit pos: source.Position): Watcher[T] =
     set.headOption.getOrElse(fail("there must be at least one watcher"))
 
   property("Operators restarts n times in case of failure") {
@@ -485,7 +482,9 @@ class OperatorsTest
 
     //when
     val exitCode = operator.withRestart(Times(maxRestarts, 0.seconds)).unsafeToFuture()
-    var currentWatcher = getWatcherOrFail(singleWatcher)
+    var currentWatcher = eventually {
+      getWatcherOrFail(singleWatcher)
+    }
 
     forAll(WatcherAction.gen, CM.gen[Kerb], minSuccessful(maxRestarts)) { (action, cm) =>
       //when
@@ -541,10 +540,12 @@ class OperatorsTest
     val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
 
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
 
     //then
-    controller.initialized should ===(true)
+    eventually {
+      controller.initialized should ===(true)
+    }
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       //when
@@ -557,7 +558,7 @@ class OperatorsTest
       }
     }
 
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 
   class FailureCounterController extends ConfigMapTestController[IO] {
@@ -589,7 +590,11 @@ class OperatorsTest
     val allEvents = new ListBuffer[(Watcher.Action, Kerb, Metadata)]()
 
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
+
+    val currentWatcher = eventually {
+      getWatcherOrFail(singleWatcher)
+    }
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       val (meta, spec) = getSpecAndMeta(cm)
@@ -598,7 +603,7 @@ class OperatorsTest
         cm.getData.put(ConfigMapParser.SpecificationKey, "error")
 
       //when
-      singleWatcher.foreach(_.eventReceived(action, cm))
+      currentWatcher.eventReceived(action, cm)
 
       //then
       if (!spec.failInTest) {
@@ -612,7 +617,7 @@ class OperatorsTest
       controller.failed should ===(0)
     }
 
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 
   property("Operator handles controller failures") {
@@ -643,12 +648,15 @@ class OperatorsTest
     val (operator, singleWatcher) = configMapOperator[IO](controller)
 
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
+    val currentWatcher = eventually {
+      getWatcherOrFail(singleWatcher)
+    }
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       val (meta, spec) = getSpecAndMeta(cm)
       //when
-      singleWatcher.foreach(_.eventReceived(action, cm))
+      currentWatcher.eventReceived(action, cm)
       //then
       if (!spec.failInTest) {
         allEvents += ((action, spec, meta))
@@ -658,7 +666,7 @@ class OperatorsTest
       }
     }
 
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 
   property("ConfigMap operator handles only supported ConfigMaps") {
@@ -673,13 +681,16 @@ class OperatorsTest
     val (operator, singleWatcher) = configMapOperator[IO](controller)
 
     //when
-    val cancelable = startOperator(operator.run)
+    startOperator(operator.run)
+    val currentWatcher = eventually {
+      getWatcherOrFail(singleWatcher)
+    }
 
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
       val (meta: Metadata, spec: Kerb) = getSpecAndMeta(cm)
 
       //when
-      singleWatcher.foreach(_.eventReceived(action, cm))
+      currentWatcher.eventReceived(action, cm)
 
       //then
       if (!spec.failInTest) {
@@ -693,6 +704,6 @@ class OperatorsTest
       controller.failed should ===(0)
     }
 
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 }

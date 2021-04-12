@@ -1,6 +1,7 @@
 package freya
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.Configuration.CrdConfig
 import freya.K8sNamespace.{AllNamespaces, Namespace}

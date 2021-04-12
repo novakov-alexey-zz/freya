@@ -1,7 +1,10 @@
 package freya.watcher
 
 import cats.Parallel
-import cats.effect.ConcurrentEffect
+import cats.effect.Async
+import cats.effect.std.Dispatcher
+
+import scala.concurrent.ExecutionContext.Implicits.global //TODO: replace with correct ExecutionContext
 import cats.implicits._
 import com.typesafe.scalalogging.StrictLogging
 import freya.ExitCodes.ConsumerExitCode
@@ -17,15 +20,16 @@ object Channels {
 class Channels[F[_]: Parallel, T, U](
   concurrentController: Boolean,
   newActionConsumer: (String, Option[FeedbackConsumerAlg[F, U]]) => F[ActionConsumer[F, T, U]],
-  newFeedbackConsumer: () => Option[FeedbackConsumerAlg[F, U]]
-)(implicit F: ConcurrentEffect[F])
+  dispatcher: Dispatcher[F],
+  newFeedbackConsumer: () => Option[FeedbackConsumerAlg[F, U]] = () => None
+)(implicit F: Async[F])
     extends StrictLogging {
 
   private val actionConsumers = TrieMap.empty[String, ActionConsumer[F, T, U]]
 
   private[freya] def getOrCreateConsumer(namespace: String): F[ActionConsumer[F, T, U]] = {
-    val name = if (concurrentController) namespace else Channels.AllNamespacesConsumer
-    actionConsumers.get(name).fold(registerConsumer(name))(_.pure[F])
+    val ns = if (concurrentController) namespace else Channels.AllNamespacesConsumer
+    actionConsumers.get(ns).fold(registerConsumer(ns))(F.pure)
   }
 
   private def registerConsumer(namespace: String): F[ActionConsumer[F, T, U]] =
@@ -42,7 +46,7 @@ class Channels[F[_]: Parallel, T, U](
               case None => consumer.consume
             }
             runAsync[ConsumerExitCode](
-              F.delay(logger.info(s"Action consumer for '$namespace' namespace was started")) *> start,
+              F.delay(logger.info(s"Starting action consumer for '$namespace' namespace")) *> start,
               ec => logger.debug(s"Action consumer for '$namespace' namespace was stopped with exit code: $ec")
             )
             consumer
@@ -54,8 +58,8 @@ class Channels[F[_]: Parallel, T, U](
     actionConsumers.values.map(_.putAction(action)).toList.parSequence.void
 
   private def runAsync[A](f: F[A], fa: A => Unit): Unit =
-    F.toIO(f).unsafeRunAsync {
-      case Right(a) => fa(a)
-      case Left(t) => logger.error("Could not evaluate effect", t)
-    }
+    dispatcher
+      .unsafeToFuture(f.map(fa))
+      .failed
+      .foreach { t => logger.error("Could not evaluate effect", t) }
 }
