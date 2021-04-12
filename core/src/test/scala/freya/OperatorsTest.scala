@@ -524,7 +524,7 @@ class OperatorsTest
   ) = {
     singleWatcher.foreach { w =>
       val raiseException = arbitrary[Boolean].sample.getOrElse(fail("failed to generate boolean"))
-      val ex = if (raiseException) Some(new WatcherException("test exception")) else None
+      val ex = if (raiseException) Some(TestException("test exception")) else None
       w.onClose(ex.orNull)
     }
     eventually {

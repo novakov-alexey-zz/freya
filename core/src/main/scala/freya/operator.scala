@@ -202,7 +202,6 @@ class Operator[F[_], T: Reader, U] private (
 )(implicit F: Async[F])
     extends LazyLogging {
 
-  //val helper: F[ResourceHelper[F, T, U]] = pipeline.map(_.helper)
   private val dispatcher = Dispatcher[F]
 
   def stop: F[ExitCode] =
