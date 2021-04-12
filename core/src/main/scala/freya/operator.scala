@@ -214,7 +214,7 @@ class Operator[F[_], T: Reader, U] private (
     }
 
   def run: F[ExitCode] =
-    dispatcher.use { dispatcher =>
+    Dispatcher[F].use { dispatcher =>
       Resource
         .make(start(dispatcher)) { case (_, consumer) =>
           F.delay {
