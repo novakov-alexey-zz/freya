@@ -55,6 +55,12 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
     Try(context.dispatcher.unsafeRunSync(f)).toEither match {
       case Left(t) =>
         logger.error("Failed to evaluate passed effect synchronously", t)
+        t match {
+          case _: IllegalStateException => () // something wrong with cats.effect.std.Dispatcher, ignoring
+          case _ =>
+            // unexpected exception that worth to rethrow and break the watcher/consumer
+            throw t
+        }
       case _ => ()
     }
 
