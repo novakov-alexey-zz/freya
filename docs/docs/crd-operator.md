@@ -119,8 +119,7 @@ import freya.Operator
 import freya.Configuration.CrdConfig
 import freya.json.jackson._
 
-object KerbCrdOperator extends IOApp {
-  //implicit val cs: ContextShift[IO] = contextShift
+object KerbCrdOperator extends IOApp { 
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
