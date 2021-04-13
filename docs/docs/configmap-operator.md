@@ -3,7 +3,6 @@ title: ConfigMap Operator
 custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/configmap-operator.md
 ---
 
-
 <!-- # ConfigMap Operator -->
 
 Please first look at CRD Operator documentation. It contains more common information, which is applicable to ConfigMap

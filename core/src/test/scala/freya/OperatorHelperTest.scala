@@ -10,8 +10,8 @@ import freya.internal.kubeapi.MetadataApi
 import freya.models.{CustomResource, Metadata, Resource}
 import freya.resource.{ConfigMapParser, CrdParser}
 import freya.watcher.AnyCustomResource
-import io.fabric8.kubernetes.api.model.NamespaceBuilder
-import io.fabric8.kubernetes.client.DefaultKubernetesClient
+import io.fabric8.kubernetes.api.model.{ConfigMap, NamespaceBuilder}
+import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient}
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import io.fabric8.kubernetes.client.utils.Serialization
 import org.scalatest.BeforeAndAfter
@@ -22,8 +22,6 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
 import scala.collection.mutable
-import io.fabric8.kubernetes.client.KubernetesClient
-import io.fabric8.kubernetes.api.model.ConfigMap
 
 class OperatorHelperTest
     extends AnyPropSpec

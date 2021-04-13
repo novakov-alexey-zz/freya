@@ -1,11 +1,10 @@
 package freya
 
 import cats.Parallel
-import cats.effect.Async
 import cats.effect.kernel.Outcome.Canceled
 import cats.effect.syntax.all._
 import cats.effect.std.{Dispatcher, Queue}
-import cats.effect.{ExitCode, Resource, Sync}
+import cats.effect.{ExitCode, Resource, Sync, Async}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.{ConfigMapConfig, CrdConfig}
@@ -277,10 +276,9 @@ class Operator[F[_], T: Reader, U] private (
       workers = reconcilerInterval.fold(consumer)(duration =>
         F.race(consumer, runReconciler(duration, pipe, kind, namespace)).map(_.merge)
       )
-    } yield (workers, closableWatcher))
-      .onError { case ex: Throwable =>
-        F.delay(logger.error(s"Could not to start operator", ex))
-      }
+    } yield (workers, closableWatcher)).onError { case ex: Throwable =>
+      F.delay(logger.error(s"Could not to start operator", ex))
+    }
 
   private def runReconciler(
     interval: FiniteDuration,

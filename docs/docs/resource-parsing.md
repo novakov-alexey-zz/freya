@@ -71,7 +71,7 @@ Circe auto codecs derivation requires below module in your dependency settings:
 Let's use ADT (algebraic data types) to design custom resource case class for `Password` and
 `Secret` properties. Also, some classes will have default values.
 
-### Jackson
+### Advanced example Jackson
 
 Jackson provides several annotations to configure deserialisation for enum-like classes:
 
@@ -121,7 +121,7 @@ final case class Status(
 )
 ```
 
-### Circe 
+### Advanced example Circe 
 
 ```scala mdoc:reset-object
 sealed trait Password
