@@ -1,6 +1,7 @@
 package freya
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
 import freya.internal.crd.AnyCrList
@@ -46,8 +47,8 @@ class ServerMockTest
     val cfg = Configuration.CrdConfig(AllNamespaces, prefix)
 
     val controller = new CrdTestController[IO]
-    val operator = Operator.ofCrd[IO, Kerb, Status](cfg, IO.pure(client), controller).run
-    val cancelable = startOperator(operator)
+    val operator = Operator.ofCrd[IO, Kerb, Status](cfg, IO.pure(client), controller)
+    startOperator(operator.run)
     val krbClient = client.customResources(classOf[AnyCustomResource], classOf[AnyCrList])
 
     forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](cfg.getKind)) { case (action, (cr, spec, _)) =>
@@ -65,7 +66,7 @@ class ServerMockTest
       }
     }
 
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 
   property("ConfigMap operator handles different events") {
@@ -73,8 +74,8 @@ class ServerMockTest
     val client = server.getClient
     val cfg = Configuration.ConfigMapConfig(AllNamespaces, prefix, checkOpenshiftOnStartup = false)
     val controller = new ConfigMapTestController[IO]
-    val operator = Operator.ofConfigMap[IO, Kerb](cfg, IO.pure(client), controller).run
-    val cancelable = startOperator(operator)
+    val operator = Operator.ofConfigMap[IO, Kerb](cfg, IO.pure(client), controller)
+    startOperator(operator.run)
 
     val parser = new ConfigMapParser()
     forAll(WatcherAction.gen, CM.gen[Kerb]) { (action, cm) =>
@@ -91,6 +92,6 @@ class ServerMockTest
       }
     }
 
-    cancelable.unsafeRunSync()
+    operator.stop.unsafeRunSync()
   }
 }

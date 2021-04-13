@@ -1,7 +1,7 @@
 package freya.watcher
 
-import cats.effect.concurrent.MVar2
-import cats.effect.{Sync, Effect}
+import cats.effect.std.{Dispatcher, Queue}
+import cats.effect.{Async, Sync}
 import cats.implicits._
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{OperatorError, ParseResourceError}
@@ -22,16 +22,15 @@ final case class ConfigMapWatcherContext[F[_], T](
   convert: ConfigMap => Resource[T, Unit],
   client: KubernetesClient,
   selector: Map[String, String],
-  stopFlag: MVar2[F, ConsumerExitCode]
-)
+  stopFlag: Queue[F, ConsumerExitCode],
+  dispatcher: Dispatcher[F]
+) {
+  def toAbstractContext: AbstractWatcherContext[F, T, Unit] =
+    AbstractWatcherContext(namespace, client.getNamespace, channels, stopFlag, dispatcher)
+}
 
-class ConfigMapWatcher[F[_]: Effect, T](context: ConfigMapWatcherContext[F, T])
-    extends AbstractWatcher[F, T, Unit, Controller[F, T, Unit]](
-      context.namespace,
-      context.channels,
-      context.stopFlag,
-      context.client.getNamespace
-    ) {
+class ConfigMapWatcher[F[_]: Async, T](context: ConfigMapWatcherContext[F, T])
+    extends AbstractWatcher[F, T, Unit, Controller[F, T, Unit]](context.toAbstractContext) {
 
   private val configMapApi = new ConfigMapApi(context.client)
 
@@ -47,7 +46,7 @@ class ConfigMapWatcher[F[_]: Effect, T](context: ConfigMapWatcherContext[F, T])
     watchable: Watchable[Watcher[ConfigMap]]
   ): F[(CloseableWatcher, F[ConsumerExitCode])] = {
 
-    val startWatcher = Sync[F].delay(watchable.watch(new Watcher[ConfigMap]() {
+    val startWatcher = Sync[F].blocking(watchable.watch(new Watcher[ConfigMap]() {
       override def eventReceived(action: Watcher.Action, cm: ConfigMap): Unit = {
         if (context.controller.isSupported(cm)) {
           logger.debug(s"ConfigMap in namespace $targetNamespace was $action\nConfigMap:\n$cm\n")
@@ -62,8 +61,10 @@ class ConfigMapWatcher[F[_]: Effect, T](context: ConfigMapWatcherContext[F, T])
         ConfigMapWatcher.super.onClose(e)
     }))
 
-    Sync[F].delay(logger.info(s"ConfigMap watcher running for labels ${context.selector}")) *> startWatcher.map(
-      _ -> context.stopFlag.read
-    )
+    for {
+      _ <- Sync[F].delay(logger.info(s"ConfigMap watcher running for labels ${context.selector}"))
+      watcher <- startWatcher
+      stopFlag = context.stopFlag.take
+    } yield (watcher, stopFlag)
   }
 }

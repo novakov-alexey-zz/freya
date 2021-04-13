@@ -40,16 +40,16 @@ final case class Kerb(realm: String, principals: List[Principal])
 final case class Status(ready: Boolean = false)
 ```
 
-### Jackson
+### Jackson Simple example
 
-Jackson Scala module allows to parse simple case classes (no ADT, recursion, etc.) automatically, i.e. no extra code
+Jackson Scala module allows parsing simple case classes (no ADT, recursion, etc.) automatically, i.e. no extra code
 needs to be written. Thus, only import of the Freya Jackson module is needed.
 
 ```scala mdoc
 import freya.json.jackson._
 ```
 
-### Circe
+### Circe Simple example
 
 Circe can derive its decoder/encoders automatically, when using its `generic` module with special import. 
 
@@ -71,7 +71,7 @@ Circe auto codecs derivation requires below module in your dependency settings:
 Let's use ADT (algebraic data types) to design custom resource case class for `Password` and
 `Secret` properties. Also, some classes will have default values.
 
-### Jackson
+### Advanced example Jackson
 
 Jackson provides several annotations to configure deserialisation for enum-like classes:
 
@@ -121,7 +121,7 @@ final case class Status(
 )
 ```
 
-### Circe 
+### Advanced example Circe 
 
 ```scala mdoc:reset-object
 sealed trait Password

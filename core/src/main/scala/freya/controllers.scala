@@ -1,7 +1,7 @@
 package freya
 
 import cats.effect.Sync
-import cats.syntax.apply._
+import cats.syntax.all.catsSyntaxApply
 import freya.Controller.noStatus
 import freya.models.{CustomResource, NewStatus, NoStatus}
 import io.fabric8.kubernetes.api.model.ConfigMap

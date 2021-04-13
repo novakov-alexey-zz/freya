@@ -6,6 +6,7 @@ import org.scalatest.BeforeAndAfter
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 
 class OperatorUtilsTest extends AsyncFlatSpec with Matchers with BeforeAndAfter {
   val server = new KubernetesServer(false, false)
@@ -20,18 +21,24 @@ class OperatorUtilsTest extends AsyncFlatSpec with Matchers with BeforeAndAfter 
   }
 
   it should "return true on OpenShift" in {
-      server.expect().withPath(openShiftPath).andReturn(200, "ok").once()
-      val client = server.getClient
-      OperatorUtils.checkIfOnOpenshift[IO](client.getMasterUrl).map {
-        case (isOpenShift, _) => isOpenShift should ===(true)
-      }.unsafeRunSync()
-    }
+    server.expect().withPath(openShiftPath).andReturn(200, "ok").once()
+    val client = server.getClient
+    OperatorUtils
+      .checkIfOnOpenshift[IO](client.getMasterUrl)
+      .map { case (isOpenShift, _) =>
+        isOpenShift should ===(true)
+      }
+      .unsafeRunSync()
+  }
 
   it should "return false on K8s" in {
-      server.expect().withPath(openShiftPath).andReturn(404, "nok").once()
-      val client = server.getClient
-      OperatorUtils.checkIfOnOpenshift[IO](client.getMasterUrl).map {
-        case (isOpenShift, _) => isOpenShift should ===(false)
-      }.unsafeRunSync()
-    }
+    server.expect().withPath(openShiftPath).andReturn(404, "nok").once()
+    val client = server.getClient
+    OperatorUtils
+      .checkIfOnOpenshift[IO](client.getMasterUrl)
+      .map { case (isOpenShift, _) =>
+        isOpenShift should ===(false)
+      }
+      .unsafeRunSync()
+  }
 }

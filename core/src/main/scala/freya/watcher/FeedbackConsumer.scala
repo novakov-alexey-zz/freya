@@ -1,7 +1,7 @@
 package freya.watcher
 
-import cats.effect.Effect
-import cats.effect.concurrent.MVar2
+import cats.effect.Sync
+import cats.effect.std.Queue
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes.{ConsumerExitCode, FeedbackExitCode}
@@ -18,20 +18,20 @@ trait FeedbackConsumerAlg[F[_], T] {
 }
 
 object FeedbackConsumer {
-  type FeedbackChannel[F[_], T] = MVar2[F, Either[Unit, StatusUpdate[T]]]
+  type FeedbackChannel[F[_], T] = Queue[F, Either[Unit, StatusUpdate[T]]]
 }
 
 class FeedbackConsumer[F[_], T](
   client: KubernetesClient,
   crd: CustomResourceDefinition,
   channel: FeedbackChannel[F, T]
-)(implicit F: Effect[F], writer: JsonWriter[T])
+)(implicit F: Sync[F], writer: JsonWriter[T])
     extends FeedbackConsumerAlg[F, T]
     with LazyLogging {
   private val crdApi = new CrdApi(client, crd)
 
   def put(status: Either[Unit, StatusUpdate[T]]): F[Unit] =
-    channel.put(status)
+    channel.offer(status)
 
   def consume: F[ConsumerExitCode] =
     for {

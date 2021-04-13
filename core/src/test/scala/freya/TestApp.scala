@@ -1,6 +1,6 @@
 package freya
 
-import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, IO, IOApp}
+import cats.effect.{Async, ExitCode, IO, IOApp}
 import cats.syntax.apply._
 import com.typesafe.scalalogging.LazyLogging
 import freya.Configuration.{ConfigMapConfig, CrdConfig}
@@ -11,7 +11,7 @@ import io.fabric8.kubernetes.client.DefaultKubernetesClient
 
 import scala.concurrent.duration._
 
-class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F, Kerb, Status] with LazyLogging {
+class KrbController[F[_]](implicit F: Async[F]) extends Controller[F, Kerb, Status] with LazyLogging {
 
   private def getStatus: F[NewStatus[Status]] =
     F.pure(Some(Status(true)))
@@ -26,7 +26,7 @@ class KrbController[F[_]](implicit F: ConcurrentEffect[F]) extends Controller[F,
     F.delay(logger.info(s"Kerb modify event: ${krb.spec}, ${krb.metadata}")) *> getStatus
 }
 
-class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) extends CmController[F, Kerb] {
+class KrbCmController[F[_]](implicit F: Async[F]) extends CmController[F, Kerb] {
 
   override def isSupported(cm: ConfigMap): Boolean =
     cm.getMetadata.getName.startsWith("krb")
@@ -34,7 +34,6 @@ class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) extends CmControlle
 
 object TestCmOperator extends IOApp with TestParams {
   import freya.yaml.jackson._
-  implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] =
     Operator
@@ -44,7 +43,6 @@ object TestCmOperator extends IOApp with TestParams {
 
 object TestCrdOperator extends IOApp with TestParams {
   import freya.json.jackson._
-  implicit val cs: ContextShift[IO] = freya.cs
 
   override def run(args: List[String]): IO[ExitCode] =
     Operator
@@ -61,21 +59,22 @@ trait TestParams {
 
 object HelperCrdOperator extends IOApp with LazyLogging with TestParams {
   import freya.json.jackson._
-  implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] = {
     val controller = (helper: CrdHelper[IO, Kerb, Status]) =>
       new Controller[IO, Kerb, Status] {
 
         override def onInit(): IO[Unit] =
-          helper.currentResources().fold(
-            IO.raiseError,
-            r =>
-              IO(r.foreach {
-                case Left((error, r)) => logger.error(s"Failed to parse CRD instances $r", error)
-                case Right(resource) => logger.info(s"current ${crdCfg.getKind} CRDs: ${resource.spec}")
-              })
-          )
+          helper
+            .currentResources()
+            .fold(
+              IO.raiseError,
+              r =>
+                IO(r.foreach {
+                  case Left((error, r)) => logger.error(s"Failed to parse CRD instances $r", error)
+                  case Right(resource) => logger.info(s"current ${crdCfg.getKind} CRDs: ${resource.spec}")
+                })
+            )
       }
 
     Operator

@@ -3,7 +3,6 @@ title: ConfigMap Operator
 custom_edit_url: https://github.com/novakov-alexey/freya/edit/master/docs/docs/configmap-operator.md
 ---
 
-
 <!-- # ConfigMap Operator -->
 
 Please first look at CRD Operator documentation. It contains more common information, which is applicable to ConfigMap
@@ -53,10 +52,10 @@ final case class Kerb(realm: String, principals: List[Principal])
 
 ```scala mdoc
 import freya.CmController
-import cats.effect.ConcurrentEffect
+import cats.effect.Async
 import io.fabric8.kubernetes.api.model.ConfigMap
 
-class KrbCmController[F[_]](implicit F: ConcurrentEffect[F]) 
+class KrbCmController[F[_]](implicit F: Async[F]) 
   extends CmController[F, Kerb] {
 
   // override onAdd, onDelete, onModify like in Crd Controller 
@@ -72,7 +71,7 @@ satisfy to logical condition.
 ### 3 . Start your operator
 
 ```scala mdoc:compile-only
-import cats.effect.{ContextShift, ExitCode, IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
 import freya.Configuration.ConfigMapConfig
@@ -80,7 +79,7 @@ import freya.Operator
 import freya.yaml.jackson._
 
 object KerbCmOperator extends IOApp {
-  implicit val cs: ContextShift[IO] = contextShift
+  //implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)

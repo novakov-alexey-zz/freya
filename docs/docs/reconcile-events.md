@@ -35,14 +35,10 @@ import scala.annotation.unused
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
-// p.s. use IOApp as in previous examples instead of below timer and cs values
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-
 // override reconcile method
 
 class KerbController[F[_]](@unused client: KubernetesClient)(
-  implicit F: ConcurrentEffect[F]
+  implicit F: Async[F]
 ) 
   extends Controller[F, Kerb, Unit] with LazyLogging {
 

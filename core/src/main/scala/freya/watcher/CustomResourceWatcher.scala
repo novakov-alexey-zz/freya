@@ -1,8 +1,8 @@
 package freya.watcher
 
-import cats.effect.concurrent.MVar2
-import cats.effect.{Effect, Sync}
-import cats.implicits._
+import cats.effect.{Async, Sync}
+import cats.effect.std.{Dispatcher, Queue}
+import cats.syntax.all._
 import freya.ExitCodes.ConsumerExitCode
 import freya.errors.{OperatorError, ParseResourceError}
 import freya.internal.kubeapi.CrdApi
@@ -20,16 +20,15 @@ final case class CrdWatcherContext[F[_], T, U](
   convertCr: AnyCustomResource => Resource[T, U],
   client: KubernetesClient,
   crd: CustomResourceDefinition,
-  stopFlag: MVar2[F, ConsumerExitCode]
-)
+  stopFlag: Queue[F, ConsumerExitCode],
+  dispatcher: Dispatcher[F]
+) {
+  def toAbstractContext: AbstractWatcherContext[F, T, U] =
+    AbstractWatcherContext(ns, client.getNamespace, channels, stopFlag, dispatcher)
+}
 
-class CustomResourceWatcher[F[_]: Effect, T, U](context: CrdWatcherContext[F, T, U])
-    extends AbstractWatcher[F, T, U, Controller[F, T, U]](
-      context.ns,
-      context.channels,
-      context.stopFlag,
-      context.client.getNamespace
-    ) {
+class CustomResourceWatcher[F[_]: Async, T, U](context: CrdWatcherContext[F, T, U])
+    extends AbstractWatcher[F, T, U, Controller[F, T, U]](context.toAbstractContext) {
 
   private val crdApi = new CrdApi(context.client, context.crd)
 
@@ -41,7 +40,7 @@ class CustomResourceWatcher[F[_]: Effect, T, U](context: CrdWatcherContext[F, T,
   protected[freya] def registerWatcher(
     watchable: Watchable[Watcher[AnyCustomResource]]
   ): F[(CloseableWatcher, F[ConsumerExitCode])] = {
-    val startWatcher = Sync[F].delay(watchable.watch(new Watcher[AnyCustomResource]() {
+    val startWatcher = Sync[F].blocking(watchable.watch(new Watcher[AnyCustomResource]() {
 
       override def eventReceived(action: Watcher.Action, cr: AnyCustomResource): Unit = {
         logger.debug(s"Custom resource in namespace '${cr.getMetadata.getNamespace}' was $action\nCR spec:\n$cr")
@@ -58,8 +57,10 @@ class CustomResourceWatcher[F[_]: Effect, T, U](context: CrdWatcherContext[F, T,
         CustomResourceWatcher.super.onClose(e)
     }))
 
-    Sync[F].delay(logger.info(s"CustomResource watcher is running for kinds '${context.kind}'")) *> startWatcher.map(
-      _ -> context.stopFlag.read
-    )
+    for {
+      _ <- Sync[F].delay(logger.info(s"CustomResource watcher is running for kinds '${context.kind}'"))
+      watcher <- startWatcher
+      stopFlag = context.stopFlag.take <* Sync[F].delay(logger.debug("Stop flag is triggered. Stopping watcher"))
+    } yield (watcher, stopFlag)
   }
 }

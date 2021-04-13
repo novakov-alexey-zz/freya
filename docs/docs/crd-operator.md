@@ -71,12 +71,12 @@ Just extend `freya.Controller` abstract class:
 
 ```scala mdoc
 import com.typesafe.scalalogging.LazyLogging
-import cats.effect.ConcurrentEffect
+import cats.effect.Async
 import cats.syntax.apply._
 import freya.Controller
 import freya.models.{CustomResource, NewStatus}
 
-class KerbController[F[_]](implicit F: ConcurrentEffect[F]) 
+class KerbController[F[_]](implicit F: Async[F]) 
   extends Controller[F, Kerb, Status] with LazyLogging {
 
   override def onAdd(krb: CustomResource[Kerb, Status]): F[NewStatus[Status]] =
@@ -112,7 +112,7 @@ is started to watch for custom resources or ConfigMap resources.
 ### 3 . Start your operator
 
 ```scala mdoc
-import cats.effect.{ContextShift, ExitCode, IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp}
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import freya.K8sNamespace.Namespace
 import freya.Operator
@@ -120,7 +120,7 @@ import freya.Configuration.CrdConfig
 import freya.json.jackson._
 
 object KerbCrdOperator extends IOApp {
-  implicit val cs: ContextShift[IO] = contextShift
+  //implicit val cs: ContextShift[IO] = contextShift
 
   override def run(args: List[String]): IO[ExitCode] = {
     val client = IO(new DefaultKubernetesClient)
@@ -156,14 +156,12 @@ listening process, it will be restarted with the same parameters. There are few 
 ### Retry infinitely with random delay
 
 ```scala mdoc:compile-only
-import cats.effect.{IO, Timer}
+import cats.effect.IO
 import freya.Retry.Infinite
 import freya.Operator
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
@@ -177,14 +175,12 @@ Operator
 ### Retry with fixed number of restarts
 
 ```scala mdoc:compile-only
-import cats.effect.{IO, Timer}
+import cats.effect.IO
 import freya.Retry.Times
 import freya.Operator
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)
 
@@ -215,13 +211,10 @@ within Operator code manually.
 ### CRD Helper
 
 ```scala mdoc:compile-only
-import cats.effect.{IO, Timer}
+import cats.effect.IO
 import freya.CrdHelper
 import freya.models.NoStatus 
 import scala.concurrent.ExecutionContext
-
-implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global) 
-implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
 val cfg = CrdConfig(Namespace("test"), prefix = "io.myorg.kerboperator")
 val client = IO(new DefaultKubernetesClient)

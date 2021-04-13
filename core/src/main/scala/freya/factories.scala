@@ -1,6 +1,6 @@
 package freya
 
-import cats.effect.{Effect, Sync}
+import cats.effect.{Async, Sync}
 import freya.Configuration.CrdConfig
 import freya.ExitCodes.ConsumerExitCode
 import freya.internal.crd.Deployer
@@ -19,7 +19,7 @@ trait CrdWatchMaker[F[_], T, U] {
 }
 
 object CrdWatchMaker {
-  implicit def crd[F[_]: Effect, T, U]: CrdWatchMaker[F, T, U] =
+  implicit def crd[F[_]: Async, T, U]: CrdWatchMaker[F, T, U] =
     (context: CrdWatcherContext[F, T, U]) => new CustomResourceWatcher(context)
 }
 
@@ -28,12 +28,12 @@ trait ConfigMapWatchMaker[F[_], T] {
 }
 
 object ConfigMapWatchMaker {
-  implicit def cm[F[_]: Effect, T]: ConfigMapWatchMaker[F, T] =
+  implicit def cm[F[_]: Async, T]: ConfigMapWatchMaker[F, T] =
     (context: ConfigMapWatcherContext[F, T]) => new ConfigMapWatcher(context)
 }
 
 trait CrdDeployer[F[_]] {
-  def deployCrd[T: JsonReader](
+  def deploy[T: JsonReader](
     client: KubernetesClient,
     cfg: CrdConfig,
     isOpenShift: Option[Boolean]
@@ -42,7 +42,7 @@ trait CrdDeployer[F[_]] {
 
 object CrdDeployer {
   implicit def deployer[F[_]: Sync]: CrdDeployer[F] = new CrdDeployer[F] {
-    override def deployCrd[T: JsonReader](
+    override def deploy[T: JsonReader](
       client: KubernetesClient,
       cfg: CrdConfig,
       isOpenShift: Option[Boolean]
@@ -60,7 +60,7 @@ trait FeedbackConsumerMaker[F[_], T] {
 }
 
 object FeedbackConsumerMaker {
-  implicit def consumer[F[_]: Effect, T: JsonWriter]: FeedbackConsumerMaker[F, T] =
+  implicit def consumer[F[_]: Sync, T: JsonWriter]: FeedbackConsumerMaker[F, T] =
     (client: KubernetesClient, crd: CustomResourceDefinition, channel: FeedbackChannel[F, T]) =>
       new FeedbackConsumer[F, T](client, crd, channel)
 }

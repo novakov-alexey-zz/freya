@@ -2,6 +2,7 @@ import sbt.url
 import sbtrelease.ReleaseStateTransformations._
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
+Global / excludeLintKeys := Set(name, pomIncludeRepository, publishMavenStyle, git.useGitDescribe)
 
 ThisBuild / name := "freya"
 ThisBuild / scalaVersion := "2.13.5"
@@ -50,7 +51,7 @@ releaseProcess ++= (if (sys.env.contains("RELEASE_PUBLISH"))
                       Seq[ReleaseStep](inquireVersions, setNextVersion, commitNextVersion, pushChanges)
                     else Seq.empty[ReleaseStep])
 
-lazy val freya = (project in file(".")).aggregate(`core`, `api`, `jackson`, `circe`).settings(skip in publish := true)
+lazy val freya = (project in file(".")).aggregate(`core`, `api`, `jackson`, `circe`).settings(publish / skip := true)
 
 lazy val `api` = (project in file("api"))
   .settings(moduleName := "freya-api")
@@ -59,7 +60,7 @@ lazy val `core` = (project in file("core"))
   .settings(moduleName := "freya-core")
   .settings(
     addCompilerPlugin(betterMonadicFor),
-    publishArtifact in Test := false,
+    Test / publishArtifact := false,
     libraryDependencies ++= Seq(
       k8sClient,
       k8sModel,
@@ -102,4 +103,4 @@ lazy val docs = project
   .enablePlugins(MdocPlugin, DocusaurusPlugin)
 
 lazy val generateSchema = taskKey[Unit]("Generate JSON Schema")
-generateSchema := (runMain in Test).toTask("freya.ScalaJsonSchema").value
+generateSchema := (Test / runMain).toTask("freya.ScalaJsonSchema").value

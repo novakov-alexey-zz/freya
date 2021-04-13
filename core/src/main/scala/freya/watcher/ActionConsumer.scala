@@ -1,7 +1,8 @@
 package freya.watcher
 
 import cats.data.OptionT
-import cats.effect.Effect
+import cats.effect.Sync
+import cats.effect.std.Queue
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes.ConsumerExitCode
@@ -18,9 +19,9 @@ class ActionConsumer[F[_], T, U](
   name: String,
   controller: Controller[F, T, U],
   kind: String,
-  queue: BlockingQueue[F, Action[T, U]],
+  queue: Queue[F, Action[T, U]],
   feedback: Option[FeedbackConsumerAlg[F, U]]
-)(implicit F: Effect[F])
+)(implicit F: Sync[F])
     extends LazyLogging {
 
   private val noStatus = F.pure[NewStatus[U]](None)
@@ -29,10 +30,12 @@ class ActionConsumer[F[_], T, U](
   private val stopFeedbackConsumer = Left(())
 
   private[freya] def putAction(action: Action[T, U]): F[Unit] =
-    queue.produce(action)
+    queue.offer(action)
 
-  private[freya] def consume: F[ConsumerExitCode] =
-    queue.consume(processAction) *> ExitCodes.ActionConsumerExitCode.pure[F]
+  private[freya] def consume: F[ConsumerExitCode] = for {
+    cont <- queue.take.flatMap(processAction)
+    ec <- if (cont) consume else ExitCodes.ActionConsumerExitCode.pure[F]
+  } yield ec
 
   private def processAction(action: Action[T, U]): F[Boolean] =
     for {
@@ -49,7 +52,7 @@ class ActionConsumer[F[_], T, U](
     e match {
       case WatcherClosedError(e) =>
         F.delay(logger.error(s"K8s closed socket, so closing consumer $name as well", e)) *>
-            feedback.fold(F.unit)(_.put(stopFeedbackConsumer)) *> stop
+          feedback.fold(F.unit)(_.put(stopFeedbackConsumer)) *> stop
       case ParseResourceError(a, t, r) =>
         F.delay(logger.error(s"Failed action $a for resource $r", t)) *> continue
       case ParseReconcileError(t, r) =>
@@ -67,10 +70,10 @@ class ActionConsumer[F[_], T, U](
                   s"Event received ${gr}ADDED$xx kind=$kind name=${resource.metadata.name} in '${resource.metadata.namespace}' namespace"
                 )
             ) *>
-                controller.onAdd(resource) <*
-                F.delay(
-                  logger.debug(s"Event ${gr}ADDED$xx for kind=$kind name=${resource.metadata.name} has been handled")
-                )
+              controller.onAdd(resource) <*
+              F.delay(
+                logger.debug(s"Event ${gr}ADDED$xx for kind=$kind name=${resource.metadata.name} has been handled")
+              )
 
           case DELETED =>
             F.delay(
@@ -79,10 +82,10 @@ class ActionConsumer[F[_], T, U](
                   s"Event received ${gr}DELETED$xx kind=$kind name=${resource.metadata.name} in '${resource.metadata.namespace}' namespace"
                 )
             ) *>
-                controller.onDelete(resource) *>
-                F.delay(
-                  logger.debug(s"Event ${gr}DELETED$xx for kind=$kind name=${resource.metadata.name} has been handled")
-                ) *> F.pure(Option.empty[U])
+              controller.onDelete(resource) *>
+              F.delay(
+                logger.debug(s"Event ${gr}DELETED$xx for kind=$kind name=${resource.metadata.name} has been handled")
+              ) *> F.pure(Option.empty[U])
 
           case MODIFIED =>
             F.delay(
@@ -91,10 +94,10 @@ class ActionConsumer[F[_], T, U](
                   s"Event received ${gr}MODIFIED$xx kind=$kind name=${resource.metadata.name} in '${resource.metadata.namespace}' namespace"
                 )
             ) *>
-                controller.onModify(resource) <*
-                F.delay(
-                  logger.debug(s"Event ${gr}MODIFIED$xx for kind=$kind name=${resource.metadata.name} has been handled")
-                )
+              controller.onModify(resource) <*
+              F.delay(
+                logger.debug(s"Event ${gr}MODIFIED$xx for kind=$kind name=${resource.metadata.name} has been handled")
+              )
 
           case ERROR =>
             F.delay(
