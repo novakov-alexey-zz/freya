@@ -40,16 +40,16 @@ final case class Kerb(realm: String, principals: List[Principal])
 final case class Status(ready: Boolean = false)
 ```
 
-### Jackson
+### Jackson Simple example
 
-Jackson Scala module allows to parse simple case classes (no ADT, recursion, etc.) automatically, i.e. no extra code
+Jackson Scala module allows parsing simple case classes (no ADT, recursion, etc.) automatically, i.e. no extra code
 needs to be written. Thus, only import of the Freya Jackson module is needed.
 
 ```scala mdoc
 import freya.json.jackson._
 ```
 
-### Circe
+### Circe Simple example
 
 Circe can derive its decoder/encoders automatically, when using its `generic` module with special import. 
 

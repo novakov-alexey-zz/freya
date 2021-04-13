@@ -11,9 +11,9 @@ import freya.models.{CustomResource, Metadata, Resource}
 import freya.resource.{ConfigMapParser, CrdParser}
 import freya.watcher.AnyCustomResource
 import io.fabric8.kubernetes.api.model.{ConfigMap, NamespaceBuilder}
-import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient}
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer
 import io.fabric8.kubernetes.client.utils.Serialization
+import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
