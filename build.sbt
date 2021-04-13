@@ -2,6 +2,7 @@ import sbt.url
 import sbtrelease.ReleaseStateTransformations._
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
+Global / excludeLintKeys := Set(name, pomIncludeRepository, publishMavenStyle, git.useGitDescribe)
 
 ThisBuild / name := "freya"
 ThisBuild / scalaVersion := "2.13.5"
