@@ -51,12 +51,11 @@ abstract class AbstractWatcher[F[_], T, U, C <: Controller[F, T, U]] protected (
   private def putActionBlocking(namespace: String, action: Either[OperatorError, WatcherAction[T, U]]): Unit =
     runSync(context.channels.getOrCreateConsumer(namespace).flatMap(_.putAction(action)))
 
-  private def runSync[A](f: F[A]): A =
+  private def runSync[A](f: F[Unit]): Unit =
     Try(context.dispatcher.unsafeRunSync(f)).toEither match {
       case Left(t) =>
         logger.error("Failed to evaluate passed effect synchronously", t)
-        throw t
-      case Right(a) => a
+      case _ => ()
     }
 
   protected def onClose(e: WatcherException): Unit = {
