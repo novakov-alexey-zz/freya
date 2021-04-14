@@ -1,5 +1,6 @@
 package freya.internal
 
+import cats.effect.{Async, Temporal}
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import freya.ExitCodes
@@ -11,7 +12,6 @@ import freya.watcher.Channels
 import freya.watcher.actions.ReconcileAction
 
 import scala.concurrent.duration._
-import cats.effect.{Async, Temporal}
 
 private[freya] class Reconciler[F[_], T, U](
   delay: FiniteDuration,
@@ -40,7 +40,7 @@ private[freya] class Reconciler[F[_], T, U](
       _.map {
         case Left((t, resource)) =>
           val action = Left(ParseReconcileError(t, resource))
-          putAction(resource.getMetadata.getNamespace, action)
+          putAction(Channels.UnparsedNamespace, action)
         case Right(resource) =>
           val action = Right(ReconcileAction(resource))
           putAction(resource.metadata.namespace, action)

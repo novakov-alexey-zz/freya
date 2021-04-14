@@ -83,10 +83,10 @@ class OperatorHelperTest
     }
   }
 
-  def createConfigMap(client: KubernetesClient, cm: ConfigMap, ns: K8sNamespace) = {
+  private def createConfigMap(client: KubernetesClient, cm: ConfigMap, ns: K8sNamespace) = {
     cm.getMetadata.setNamespace(ns.value)
     client.configMaps().inNamespace(cm.getMetadata.getNamespace).create(cm)
-    client.configMaps().inNamespace(cm.getMetadata.getNamespace).withName(cm.getMetadata().getName()).get()
+    client.configMaps().inNamespace(cm.getMetadata.getNamespace).withName(cm.getMetadata.getName).get()
   }
 
   ignore("Crd helper should return current CRDs") {
@@ -113,7 +113,7 @@ class OperatorHelperTest
     val ns = new NamespaceBuilder().withNewMetadata.withName(testNs.value).endMetadata.build
     client.namespaces().createOrReplace(ns)
 
-    forAll(AnyCustomResource.gen[Kerb](cfg.getKind)) { case (cr, spec, _) =>
+    forAll(AnyCustomResource.gen[Kerb]()) { case (cr, spec, _) =>
       cr.getMetadata.setNamespace(testNs.value)
       //when
       krbClient

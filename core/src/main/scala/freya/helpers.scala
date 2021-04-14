@@ -2,13 +2,13 @@ package freya
 
 import cats.syntax.either._
 import freya.Configuration.CrdConfig
+import freya.CrdHelper.convertCr
 import freya.K8sNamespace.AllNamespaces
 import freya.internal.OperatorUtils
-import freya.internal.kubeapi.CrdApi.Filtered
-import freya.internal.kubeapi.{ConfigMapApi, CrdApi, MetadataApi}
-import freya.models.{CustomResource, Resource, ResourcesList}
-import freya.resource.{ConfigMapParser, ConfigMapLabels}
-import freya.watcher.AnyCustomResource
+import freya.internal.kubeapi.CrdApi.CustomResourceList
+import freya.internal.kubeapi.{ConfigMapApi, CrdApi}
+import freya.models.{CustomResource, Metadata, Resource, ResourcesList}
+import freya.resource.{ConfigMapLabels, ConfigMapParser}
 import io.fabric8.kubernetes.api.model.ConfigMap
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.CustomResourceDefinition
 import io.fabric8.kubernetes.client.KubernetesClient
@@ -50,8 +50,8 @@ final case class ConfigMapHelperContext(
 
 object ConfigMapHelper {
   def convertCm[T: YamlReader](parser: ConfigMapParser)(cm: ConfigMap): Resource[T, Unit] =
-    parser.parseCM(cm).leftMap(_ -> cm).map { case (resource, meta) =>
-      CustomResource(meta, resource, None)
+    parser.parseCM(cm).map { case (resource, meta) =>
+      CustomResource(Metadata.fromObjectMeta(meta), resource, None)
     }
 }
 
@@ -93,19 +93,14 @@ final case class CrdHelperContext(
 )
 
 object CrdHelper {
-
-  def convertCr[T: JsonReader, U: JsonReader](
-    parser: CustomResourceParser
-  )(resource: AnyCustomResource): Resource[T, U] =
+  def convertCr[T: JsonReader, U: JsonReader](parser: CustomResourceParser)(resource: AnyRef): Resource[T, U] =
     for {
-      (spec, status) <- parser
+      (spec, status, meta) <- parser
         .parse[T, U](resource)
-        .leftMap(_ -> resource)
-      meta <- Right(getMetadata(resource))
-    } yield CustomResource(meta, spec, status)
-
-  private def getMetadata(r: AnyCustomResource) =
-    MetadataApi.translate(r.getMetadata)
+        .leftMap { case (t, r) =>
+          t -> r
+        }
+    } yield CustomResource(Metadata.fromObjectMeta(meta), spec, status)
 }
 
 class CrdHelper[F[_], T: JsonReader, U: JsonReader](val context: CrdHelperContext)
@@ -113,19 +108,15 @@ class CrdHelper[F[_], T: JsonReader, U: JsonReader](val context: CrdHelperContex
   private val crdApi = new CrdApi(client, context.crd)
 
   def currentResources(namespace: K8sNamespace = targetNamespace): Either[Throwable, ResourcesList[T, U]] = {
-    val resources = Try(crdApi.resourcesIn[T](namespace)).toEither
+    val resources = Try(crdApi.listResources(namespace)).toEither
     convert(resources)
   }
 
   def currentResources(labels: Map[String, String]): Either[Throwable, ResourcesList[T, U]] = {
-    val resources = Try(crdApi.resourcesWithLabels[T](labels)).toEither
+    val resources = Try(crdApi.listResources[T](labels)).toEither
     convert(resources)
   }
 
-  private def convert(resources: Either[Throwable, Filtered]) =
-    resources.map { c =>
-      CrdApi
-        .list(c)
-        .map(CrdHelper.convertCr[T, U](context.parser)(_))
-    }
+  private def convert(resources: Either[Throwable, CustomResourceList]) =
+    resources.map(_.map(convertCr[T, U](context.parser)))
 }

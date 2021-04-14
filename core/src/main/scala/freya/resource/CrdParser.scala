@@ -1,8 +1,10 @@
 package freya.resource
 
-import cats.implicits._
+import cats.implicits.catsSyntaxEitherId
+import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import freya.watcher.AnyCustomResource
 import freya.{CustomResourceParser, JsonReader}
+import io.fabric8.kubernetes.api.model.ObjectMeta
 
 import scala.util.{Failure, Success, Try}
 
@@ -11,15 +13,26 @@ private[freya] object CrdParser {
 }
 
 private[freya] class CrdParser extends CustomResourceParser {
+  val mapper = new ObjectMapper
+  mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-  def parse[T: JsonReader, U: JsonReader](cr: AnyCustomResource): Either[Throwable, (T, Option[U])] =
+  def parse[T: JsonReader, U: JsonReader](cr: AnyRef): Either[(Throwable, String), (T, Option[U], ObjectMeta)] = {
+    val s = cr match {
+      case s: String => s
+      case _ => mapper.writeValueAsString(cr)
+    }
+    parseStr[T, U](s).left.map((_, s))
+  }
+
+  def parseStr[T: JsonReader, U: JsonReader](cr: String): Either[Throwable, (T, Option[U], ObjectMeta)] =
     for {
-      spec <- parseProperty[T](cr.getSpec, "spec")
-      status <- Option(cr.getStatus) match {
+      anyCr <- Try(mapper.readValue(cr, classOf[AnyCustomResource])).toEither
+      spec <- parseProperty[T](anyCr.getSpec.value, "spec")
+      status <- Option(anyCr.getStatus) match {
         case None => None.asRight[Throwable]
-        case Some(s) => parseProperty[U](s, "status").map(Some(_))
+        case Some(s) => parseProperty[U](s.value, "status").map(Some(_))
       }
-    } yield (spec, status)
+    } yield (spec, status, anyCr.getMetadata)
 
   private def parseProperty[T: JsonReader](property: String, name: String) = {
     val read = implicitly[JsonReader[T]]

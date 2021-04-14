@@ -101,7 +101,6 @@ class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
 
   private def newCr(crd: CustomResourceDefinition, spec: Kerb) = {
     val anyCr = new AnyCustomResource
-    anyCr.setKind(crd.getSpec.getNames.getKind)
     anyCr.setApiVersion(s"${crd.getSpec.getGroup}/${crd.getSpec.getVersion}")
     anyCr.setMetadata(
       new ObjectMetaBuilder()

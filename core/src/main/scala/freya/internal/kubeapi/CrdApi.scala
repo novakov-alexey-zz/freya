@@ -2,24 +2,19 @@ package freya.internal.kubeapi
 
 import com.typesafe.scalalogging.LazyLogging
 import freya.K8sNamespace.AllNamespaces
-import freya.internal.crd.AnyCrList
-import freya.internal.kubeapi.CrdApi.{Filtered, FilteredMulti, StatusUpdate, statusUpdateJson}
+import freya.internal.kubeapi.CrdApi.{statusUpdateJson, CustomResourceList, StatusUpdate}
 import freya.models.Metadata
-import freya.watcher.AnyCustomResource
 import freya.{JsonWriter, K8sNamespace}
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.{CustomResourceDefinition, CustomResourceDefinitionBuilder, CustomResourceDefinitionFluent}
-import io.fabric8.kubernetes.client.dsl.{FilterWatchListDeletable, FilterWatchListMultiDeletable}
-import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext
 import io.fabric8.kubernetes.client.KubernetesClient
+import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext
+import io.fabric8.kubernetes.client.dsl.internal.RawCustomResourceOperationsImpl
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 object CrdApi {
-  type FilteredMulti =
-    FilterWatchListMultiDeletable[AnyCustomResource, AnyCrList]
-
-  type Filtered = FilterWatchListDeletable[AnyCustomResource, AnyCrList]
+  type CustomResourceList = List[AnyRef]
 
   final case class StatusUpdate[T](meta: Metadata, status: T)
 
@@ -58,9 +53,6 @@ object CrdApi {
       .withPreserveUnknownFields(false) //TODO: extract to config
   }
 
-  def list[T, U](crs: Filtered): List[AnyCustomResource] =
-    crs.list().getItems.asScala.toList
-
   def statusUpdateJson[T: JsonWriter](
     crd: CustomResourceDefinition,
     su: StatusUpdate[T],
@@ -86,17 +78,29 @@ object CrdApi {
 
 private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinition) extends LazyLogging {
   private lazy val context = CrdApi.toCrdContext(crd)
+  private val AnyNamespace = null
 
-  def resourcesWithLabels[T](labels: Map[String, String]): Filtered =
-    customResourceOperation.withLabels(labels.asJava)
+  def listResources[T](labels: Map[String, String]): CustomResourceList =
+    toItemList(customResourceOperation.list(AnyNamespace, labels.asJava).asScala.toMap)
 
-  def resourcesIn[T](ns: K8sNamespace): FilteredMulti = {
-    val _crs = customResourceOperation
-    if (AllNamespaces == ns) _crs.inAnyNamespace else _crs.inNamespace(ns.value)
+  def rawResource: RawCustomResourceOperationsImpl =
+    customResourceOperation
+
+  def listResources(ns: K8sNamespace): CustomResourceList = {
+    val rawCustomResource = customResourceOperation
+    val map = if (AllNamespaces == ns) rawCustomResource.list() else rawCustomResource.list(ns.value)
+    toItemList(map.asScala.toMap)
   }
 
-  private def customResourceOperation[T] =
-    client.customResources(classOf[AnyCustomResource], classOf[AnyCrList])
+  private def toItemList(map: Map[String, AnyRef]): CustomResourceList = {
+    val items = map.get("items")
+    println("items:" + items) //TODO: remove
+    items.collect { case i: java.util.ArrayList[_] => i.asScala.toList.asInstanceOf[List[AnyRef]] }
+      .getOrElse(List.empty[AnyRef])
+  }
+
+  private def customResourceOperation =
+    client.customResource(context)
 
   def updateStatus[T: JsonWriter](su: StatusUpdate[T]): Unit = {
     val resourceProperties = Try(

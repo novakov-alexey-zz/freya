@@ -1,5 +1,7 @@
 package freya.resource
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import freya.json.circe._
 import freya.watcher.AnyCustomResource
 import freya.{Kerb, Status}
@@ -9,13 +11,16 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class CrdParserCirceTest extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers with CirceCodecs {
   val parser = new CrdParser
+  val mapper = new ObjectMapper
+  mapper.registerModule(DefaultScalaModule)
 
   property("CrdParser parses valid spec") {
-    forAll(freya.AnyCustomResource.gen[Kerb]("kerb")) { case (anyCr, spec, status) =>
+    forAll(freya.AnyCustomResource.gen[Kerb]()) { case (anyCr, spec, status) =>
       //when
-      val parsed = parser.parse[Kerb, Status](anyCr)
+      val parsed = parser.parseStr[Kerb, Status](mapper.writeValueAsString(anyCr))
       //then
-      parsed should ===(Right((spec, Some(status))))
+      val expected = Right((spec, Some(status), anyCr.getMetadata))
+      parsed should ===(expected)
     }
   }
 

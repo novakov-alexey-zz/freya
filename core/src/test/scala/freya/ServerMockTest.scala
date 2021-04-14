@@ -51,7 +51,7 @@ class ServerMockTest
     startOperator(operator.run)
     val krbClient = client.customResources(classOf[AnyCustomResource], classOf[AnyCrList])
 
-    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](cfg.getKind)) { case (action, (cr, spec, _)) =>
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb]()) { case (action, (cr, spec, _)) =>
       val ns = new NamespaceBuilder().withNewMetadata.withName(cr.getMetadata.getNamespace).endMetadata.build
       client.namespaces().create(ns)
 

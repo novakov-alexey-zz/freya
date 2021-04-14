@@ -36,7 +36,7 @@ class ConfigMapWatcher[F[_]: Async, T](context: ConfigMapWatcherContext[F, T])
 
   override def watch: F[(CloseableWatcher, F[ConsumerExitCode])] =
     Sync[F].delay(
-      KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap]) //TODO: why internal API is called?
+      KubernetesDeserializer.registerCustomKind("v1#ConfigMap", classOf[ConfigMap])
     ) *> {
       val watchable = configMapApi.select(configMapApi.in(targetNamespace), context.selector)
       registerWatcher(watchable)

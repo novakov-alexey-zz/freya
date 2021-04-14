@@ -1,11 +1,11 @@
 package freya
 
 import cats.effect.ExitCode
-import freya.watcher.AnyCustomResource
-import io.fabric8.kubernetes.api.model.HasMetadata
+import freya.internal.kubeapi.MetadataApi
+import io.fabric8.kubernetes.api.model.ObjectMeta
 
 object models {
-  type Resource[T, U] = Either[(Throwable, HasMetadata), CustomResource[T, U]]
+  type Resource[T, U] = Either[(Throwable, String), CustomResource[T, U]]
   type ResourcesList[T, U] = List[Resource[T, U]]
   type NewStatus[U] = Option[U]
   type NoStatus = NewStatus[Unit]
@@ -17,6 +17,12 @@ object models {
     resourceVersion: String,
     uid: String
   )
+
+  object Metadata {
+    def fromObjectMeta(m: ObjectMeta): Metadata =
+      MetadataApi.translate(m)
+  }
+
   final case class CustomResource[T, U](metadata: Metadata, spec: T, status: NewStatus[U])
 }
 
@@ -31,5 +37,6 @@ object ExitCodes {
 }
 
 trait CustomResourceParser {
-  def parse[T: JsonReader, U: JsonReader](cr: AnyCustomResource): Either[Throwable, (T, Option[U])]
+  def parseStr[T: JsonReader, U: JsonReader](cr: String): Either[Throwable, (T, Option[U], ObjectMeta)]
+  def parse[T: JsonReader, U: JsonReader](cr: AnyRef): Either[(Throwable, String), (T, Option[U], ObjectMeta)]
 }

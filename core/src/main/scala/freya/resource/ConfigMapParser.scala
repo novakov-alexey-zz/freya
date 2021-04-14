@@ -2,10 +2,8 @@ package freya.resource
 
 import com.typesafe.scalalogging.LazyLogging
 import freya.YamlReader
-import freya.internal.kubeapi.MetadataApi
-import freya.models.Metadata
 import freya.resource.ConfigMapParser.SpecificationKey
-import io.fabric8.kubernetes.api.model.ConfigMap
+import io.fabric8.kubernetes.api.model.{ConfigMap, ObjectMeta}
 
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -53,12 +51,17 @@ private[freya] class ConfigMapParser extends LazyLogging {
     }
   }
 
-  def parseCM[T: YamlReader](cm: ConfigMap): Either[Throwable, (T, Metadata)] =
+  def parseCM[T: YamlReader](cm: ConfigMap): Either[(Throwable, String), (T, ObjectMeta)] = {
+    val data = cm.getData.asScala
+
     for {
-      yaml <- cm.getData.asScala
+      yaml: String <- data
         .get(SpecificationKey)
-        .toRight(new RuntimeException(s"ConfigMap is missing '$SpecificationKey' key"))
-      meta = MetadataApi.translate(cm.getMetadata)
-      parsed <- parseYaml(yaml).map(_ -> meta)
+        .toRight((new RuntimeException(s"ConfigMap is missing '$SpecificationKey' key"), data.toString()))
+      parsed <- parseYaml(yaml) match {
+        case Right(r) => Right(r -> cm.getMetadata)
+        case Left(t) => Left(t -> yaml)
+      }
     } yield parsed
+  }
 }

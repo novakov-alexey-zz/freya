@@ -92,9 +92,7 @@ class OperatorsTest
           registerWatcher(watchable)
       }
 
-  implicit def crdWatch[F[_]: Async, T, U](implicit
-    watchable: Watchable[Watcher[AnyCustomResource]]
-  ): CrdWatchMaker[F, T, U] =
+  implicit def crdWatch[F[_]: Async, T, U](implicit watchable: Watchable[Watcher[String]]): CrdWatchMaker[F, T, U] =
     (context: CrdWatcherContext[F, T, U]) =>
       new CustomResourceWatcher(context) {
         override def watch: F[(CloseableWatcher, F[ConsumerExitCode])] =
@@ -126,9 +124,9 @@ class OperatorsTest
   def crdOperator[F[_]: Async: Parallel, T: JsonReader](
     controller: Controller[F, T, Status],
     cfg: CrdConfig = crdCfg
-  ): (Operator[F, T, Status], mutable.Set[Watcher[AnyCustomResource]], mutable.Set[StatusUpdate[Status]]) = {
-    val (fakeWatchable, singleWatcher) = makeWatchable[T, AnyCustomResource]
-    implicit val watchable: Watchable[Watcher[AnyCustomResource]] = fakeWatchable
+  ): (Operator[F, T, Status], mutable.Set[Watcher[String]], mutable.Set[StatusUpdate[Status]]) = {
+    val (fakeWatchable, singleWatcher) = makeWatchable[T, String]
+    implicit val watchable: Watchable[Watcher[String]] = fakeWatchable
 
     val status = mutable.Set.empty[StatusUpdate[Status]]
     implicit val feedbackConsumer: FeedbackConsumerMaker[F, Status] = testFeedbackConsumer[F](status)
@@ -170,10 +168,10 @@ class OperatorsTest
     var currentWatcher = eventually {
       getWatcherOrFail(singleWatcher)
     }
-    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb])) { case (action, (anyCr, spec, _)) =>
+    forAll(WatcherAction.gen, AnyCustomResource.gen[Kerb]()) { case (action, (anyCr, spec, _)) =>
       //when
       currentWatcher = getWatcherOrFail(singleWatcher)
-      currentWatcher.eventReceived(action, anyCr)
+      currentWatcher.eventReceived(action, mapper.writeValueAsString(anyCr))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
       allEvents += ((action, spec, meta))
@@ -225,12 +223,12 @@ class OperatorsTest
     //then
     forAll(
       WatcherAction.gen,
-      AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb]),
+      AnyCustomResource.gen[Kerb](),
       workers(PosInt.ensuringValid(parallelNamespaces)),
       minSuccessful(PosInt.ensuringValid(parallelNamespaces))
     ) { case (action, (anyCr, spec, _)) =>
       //when
-      currentWatcher.eventReceived(action, anyCr)
+      currentWatcher.eventReceived(action, mapper.writeValueAsString(anyCr))
 
       val meta = MetadataApi.translate(anyCr.getMetadata)
       allEvents.add((action, spec, meta))
@@ -260,7 +258,7 @@ class OperatorsTest
     def actionAndResourceGen(namespace: String) =
       for {
         a <- WatcherAction.gen
-        r <- AnyCustomResource.gen[Kerb](crdCfg.getKind[Kerb], ObjectMetaTest.constNamespaceGen(namespace))
+        r <- AnyCustomResource.gen[Kerb](ObjectMetaTest.constNamespaceGen(namespace))
       } yield (a, r)
 
     //when
@@ -276,7 +274,7 @@ class OperatorsTest
           val specWithIndex = spec.copy(index = i)
           anyCr.setSpec(mapper.writeValueAsString(specWithIndex))
 
-          singleWatcher.foreach(_.eventReceived(action, anyCr))
+          singleWatcher.foreach(_.eventReceived(action, mapper.writeValueAsString(anyCr)))
 
           val meta = MetadataApi.translate(anyCr.getMetadata)
           (action, specWithIndex, meta)
@@ -333,7 +331,7 @@ class OperatorsTest
   property("Crd Operator gets event from reconciler process") {
     //given
     val controller = new CrdTestController[IO]
-    implicit val (fakeWatchable, _) = makeWatchable[Kerb, AnyCustomResource]
+    implicit val (fakeWatchable, _) = makeWatchable[Kerb, String]
 
     val testResources = new mutable.ArrayBuffer[Resource[Kerb, Status]]()
     implicit val helper: CrdHelperMaker[IO, Kerb, Status] = (context: CrdHelperContext) =>
@@ -349,7 +347,7 @@ class OperatorsTest
     //when
     startOperator(operator.run)
 
-    forAll(AnyCustomResource.gen[Kerb](crdCfg.getKind)) { case (anyCr, spec, status) =>
+    forAll(AnyCustomResource.gen[Kerb]()) { case (anyCr, spec, status) =>
       val meta = MetadataApi.translate(anyCr.getMetadata)
       testResources += Right(CustomResource(meta, spec, status.some))
       //then
@@ -408,18 +406,18 @@ class OperatorsTest
 
     forAll(
       WatcherAction.gen,
-      AnyCustomResource.gen[Kerb](crdCfg.getKind),
+      AnyCustomResource.gen[Kerb](),
       arbitrary[Boolean],
       minSuccessful(maxRestarts)
     ) { case (action, (anyCr, spec, _), close) =>
       //when
       if (close)
-        closeCurrentWatcher[AnyCustomResource](singleWatcher, oldWatcher)
+        closeCurrentWatcher(singleWatcher, oldWatcher)
 
       oldWatcher = getWatcherOrFail(singleWatcher)
-      singleWatcher.foreach(_.eventReceived(action, anyCr))
+      singleWatcher.foreach(_.eventReceived(action, mapper.writeValueAsString(anyCr)))
 
-      val meta = MetadataApi.translate(anyCr.getMetadata)
+      val meta = Metadata.fromObjectMeta(anyCr.getMetadata)
       allEvents += ((action, spec, meta))
       //then
       eventually {

@@ -15,6 +15,7 @@ import scala.collection.concurrent.TrieMap
 
 object Channels {
   val AllNamespacesConsumer = "all"
+  val UnparsedNamespace = "unparsed-namespace"
 }
 
 class Channels[F[_]: Parallel, T, U](

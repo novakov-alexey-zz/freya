@@ -260,8 +260,6 @@ class Operator[F[_], T: Reader, U] private (
   def start(dispatcher: Dispatcher[F]): F[(F[ExitCode], CloseableWatcher)] =
     (for {
       pipe <- pipeline(dispatcher)
-
-      _ = CustomResourceAnnotations.set(pipe.helper.cfg.prefix, "v1")
       kind = pipe.helper.cfg.getKind
       namespace = pipe.helper.targetNamespace
 
