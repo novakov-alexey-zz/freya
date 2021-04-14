@@ -94,7 +94,6 @@ private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinit
 
   private def toItemList(map: Map[String, AnyRef]): CustomResourceList = {
     val items = map.get("items")
-    println("items:" + items) //TODO: remove
     items.collect { case i: java.util.ArrayList[_] => i.asScala.toList.asInstanceOf[List[AnyRef]] }
       .getOrElse(List.empty[AnyRef])
   }
