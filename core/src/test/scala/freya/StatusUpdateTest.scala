@@ -8,7 +8,7 @@ import freya.internal.kubeapi.CrdApi.StatusUpdate
 import freya.json.circe._
 import freya.models.Metadata
 import freya.resource.CirceCodecs
-import freya.watcher.AnyCustomResource
+import freya.watcher.{AnyCustomResource, StringProperty}
 import io.fabric8.kubernetes.api.model.apiextensions.v1beta1.{CustomResourceDefinition, CustomResourceDefinitionBuilder}
 import io.fabric8.kubernetes.api.model.{HasMetadata, ObjectMetaBuilder}
 import io.fabric8.kubernetes.client._
@@ -24,11 +24,7 @@ import scala.jdk.CollectionConverters.MapHasAsScala
 class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
 
   private[freya] def createWatch(
-    kerbClient: NonNamespaceOperation[
-      AnyCustomResource,
-      AnyCrList,      
-      Resource[AnyCustomResource]
-    ]
+    kerbClient: NonNamespaceOperation[AnyCustomResource, AnyCrList, Resource[AnyCustomResource]]
   ): Watch = {
     kerbClient.watch(new Watcher[AnyCustomResource]() {
       override def eventReceived(action: Watcher.Action, resource: AnyCustomResource): Unit =
@@ -74,7 +70,8 @@ class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
 
     val client = new DefaultKubernetesClient()
 
-    val kerbClient = client.customResources(classOf[AnyCustomResource], classOf[AnyCrList])
+    val kerbClient = client
+      .customResources(classOf[AnyCustomResource], classOf[AnyCrList])
       .inNamespace("test")
     val watch = createWatch(kerbClient)
 
@@ -107,7 +104,7 @@ class StatusUpdateTest extends AnyFlatSpec with CirceCodecs {
         .withName("test-kerb")
         .build()
     )
-    anyCr.setSpec(Serialization.jsonMapper().writeValueAsString(spec))
+    anyCr.setSpec(StringProperty(Serialization.jsonMapper().writeValueAsString(spec)))
     anyCr
   }
 }

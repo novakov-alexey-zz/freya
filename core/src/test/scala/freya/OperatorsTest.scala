@@ -272,7 +272,7 @@ class OperatorsTest
         val currentEvents = list.zipWithIndex.map { case ((action, (anyCr, spec, _)), i) =>
           // mutate current spec to have an index to test event ordering
           val specWithIndex = spec.copy(index = i)
-          anyCr.setSpec(mapper.writeValueAsString(specWithIndex))
+          anyCr.setSpec(StringProperty(mapper.writeValueAsString(specWithIndex)))
 
           singleWatcher.foreach(_.eventReceived(action, mapper.writeValueAsString(anyCr)))
 
