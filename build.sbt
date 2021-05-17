@@ -5,7 +5,7 @@ Global / onChangedBuildSource := ReloadOnSourceChanges
 Global / excludeLintKeys := Set(name, pomIncludeRepository, publishMavenStyle, git.useGitDescribe)
 
 ThisBuild / name := "freya"
-ThisBuild / scalaVersion := "2.13.5"
+ThisBuild / scalaVersion := "2.13.6"
 ThisBuild / organization := "io.github.novakov-alexey"
 ThisBuild / watchBeforeCommand := Watch.clearScreen
 
