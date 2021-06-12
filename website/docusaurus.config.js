@@ -29,7 +29,7 @@ module.exports = {
       copyright: `Copyright © ${new Date().getFullYear()} Freya. Built with Docusaurus.`,
     },
     prism: {
-      additionalLanguages: ["scala"],
+      additionalLanguages: ["java", "scala"],
     },
   },
   presets: [
