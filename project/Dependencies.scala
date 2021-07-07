@@ -13,7 +13,7 @@ object Dependencies extends AutoPlugin {
       val circeYamlVersion                 = "0.14.0"
       val circeExtrasVersion               = "0.12.2"
       val fabric8K8sVersion                = "5.4.1"
-      val jacksonScalaVersion              = "2.12.3"
+      val jacksonScalaVersion              = "2.12.4"
       val jacksonJsonSchemaV               = "1.0.39"
       val logbackClassicVersion            = "1.3.0-alpha4"
       val scalaLoggingVersion              = "3.9.4"
