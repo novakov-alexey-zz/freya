@@ -105,8 +105,9 @@ private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinit
     val resourceProperties = Try(
       client
         .customResource(context)
-        .get(su.meta.namespace, su.meta.name)
-    ).toOption.map(_.asScala.toMap)
+        .inNamespace(su.meta.namespace)
+        .withName(su.meta.name)
+    ).toOption.map(_.get().asScala.toMap)
 
     val lastVersion = latestResourceVersion(resourceProperties)
 
@@ -114,7 +115,7 @@ private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinit
     val json = statusUpdateJson(crd, su, lastVersion)
     logger.debug(s"Update status json: $json")
 
-    client.customResource(context).updateStatus(su.meta.namespace, su.meta.name, json)
+    client.customResource(context).inNamespace(su.meta.namespace).withName(su.meta.name).updateStatus(json)
     ()
   }
 
