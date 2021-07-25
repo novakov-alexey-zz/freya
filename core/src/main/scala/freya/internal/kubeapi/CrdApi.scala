@@ -107,7 +107,7 @@ private[freya] class CrdApi(client: KubernetesClient, crd: CustomResourceDefinit
         .customResource(context)
         .inNamespace(su.meta.namespace)
         .withName(su.meta.name)
-    ).toOption.map(_.get.asScala.toMap)
+    ).toOption.map(_.get().asScala.toMap)
 
     val lastVersion = latestResourceVersion(resourceProperties)
 
