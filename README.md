@@ -1,4 +1,6 @@
-# Freya
+# [ARCHIVED] Freya
+# Pleasue use [kubernetes-client](https://github.com/joan38/kubernetes-client) to do the same
+# See this blog-post as an example [k8s-operator](https://novakov-alexey.github.io/k8s-operator/)
 
 ![Build Status](https://github.com/novakov-alexey/freya/actions/workflows/scala.yml/badge.svg?branch=master)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/b91f0a22195e499c9d6bafd097c69dd6)](https://www.codacy.com/manual/novakov.alex/freya?utm_source=github.com&utm_medium=referral&utm_content=novakov-alexey/freya&utm_campaign=Badge_Grade)
